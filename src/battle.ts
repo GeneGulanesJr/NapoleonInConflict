@@ -14,6 +14,8 @@ const FORMS: [string, string, string][] = [['line', 'Z', 'Line'], ['column', 'X'
 const ABKEY: Record<string, string> = { barrage: 'Digit1', rockets: 'Digit2', cavalry: 'Digit3' };
 const $ = <T extends HTMLElement>(root: ParentNode, sel: string) => root.querySelector(sel) as T;
 const pad = (n: number) => String(Math.floor(n)).padStart(2, '0');
+/** names and log text come from the server in multiplayer: never put them into innerHTML raw */
+const esc = (s: unknown) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, opts: { campaign: boolean; onExit: (o: Outcome) => void }) {
   const me = src.side;
@@ -38,7 +40,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       <div class="score s1"><b id="sc1">0</b><span class="lbl">Coalition</span></div>
     </div>
     <div class="ctl">
-      <button data-sp="0" title="Pause (Space)">⏸</button><button data-sp="1" class="on">1×</button><button data-sp="2">2×</button><button data-sp="4">4×</button><button id="mute" title="Mute (M)">🔊</button>
+      <button data-sp="0" title="Pause (Space)">⏸</button><button data-sp="1" class="on">1×</button><button data-sp="2">2×</button><button data-sp="4">4×</button><button id="mute" title="Mute (M)">🔊</button><button id="leave" title="Leave battle" style="display:none">✕</button>
     </div>
     <div id="toasts"></div>
     <div id="popups"></div>
@@ -178,7 +180,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     (rows as any)._sig = sig;
     rows.innerHTML = selection.slice(0, 6).map((id) => {
       const u = st.units.find((q: any) => q.id === id);
-      return `<div class="srow${u.routed ? ' routed' : ''}"><span>${u.name}</span><i class="b m"><s style="width:${(u.men / u.maxMen) * 100}%"></s></i><i class="b o"><s style="width:${Math.max(0, (u.morale / u.maxMorale) * 100)}%"></s></i><em>${Math.round(u.men)}</em></div>`;
+      return `<div class="srow${u.routed ? ' routed' : ''}"><span>${esc(u.name)}</span><i class="b m"><s style="width:${(u.men / u.maxMen) * 100}%"></s></i><i class="b o"><s style="width:${Math.max(0, (u.morale / u.maxMorale) * 100)}%"></s></i><em>${Math.round(u.men)}</em></div>`;
     }).join('') + (selection.length > 6 ? `<div class="srow more">+${selection.length - 6} more</div>` : '');
   }
 
@@ -317,7 +319,12 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   };
   hud.querySelectorAll<HTMLElement>('[data-sp]').forEach((b) => (b.onclick = () => setSpeed(Number(b.dataset.sp))));
   $<HTMLElement>(hud, '#mute').onclick = () => { $(hud, '#mute').textContent = toggleMute() ? '🔇' : '🔊'; };
-  if (src.mode === 'remote') hud.querySelectorAll<HTMLElement>('[data-sp]').forEach((b) => (b.style.display = 'none'));
+  if (src.mode === 'remote') {
+    hud.querySelectorAll<HTMLElement>('[data-sp]').forEach((b) => (b.style.display = 'none'));
+    const leave = $<HTMLElement>(hud, '#leave');
+    leave.style.display = '';
+    leave.onclick = () => opts.onExit('menu'); // onExit destroys the battle, which closes the socket
+  }
 
   // minimap
   const mini = $<HTMLCanvasElement>(hud, '#mini'), mctx = mini.getContext('2d')!;
@@ -375,8 +382,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   const mmss = (t: number) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
   function reportHtml(r: any) {
     const s = r.stats; if (!s) return '';
-    const top = s.top[me].filter((u: any) => u.xp > 0).slice(0, 2).map((u: any) => `<li>${'*'.repeat(u.vet)} ${u.name}: ${u.xp} men</li>`).join('');
-    const ev = s.chron.slice(-6).map((e: any) => `<li style="color:${SIDE_COLOR[e.side]}">${mmss(e.t)} ${e.text}</li>`).join('');
+    const top = s.top[me].filter((u: any) => u.xp > 0).slice(0, 2).map((u: any) => `<li>${'*'.repeat(Number(u.vet) || 0)} ${esc(u.name)}: ${esc(u.xp)} men</li>`).join('');
+    const ev = s.chron.slice(-6).map((e: any) => `<li style="color:${SIDE_COLOR[e.side]}">${mmss(e.t)} ${esc(e.text)}</li>`).join('');
     return `<canvas id="chart" width="200" height="40"></canvas><div class="rep"><div><b>Best regiments</b><ul>${top || '<li>-</li>'}</ul></div><div><b>Turning points</b><ul>${ev || '<li>-</li>'}</ul></div></div>`;
   }
   function drawChart(r: any) {
@@ -396,8 +403,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const next = opts.campaign ? `<button id="rcont">Continue the campaign</button>${won ? '' : '<button id="rretry" class="alt">Retry battle</button>'}` : '<button id="rmenu">Back to menu</button>';
     el.innerHTML = `<div class="card ${draw ? 'draw' : won ? 'win' : 'loss'}"><h2>${title}</h2><p>${scn.title}, ${scn.date}</p>
       <table><tr><th></th><th>${SIDE_NAME[me]} (you)</th><th>${SIDE_NAME[1 - me]}</th></tr>
-      <tr><td>Score</td><td class="n" data-v="${r.score[me]}">0</td><td class="n" data-v="${r.score[1 - me]}">0</td></tr>
-      <tr><td>Men lost</td><td class="n" data-v="${r.lost[me]}">0</td><td class="n" data-v="${r.lost[1 - me]}">0</td></tr></table>
+      <tr><td>Score</td><td class="n" data-v="${Number(r.score[me])}">0</td><td class="n" data-v="${Number(r.score[1 - me])}">0</td></tr>
+      <tr><td>Men lost</td><td class="n" data-v="${Number(r.lost[me])}">0</td><td class="n" data-v="${Number(r.lost[1 - me])}">0</td></tr></table>
       ${reportHtml(r)}
       <div class="rb">${next}</div></div>`;
     el.style.display = 'flex';
