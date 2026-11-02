@@ -2,11 +2,15 @@
   "name": "napoleon-in-conflict",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "server": "node server/server.ts",
-    "sim": "node scripts/headless.ts"
+    "sim": "node scripts/headless.ts",
+    "test": "node --test scripts/test.ts"
   },
   "dependencies": {
     "animejs": "^4.5.0",
@@ -17,7 +21,6 @@
     "@types/node": "^26.6.6",
     "@types/three": "^0.187.0",
     "@types/ws": "^8.18.2",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.5"
   }

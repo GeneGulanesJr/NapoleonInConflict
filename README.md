@@ -9,6 +9,7 @@ Five linked battles: **Charleroi → Quatre Bras → Ligny → Genappe → Water
     npm run server     # multiplayer server (ws://localhost:8080), optional
     npm run sim        # headless bot-vs-bot balance run over all five battles
     npm run build      # type-check + production build
+    npm test           # roster logic + multiplayer server (bad-packet) tests
 
 ## Controls
 Left-click / drag-box select · right-click move or attack · WASD pan · Q/E or middle-drag rotate · wheel zoom ·
