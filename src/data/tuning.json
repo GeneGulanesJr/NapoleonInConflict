@@ -1,0 +1,281 @@
+{
+  "_note": "All gameplay numbers live here. Speeds are world units/s, ranges world units, reload seconds. power = casualties per man per volley at point blank.",
+  "types": {
+    "line": {
+      "label": "Line Infantry",
+      "men": 540,
+      "speed": 4.0,
+      "range": 32,
+      "reload": 7,
+      "power": 0.13,
+      "melee": 0.6,
+      "morale": 100,
+      "cost": 30,
+      "perFig": 12,
+      "cav": false
+    },
+    "guard": {
+      "label": "Imperial Guard",
+      "men": 450,
+      "speed": 4.0,
+      "range": 34,
+      "reload": 6,
+      "power": 0.16,
+      "melee": 1,
+      "morale": 150,
+      "cost": 55,
+      "perFig": 12,
+      "cav": false
+    },
+    "skirmisher": {
+      "label": "Skirmishers",
+      "men": 270,
+      "speed": 5.5,
+      "range": 44,
+      "reload": 5,
+      "power": 0.08,
+      "melee": 0.3,
+      "morale": 85,
+      "cost": 20,
+      "perFig": 9,
+      "cav": false
+    },
+    "lancer": {
+      "label": "Lancers",
+      "men": 360,
+      "speed": 11.25,
+      "range": 0,
+      "reload": 0,
+      "power": 0,
+      "melee": 1.5,
+      "morale": 95,
+      "cost": 40,
+      "perFig": 12,
+      "cav": true
+    },
+    "cuirassier": {
+      "label": "Cuirassiers",
+      "men": 315,
+      "speed": 9.38,
+      "range": 0,
+      "reload": 0,
+      "power": 0,
+      "melee": 1.9,
+      "morale": 115,
+      "cost": 50,
+      "perFig": 12,
+      "cav": true
+    },
+    "artillery": {
+      "label": "Field Artillery",
+      "men": 180,
+      "speed": 2.75,
+      "range": 95,
+      "reload": 9,
+      "power": 0.5,
+      "melee": 0.1,
+      "morale": 90,
+      "cost": 45,
+      "perFig": 45,
+      "cav": false
+    },
+    "commander": {
+      "label": "Commander",
+      "men": 30,
+      "speed": 10,
+      "range": 0,
+      "reload": 0,
+      "power": 0,
+      "melee": 0.2,
+      "morale": 150,
+      "cost": 0,
+      "perFig": 8,
+      "cav": true
+    }
+  },
+  "formFire": {
+    "line": 1,
+    "column": 0.35,
+    "square": 0.6
+  },
+  "formDmg": {
+    "line": 1,
+    "column": 1.35,
+    "square": 1.15
+  },
+  "formSpeed": {
+    "line": 0.8,
+    "column": 1.25,
+    "square": 0.5
+  },
+  "formChangeTime": 2.8,
+  "moraleLoss": 250,
+  "rangeFloor": 0.25,
+  "canisterRange": 30,
+  "canisterMult": 1.8,
+  "meleeRate": 0.02,
+  "chargeShock": 22,
+  "routSpread": {
+    "radius": 30,
+    "loss": 10
+  },
+  "rallyAt": 35,
+  "rallyDistance": 45,
+  "smoke": {
+    "life": 14,
+    "radius": 8,
+    "perShot": 1,
+    "maxPuffs": 260
+  },
+  "weather": {
+    "clear": {
+      "fire": 1,
+      "move": 1,
+      "label": "Clear"
+    },
+    "rain": {
+      "fire": 0.7,
+      "move": 0.85,
+      "label": "Rain"
+    },
+    "storm": {
+      "fire": 0.5,
+      "move": 0.7,
+      "label": "Thunderstorm"
+    }
+  },
+  "capture": {
+    "rate": 0.05,
+    "minStrength": 0.3,
+    "maxStrength": 2,
+    "refMen": 675
+  },
+  "casualtyScore": 0.111111,
+  "decisiveRatio": 0.68,
+  "endHeldWeight": 0.6,
+  "drawBand": 0.05,
+  "abilities": {
+    "barrage": {
+      "label": "Artillery Barrage",
+      "key": "1",
+      "cd": 90,
+      "delay": 5,
+      "dur": 10,
+      "r": 20,
+      "dps": 0.02,
+      "mdps": 4,
+      "booms": 3
+    },
+    "rockets": {
+      "label": "Congreve Rockets",
+      "key": "2",
+      "cd": 75,
+      "delay": 3,
+      "dur": 2,
+      "r": 11,
+      "dps": 0.14,
+      "mdps": 18,
+      "booms": 6
+    },
+    "cavalry": {
+      "label": "Cavalry Reserve",
+      "key": "3",
+      "cd": 120,
+      "unit": "cuirassier",
+      "men": 270
+    }
+  },
+  "specials": {
+    "line": {
+      "kind": "volley",
+      "label": "Volley",
+      "cd": 30,
+      "dur": 12
+    },
+    "guard": {
+      "kind": "volley",
+      "label": "Volley",
+      "cd": 25,
+      "dur": 12
+    },
+    "skirmisher": {
+      "kind": "sprint",
+      "label": "Sprint",
+      "cd": 30,
+      "dur": 7
+    },
+    "lancer": {
+      "kind": "charge",
+      "label": "Charge",
+      "cd": 40,
+      "dur": 8
+    },
+    "cuirassier": {
+      "kind": "charge",
+      "label": "Charge",
+      "cd": 40,
+      "dur": 8
+    },
+    "artillery": {
+      "kind": "canister",
+      "label": "Canister",
+      "cd": 35,
+      "dur": 10
+    },
+    "commander": {
+      "kind": "rally",
+      "label": "Rally",
+      "cd": 60,
+      "dur": 1
+    }
+  },
+  "veterancy": {
+    "xp": [
+      800,
+      2200,
+      5000
+    ],
+    "fire": 0.08,
+    "resist": 0.1,
+    "melee": 0.1
+  },
+  "flank": {
+    "dmg": [
+      1,
+      1.3,
+      1.7
+    ],
+    "morale": [
+      1,
+      1.3,
+      1.8
+    ]
+  },
+  "garrison": {
+    "cover": 0.7,
+    "capacity": 2,
+    "meleeCav": 0.5,
+    "meleeInf": 0.85,
+    "morale": 0.8
+  },
+  "commanderAura": {
+    "radius": 45,
+    "regen": 1.2,
+    "resist": 0.8,
+    "rallyRadius": 55,
+    "fallPenalty": 20
+  },
+  "sight": {
+    "line": 90,
+    "guard": 90,
+    "skirmisher": 110,
+    "lancer": 115,
+    "cuirassier": 115,
+    "artillery": 85,
+    "commander": 130,
+    "reveal": 4,
+    "rain": 0.75,
+    "storm": 0.55
+  },
+  "figScale": 1.3
+}

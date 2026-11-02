@@ -1,0 +1,20 @@
+{
+  "title": "The Hundred Days",
+  "subtitle": "Belgium, June 1815 — the road to Waterloo",
+  "intro": "Napoleon has escaped Elba and retaken France. Two armies stand between him and Brussels: Wellington's Anglo-Allied army and Blücher's Prussians. His plan is to strike between them, defeat each in turn, and end the war before Austria and Russia arrive. Every regiment you lose now will be missing at Waterloo.",
+  "battles": ["charleroi", "quatrebras", "ligny", "genappe", "waterloo"],
+  "healFraction": 0.4,
+  "roster": {
+    "line": ["Donzelot", "Marcognet", "Durutte", "Quiot", "Bachelu", "Foy", "Jérôme", "Girard", "Habert", "Lefol", "Berthezène", "Pécheux"],
+    "guard": ["1er Grenadiers (Old Guard)", "2e Grenadiers (Old Guard)", "3e Chasseurs (Middle Guard)"],
+    "skirmisher": ["Voltigeurs, 1er Léger", "Voltigeurs, 2e Léger", "Tirailleurs, 12e", "Tirailleurs, 19e"],
+    "lancer": ["1er Lanciers", "2e Lanciers", "Red Lancers (Guard)"],
+    "cuirassier": ["1er Cuirassiers", "5e Cuirassiers", "Carabiniers"],
+    "artillery": ["Battery Desvaux", "Battery Ruty", "Horse Battery Duchand", "Battery Lallemand", "Foot Battery Mouton"]
+  },
+  "endings": {
+    "waterloo_win": "The Coalition line breaks. Wellington withdraws toward the coast and Blücher falls back on the Rhine. Without a decisive allied victory the coalition falters — Napoleon enters Brussels and offers terms. The Hundred Days become something longer.",
+    "waterloo_draw": "Night falls over a bloodied field. Neither army has broken, but the Prussians are on the flank and the Emperor's reserves are gone. The campaign will be decided by the retreat.",
+    "waterloo_loss": "The Guard recoils, the line dissolves, and the cry goes up: 'La Garde recule!' Napoleon abdicates for the second time and is sent to Saint Helena. History is kept."
+  }
+}

@@ -1,0 +1,148 @@
+// Bot commander. Uses the same command() API as a human player, so it plays by the same rules.
+import { command, rand, useAbility, type Sim } from './sim.ts';
+
+const dist = (a: any, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
+
+export function makeBot(sim: Sim, side: number) {
+  let acc = 1.5;
+  const mem: { assign: Record<number, { zid: string; ox: number; oz: number }> } = { assign: {} };
+  return (dt: number) => {
+    acc += dt;
+    if (acc < 2) return;
+    acc = 0;
+    think(sim, side, mem);
+  };
+}
+
+function think(sim: Sim, side: number, mem: any) {
+  const { s, scn, tu } = sim;
+  if (s.over) return;
+  const stance: string = scn.bot?.[side] ?? (side === 0 ? 'attack' : 'defend');
+  const sd = s.side[side];
+  const my = s.units.filter((u: any) => u.side === side && !u.dead && !u.routed);
+  const sv = (e: any) => !s.fog || s.seen[side].includes(e.id); // the bot only knows what it can see
+  const enemies = s.units.filter((u: any) => u.side !== side && !u.dead && sv(u));
+  const foes = enemies.filter((u: any) => !u.routed);
+
+  // reserves: spend points as soon as something is affordable
+  const afford = Object.keys(sd.reserves).filter((t) => sd.reserves[t] > 0 && tu.types[t].cost <= sd.rp);
+  if (afford.length && s.t > 15) command(sim, side, { c: 'deploy', type: afford[Math.floor(rand(s) * afford.length)] });
+
+  // tactical aid
+  for (const name of scn.abilities?.[side] ?? []) {
+    if ((sd.cd[name] ?? 0) > 0 || !foes.length || s.t < 45) continue; // grace period so the player can react
+    const ab = tu.abilities[name];
+    if (name === 'cavalry') {
+      if (s.t < 90) continue;
+      const art = foes.find((e: any) => e.type === 'artillery') ?? foes[0];
+      useAbility(sim, side, name, art.x, art.z);
+    } else {
+      let best: any = null, bs = 0;
+      for (const e of foes) {
+        if (!my.some((f: any) => dist(f, e) < 110)) continue; // needs a spotter
+        let sc = 0;
+        for (const o of foes) if (dist(o, e) < ab.r) sc += o.men / 270;
+        for (const f of my) if (dist(f, e) < ab.r * 1.2) sc -= 3; // keep clear of own men
+        if (sc > bs) { bs = sc; best = e; }
+      }
+      if (best && bs >= (name === 'barrage' ? 1.5 : 1)) useAbility(sim, side, name, best.x, best.z);
+    }
+  }
+
+  // zone assignment
+  const mineZones = s.zones.filter((z: any) => z.owner === side);
+  const goalZones = stance === 'attack' ? s.zones.filter((z: any) => z.owner !== side) : mineZones.length ? mineZones : s.zones;
+  const zones = goalZones.length ? goalZones : s.zones;
+  const load: Record<string, number> = {};
+  for (const id in mem.assign) { const a = mem.assign[id]; load[a.zid] = (load[a.zid] ?? 0) + 1; }
+
+  for (const u of my) {
+    if (u.busy > 0) continue;
+    const T = tu.types[u.type];
+    if (u.type === 'commander') { // stay with the army, rally broken men
+      const inf = my.filter((f: any) => f !== u && f.type !== 'commander');
+      if (inf.length) {
+        const cx = inf.reduce((q: number, f: any) => q + f.x, 0) / inf.length, cz = inf.reduce((q: number, f: any) => q + f.z, 0) / inf.length + (side === 0 ? 14 : -14);
+        if (dist(u, { x: cx, z: cz }) > 26 && (u.tx == null || Math.hypot(u.tx - cx, u.tz - cz) > 12)) command(sim, side, { c: 'move', ids: [u.id], x: cx, z: cz });
+      }
+      if (s.t >= u.spReady && s.units.some((f: any) => f.side === side && f.routed && dist(f, u) < tu.commanderAura.rallyRadius)) command(sim, side, { c: 'special', ids: [u.id] });
+      continue;
+    }
+    if (!u.auto && (u.type === 'line' || u.type === 'guard')) command(sim, side, { c: 'auto', ids: [u.id] });
+    let near: any = null, nd = 1e9;
+    for (const e of foes) { const d = dist(u, e); if (d < nd) { nd = d; near = e; } }
+
+    const spc = tu.specials?.[u.type];
+    if (spc && s.t >= u.spReady && s.t > 20 && near) {
+      const k = spc.kind;
+      if ((k === 'volley' && nd < T.range * 0.8 && !u.mv) || (k === 'canister' && nd < tu.canisterRange * 2) || (k === 'sprint' && nd < 70 && nd > 25) || (k === 'charge' && u.chase != null && nd < 50)) command(sim, side, { c: 'special', ids: [u.id] });
+    }
+    // pick / refresh a goal zone
+    let a = mem.assign[u.id];
+    if (!a || !zones.some((z: any) => z.id === a.zid)) {
+      if (a) load[a.zid]--;
+      let bz: any = null, bsc = 1e9;
+      for (const z of zones) { const sc = dist(u, z) + 70 * (load[z.id] ?? 0); if (sc < bsc) { bsc = sc; bz = z; } }
+      const ang = rand(s) * Math.PI * 2, rr = Math.sqrt(rand(s)) * bz.r * 0.7;
+      a = mem.assign[u.id] = { zid: bz.id, ox: Math.cos(ang) * rr, oz: Math.sin(ang) * rr };
+      load[bz.id] = (load[bz.id] ?? 0) + 1;
+    }
+    const z = s.zones.find((q: any) => q.id === a.zid);
+    const gx = z.x + a.ox, gz = z.z + a.oz;
+    const goto = (x: number, zz: number) => {
+      if (u.tx != null && Math.hypot(u.tx - x, u.tz - zz) < 4) return;
+      command(sim, side, { c: 'move', ids: [u.id], x, z: zz });
+    };
+    const hold = () => { if (u.tx != null || u.chase != null) command(sim, side, { c: 'stop', ids: [u.id] }); };
+    if (stance === 'defend' && u.garrison == null && u.gTarget == null && (u.type === 'line' || u.type === 'guard' || u.type === 'skirmisher')) { // man the farm that sits on our objective
+      const vs = scn.map.villages ?? [], vi = vs.findIndex((v: any) => v.garrison && dist(v, z) < 25);
+      if (vi >= 0 && s.units.filter((q: any) => q.side === side && (q.garrison === vi || q.gTarget === vi)).length < tu.garrison.capacity) { command(sim, side, { c: 'garrison', ids: [u.id], vid: vi }); continue; }
+    }
+    if (u.garrison != null || u.gTarget != null) continue;
+
+    if (u.type === 'line' || u.type === 'guard') {
+      const cavNear = foes.some((e: any) => tu.types[e.type].cav && dist(u, e) < 28);
+      if (cavNear) { if (u.form !== 'square') command(sim, side, { c: 'form', ids: [u.id], f: 'square' }); hold(); continue; }
+      if (u.form === 'square') { command(sim, side, { c: 'form', ids: [u.id], f: 'line' }); continue; }
+      if (u.chase != null) continue;
+      // bayonet charge when clearly stronger locally
+      if (stance === 'attack' && near && nd < 22 && u.morale > 60) {
+        let mine = 0, theirs = 0;
+        for (const f of my) if (dist(f, near) < 40) mine += f.men;
+        for (const e of foes) if (dist(e, near) < 40) theirs += e.men;
+        if (mine > 2.2 * theirs) { command(sim, side, { c: 'attack', ids: [u.id], target: near.id }); continue; }
+      }
+      if (near && nd <= T.range * 1.05) { hold(); if (u.form !== 'line') command(sim, side, { c: 'form', ids: [u.id], f: 'line' }); continue; }
+      const far = dist(u, { x: gx, z: gz }) > 50 && nd > 70;
+      const want = far ? 'column' : 'line';
+      if (u.form !== want && !(want === 'column' && u.form === 'line' && dist(u, { x: gx, z: gz }) < 90)) command(sim, side, { c: 'form', ids: [u.id], f: want });
+      if (dist(u, { x: gx, z: gz }) > 4 && (stance === 'attack' || dist(u, z) > z.r)) goto(gx, gz);
+    } else if (u.type === 'skirmisher') {
+      if (near && nd <= T.range * 0.95) { hold(); continue; }
+      if (dist(u, { x: gx, z: gz }) > 4 && (stance === 'attack' || dist(u, z) > z.r)) goto(gx, gz);
+    } else if (u.type === 'artillery') {
+      if (!near) { if (stance === 'attack') goto(gx, gz + (side === 0 ? 40 : -40)); continue; }
+      if (nd < 24 && near.type !== 'artillery') { goto(u.x + (u.x - near.x) * 0.5, u.z + (u.z - near.z) * 0.5); continue; }
+      if (nd > T.range * 0.92 && stance === 'attack') { goto(u.x + ((near.x - u.x) / nd) * (nd - T.range * 0.85), u.z + ((near.z - u.z) / nd) * (nd - T.range * 0.85)); continue; }
+      hold();
+    } else {
+      // cavalry: hunt artillery, skirmishers, routers and thin lines; avoid squares
+      if (u.chase != null) continue;
+      let prey: any = null, pd = 95;
+      for (const e of enemies) {
+        const d = dist(u, e);
+        if (d > pd || e.form === 'square' && !e.routed) continue;
+        const good = e.routed || e.type === 'artillery' || e.type === 'skirmisher' || (!tu.types[e.type].cav && e.morale < 70) || e.form === 'column';
+        if (good) { pd = d; prey = e; }
+      }
+      if (prey && u.morale > 45 && u.men > 0.3 * u.maxMen) command(sim, side, { c: 'attack', ids: [u.id], target: prey.id });
+      else if (stance === 'attack') {
+        const inf = my.filter((f: any) => f.type === 'line' || f.type === 'guard');
+        if (inf.length) {
+          const cx = inf.reduce((q: number, f: any) => q + f.x, 0) / inf.length, cz = inf.reduce((q: number, f: any) => q + f.z, 0) / inf.length;
+          if (dist(u, { x: cx, z: cz }) > 30) goto(cx + a.ox, cz + (side === 0 ? 14 : -14));
+        } else goto(gx, gz);
+      } else if (dist(u, z) > z.r * 1.5) goto(gx, gz);
+    }
+  }
+}

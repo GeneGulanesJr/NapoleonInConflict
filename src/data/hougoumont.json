@@ -1,0 +1,283 @@
+{
+  "id": "hougoumont",
+  "title": "Hougoumont",
+  "date": "18 June 1815, late morning",
+  "blurb": "Prince Jérôme's division is sent to draw Wellington's reserves onto the walled farm of Hougoumont. Byng's Guards hold the courtyard behind loopholed walls. It was meant to be a feint. It became a battle of its own.",
+  "hint": "Walls and cover favour the defender. Man the farm with infantry (right-click it) or starve it with guns and take the wood and orchard first.",
+  "duration": 720,
+  "clock": {
+    "start": "11:30",
+    "hours": 3
+  },
+  "weather": "clear",
+  "map": {
+    "size": 240,
+    "hills": [
+      {
+        "x": 0.0,
+        "z": -45.0,
+        "rx": 90.0,
+        "rz": 18.0,
+        "h": 3
+      }
+    ],
+    "woods": [
+      {
+        "x": -18.0,
+        "z": 36.0,
+        "r": 21.0
+      },
+      {
+        "x": 27.0,
+        "z": 45.0,
+        "r": 15.0
+      }
+    ],
+    "villages": [
+      {
+        "name": "Hougoumont",
+        "x": 0.0,
+        "z": -18.0,
+        "r": 9.6,
+        "garrison": true
+      }
+    ],
+    "hedges": [
+      {
+        "pts": [
+          [
+            -60.0,
+            9.0
+          ],
+          [
+            60.0,
+            9.0
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            -60.0,
+            -66.0
+          ],
+          [
+            60.0,
+            -66.0
+          ]
+        ]
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "hg",
+      "name": "The Farm",
+      "x": 0.0,
+      "z": -18.0,
+      "r": 14.4,
+      "value": 4,
+      "owner": 1
+    },
+    {
+      "id": "wd",
+      "name": "The Wood",
+      "x": 0.0,
+      "z": 36.0,
+      "r": 19.2,
+      "value": 2,
+      "owner": 1
+    },
+    {
+      "id": "or",
+      "name": "The Orchard",
+      "x": 0.0,
+      "z": -48.0,
+      "r": 12.0,
+      "value": 1.5,
+      "owner": 1
+    }
+  ],
+  "entry": [
+    {
+      "x": 0.0,
+      "z": 105.0
+    },
+    {
+      "x": 0.0,
+      "z": -108.0
+    }
+  ],
+  "rpStart": [
+    20,
+    0
+  ],
+  "rpRate": [
+    0.5,
+    0.6
+  ],
+  "reserves": [
+    {
+      "line": 2,
+      "artillery": 1
+    },
+    {
+      "line": 1
+    }
+  ],
+  "abilities": [
+    [
+      "barrage",
+      "cavalry"
+    ],
+    [
+      "barrage",
+      "rockets"
+    ]
+  ],
+  "cavalryName": [
+    "Piré's Lancers",
+    "Somerset's Household Cavalry"
+  ],
+  "nat": [
+    "fr",
+    "gb"
+  ],
+  "bot": [
+    "attack",
+    "defend"
+  ],
+  "forces": [
+    [
+      {
+        "type": "line",
+        "n": 4,
+        "x": -67.5,
+        "z": 82.5,
+        "dx": 45.0,
+        "names": [
+          "Bauduin's Brigade",
+          "Soye's Brigade",
+          "Jérôme's 1st",
+          "Jérôme's 2nd"
+        ]
+      },
+      {
+        "type": "skirmisher",
+        "n": 2,
+        "x": -30.0,
+        "z": 60.0,
+        "dx": 60.0,
+        "names": [
+          "Voltigeurs, 1er Léger",
+          "Tirailleurs, 6e Léger"
+        ]
+      },
+      {
+        "type": "artillery",
+        "n": 2,
+        "x": -45.0,
+        "z": 72.0,
+        "dx": 90.0,
+        "names": [
+          "Foot Battery Pegot",
+          "Battery Duchand"
+        ]
+      },
+      {
+        "type": "lancer",
+        "n": 1,
+        "x": 75.0,
+        "z": 93.0,
+        "name": "Piré's Lancers"
+      },
+      {
+        "type": "commander",
+        "n": 1,
+        "x": 0.0,
+        "z": 108.0,
+        "names": [
+          "Prince Jérôme"
+        ]
+      }
+    ],
+    [
+      {
+        "type": "line",
+        "n": 3,
+        "x": -37.5,
+        "z": -27.0,
+        "dx": 37.5,
+        "names": [
+          "Byng's Guards",
+          "Maitland's Guards",
+          "Nassau Regiment"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "skirmisher",
+        "n": 1,
+        "x": 0.0,
+        "z": 12.0,
+        "name": "Light Companies",
+        "nat": "gb"
+      },
+      {
+        "type": "artillery",
+        "n": 1,
+        "x": 22.5,
+        "z": -51.0,
+        "name": "Bull's Howitzers",
+        "nat": "gb"
+      },
+      {
+        "type": "commander",
+        "n": 1,
+        "x": 0.0,
+        "z": -81.0,
+        "names": [
+          "General Cooke"
+        ]
+      }
+    ]
+  ],
+  "timeline": [
+    {
+      "t": 0,
+      "type": "msg",
+      "msg": "Skirmish fire opens on the wood below Hougoumont."
+    },
+    {
+      "t": 300,
+      "type": "reinforce",
+      "side": 1,
+      "units": [
+        {
+          "type": "line",
+          "n": 2,
+          "x": 0.0,
+          "z": 0.0,
+          "names": [
+            "Hepburn's Guards",
+            "Saltoun's Light Companies"
+          ],
+          "nat": "gb"
+        }
+      ],
+      "entry": {
+        "x": 0.0,
+        "z": -108.0
+      },
+      "go": {
+        "x": 0.0,
+        "z": -51.0
+      },
+      "msg": "Wellington feeds more Guards into the defence."
+    }
+  ],
+  "strength": [
+    1,
+    1.85
+  ]
+}

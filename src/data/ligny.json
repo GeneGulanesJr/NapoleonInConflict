@@ -1,0 +1,402 @@
+{
+  "id": "ligny",
+  "title": "Ligny",
+  "date": "16 June 1815, evening",
+  "blurb": "Napoleon himself faces Blücher's Prussians, drawn up behind the Ligny brook in a line of stone villages. Break the centre at Ligny and St. Amand and the Prussian army is finished as a fighting force. The brook is slow to cross except at the village bridges.",
+  "hint": "Grand-battery the villages, then commit the Guard at Ligny once the defenders are shaken. A decisive win here will delay the Prussians at Waterloo.",
+  "duration": 1320,
+  "clock": {
+    "start": "14:30",
+    "hours": 7
+  },
+  "weather": "clear",
+  "map": {
+    "size": 420,
+    "hills": [
+      {
+        "x": -45.0,
+        "z": -72.0,
+        "rx": 135.0,
+        "rz": 21.0,
+        "h": 5
+      },
+      {
+        "x": 105.0,
+        "z": 82.5,
+        "rx": 52.5,
+        "rz": 30.0,
+        "h": 3
+      }
+    ],
+    "woods": [
+      {
+        "x": -177.0,
+        "z": -63.0,
+        "r": 21.0
+      },
+      {
+        "x": 135.0,
+        "z": -75.0,
+        "r": 19.5
+      },
+      {
+        "x": -75.0,
+        "z": 105.0,
+        "r": 15.0
+      }
+    ],
+    "villages": [
+      {
+        "name": "St. Amand",
+        "x": -127.5,
+        "z": -12.0,
+        "r": 13.2
+      },
+      {
+        "name": "Ligny",
+        "x": 0.0,
+        "z": -6.0,
+        "r": 13.2
+      },
+      {
+        "name": "Tongrinelle",
+        "x": 78.0,
+        "z": -12.0,
+        "r": 9.6
+      },
+      {
+        "name": "Sombreffe",
+        "x": 37.5,
+        "z": -132.0,
+        "r": 12.0
+      },
+      {
+        "name": "Brye",
+        "x": -60.0,
+        "z": -57.0,
+        "r": 8.4
+      }
+    ],
+    "rivers": [
+      {
+        "pts": [
+          [
+            -210.0,
+            -15.0
+          ],
+          [
+            -135.0,
+            -9.0
+          ],
+          [
+            -60.0,
+            -12.0
+          ],
+          [
+            0.0,
+            -6.0
+          ],
+          [
+            67.5,
+            -12.0
+          ],
+          [
+            135.0,
+            -7.5
+          ],
+          [
+            210.0,
+            -15.0
+          ]
+        ],
+        "width": 8.4,
+        "bridges": [
+          [
+            -127.5,
+            -9.0
+          ],
+          [
+            -7.5,
+            -6.0
+          ],
+          [
+            75.0,
+            -12.0
+          ]
+        ]
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "sa",
+      "name": "St. Amand",
+      "x": -127.5,
+      "z": -12.0,
+      "r": 18.0,
+      "value": 3,
+      "owner": 1
+    },
+    {
+      "id": "li",
+      "name": "Ligny",
+      "x": 0.0,
+      "z": -6.0,
+      "r": 16.8,
+      "value": 4,
+      "owner": 1
+    },
+    {
+      "id": "bw",
+      "name": "Bussy Windmill",
+      "x": -45.0,
+      "z": -72.0,
+      "r": 19.2,
+      "value": 3,
+      "owner": 1
+    },
+    {
+      "id": "to",
+      "name": "Tongrinelle",
+      "x": 78.0,
+      "z": -12.0,
+      "r": 14.4,
+      "value": 1.5,
+      "owner": 1
+    },
+    {
+      "id": "so",
+      "name": "Sombreffe",
+      "x": 37.5,
+      "z": -135.0,
+      "r": 16.8,
+      "value": 3,
+      "owner": 1
+    }
+  ],
+  "entry": [
+    {
+      "x": 0.0,
+      "z": 202.5
+    },
+    {
+      "x": 0.0,
+      "z": -202.5
+    }
+  ],
+  "rpStart": [
+    20,
+    0
+  ],
+  "rpRate": [
+    0.6,
+    0.5
+  ],
+  "reserves": [
+    {
+      "line": 2,
+      "artillery": 1
+    },
+    {
+      "line": 2,
+      "skirmisher": 1
+    }
+  ],
+  "abilities": [
+    [
+      "barrage",
+      "cavalry"
+    ],
+    [
+      "barrage"
+    ]
+  ],
+  "cavalryName": [
+    "Milhaud's Cuirassiers",
+    "Prussian Reserve Cavalry"
+  ],
+  "nat": [
+    "fr",
+    "pr"
+  ],
+  "bot": [
+    "attack",
+    "defend"
+  ],
+  "forces": [
+    [
+      {
+        "type": "line",
+        "n": 6,
+        "x": -150.0,
+        "z": 120.0,
+        "dx": 60.0
+      },
+      {
+        "type": "guard",
+        "n": 2,
+        "x": -30.0,
+        "z": 168.0,
+        "dx": 60.0
+      },
+      {
+        "type": "skirmisher",
+        "n": 2,
+        "x": -90.0,
+        "z": 90.0,
+        "dx": 180.0
+      },
+      {
+        "type": "cuirassier",
+        "n": 1,
+        "x": 135.0,
+        "z": 150.0
+      },
+      {
+        "type": "lancer",
+        "n": 1,
+        "x": -165.0,
+        "z": 150.0
+      },
+      {
+        "type": "artillery",
+        "n": 3,
+        "x": -90.0,
+        "z": 102.0,
+        "dx": 82.5
+      },
+      {
+        "type": "commander",
+        "n": 1,
+        "x": 0.0,
+        "z": 189.0,
+        "names": [
+          "Napoleon"
+        ],
+        "nat": "fr"
+      }
+    ],
+    [
+      {
+        "type": "line",
+        "n": 5,
+        "x": -150.0,
+        "z": -33.0,
+        "dx": 45.0,
+        "names": [
+          "Steinmetz's I Corps",
+          "Jagow's Brigade",
+          "Henckel's Brigade",
+          "Pirch II's Brigade",
+          "Krafft's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 4,
+        "x": -52.5,
+        "z": -57.0,
+        "dx": 37.5,
+        "names": [
+          "Jürgass's Division",
+          "Langen's Division",
+          "Brause's Brigade",
+          "Kemphen's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "skirmisher",
+        "n": 2,
+        "x": 30.0,
+        "z": -15.0,
+        "dx": 60.0,
+        "name": "Prussian Fusiliers",
+        "nat": "pr"
+      },
+      {
+        "type": "lancer",
+        "n": 2,
+        "x": -15.0,
+        "z": -120.0,
+        "dx": 60.0,
+        "name": "Lützow's Uhlans",
+        "nat": "pr"
+      },
+      {
+        "type": "artillery",
+        "n": 3,
+        "x": -90.0,
+        "z": -72.0,
+        "dx": 60.0,
+        "name": "Prussian 12-pdr Battery",
+        "nat": "pr"
+      },
+      {
+        "type": "commander",
+        "n": 1,
+        "x": 0.0,
+        "z": -141.0,
+        "names": [
+          "Blücher"
+        ]
+      }
+    ]
+  ],
+  "timeline": [
+    {
+      "t": 120,
+      "type": "msg",
+      "msg": "Three cannon shots: the signal for Gérard's IV Corps to open the assault on Ligny."
+    },
+    {
+      "t": 330,
+      "type": "msg",
+      "msg": "A large column appears on the French left. D'Erlon's I Corps? It turns back toward Ney. Napoleon must win without it."
+    },
+    {
+      "t": 420,
+      "type": "reinforce",
+      "side": 1,
+      "units": [
+        {
+          "type": "line",
+          "n": 3,
+          "x": 0.0,
+          "z": 0.0,
+          "names": [
+            "Thielmann: Borcke",
+            "Thielmann: Stülpnagel",
+            "Pirch I's II Corps"
+          ],
+          "nat": "pr"
+        }
+      ],
+      "entry": {
+        "x": 202.5,
+        "z": -90.0
+      },
+      "go": {
+        "x": 105.0,
+        "z": -67.5
+      },
+      "spreadX": 0,
+      "spreadZ": 1.6,
+      "msg": "Prussian reserves from Sombreffe move up to the brook."
+    },
+    {
+      "t": 640,
+      "type": "weather",
+      "weather": "rain",
+      "msg": "Black clouds roll in. A thunderstorm darkens the field."
+    },
+    {
+      "t": 700,
+      "type": "rp",
+      "side": 0,
+      "amount": 60,
+      "msg": "The Old Guard stands ready. The moment has come to break the centre."
+    }
+  ]
+}

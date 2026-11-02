@@ -1,0 +1,581 @@
+{
+  "id": "waterloo",
+  "title": "Waterloo",
+  "date": "18 June 1815",
+  "blurb": "The decisive battle. Wellington's army waits behind the ridge of Mont-Saint-Jean, with strongpoints at Hougoumont and La Haye Sainte. Napoleon must break it before Blücher's Prussians arrive on his right flank. The ground is soaked; the Emperor waits for it to dry. Every regiment still in your roster fights here.",
+  "hint": "Take Hougoumont and La Haye Sainte, then crack the ridge. The Prussians come from the east around mid-afternoon; hold Plancenoit. Keep the Guard for the last throw. If you beat Blücher at Ligny, he comes later.",
+  "duration": 1800,
+  "clock": {
+    "start": "11:00",
+    "hours": 10
+  },
+  "weather": "rain",
+  "map": {
+    "size": 450,
+    "hills": [
+      {
+        "x": 0.0,
+        "z": -60.0,
+        "rx": 225.0,
+        "rz": 21.0,
+        "h": 8
+      },
+      {
+        "x": 0.0,
+        "z": 82.5,
+        "rx": 225.0,
+        "rz": 24.0,
+        "h": 6
+      },
+      {
+        "x": 142.5,
+        "z": 82.5,
+        "rx": 37.5,
+        "rz": 30.0,
+        "h": 3
+      },
+      {
+        "x": -105.0,
+        "z": -15.0,
+        "rx": 30.0,
+        "rz": 24.0,
+        "h": 2
+      }
+    ],
+    "woods": [
+      {
+        "x": -117.0,
+        "z": -18.0,
+        "r": 18.0
+      },
+      {
+        "x": 168.0,
+        "z": 42.0,
+        "r": 24.0
+      },
+      {
+        "x": -30.0,
+        "z": -135.0,
+        "r": 21.0
+      },
+      {
+        "x": 90.0,
+        "z": 142.5,
+        "r": 15.0
+      }
+    ],
+    "villages": [
+      {
+        "name": "Hougoumont",
+        "x": -108.0,
+        "z": -12.0,
+        "r": 9.6,
+        "garrison": true
+      },
+      {
+        "name": "La Haye Sainte",
+        "x": 0.0,
+        "z": -21.0,
+        "r": 7.2,
+        "garrison": true
+      },
+      {
+        "name": "Papelotte",
+        "x": 132.0,
+        "z": -30.0,
+        "r": 9.6,
+        "garrison": true
+      },
+      {
+        "name": "Plancenoit",
+        "x": 150.0,
+        "z": 93.0,
+        "r": 12.0
+      },
+      {
+        "name": "Mont-Saint-Jean",
+        "x": 0.0,
+        "z": -108.0,
+        "r": 10.8
+      },
+      {
+        "name": "La Belle Alliance",
+        "x": 0.0,
+        "z": 75.0,
+        "r": 7.2
+      }
+    ],
+    "hedges": [
+      {
+        "pts": [
+          [
+            -75.0,
+            -72.8
+          ],
+          [
+            165.0,
+            -72.8
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            -75.0,
+            -59.2
+          ],
+          [
+            165.0,
+            -59.2
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            -45.0,
+            33.0
+          ],
+          [
+            -45.0,
+            78.0
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            60.0,
+            33.0
+          ],
+          [
+            60.0,
+            78.0
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            -45.0,
+            33.0
+          ],
+          [
+            60.0,
+            33.0
+          ]
+        ]
+      }
+    ],
+    "lanes": [
+      {
+        "pts": [
+          [
+            -75.0,
+            -66.0
+          ],
+          [
+            165.0,
+            -66.0
+          ]
+        ],
+        "w": 3.6,
+        "depth": 1.4
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "hg",
+      "name": "Hougoumont",
+      "x": -108.0,
+      "z": -12.0,
+      "r": 16.8,
+      "value": 2,
+      "owner": 1
+    },
+    {
+      "id": "lh",
+      "name": "La Haye Sainte",
+      "x": 0.0,
+      "z": -21.0,
+      "r": 14.4,
+      "value": 3,
+      "owner": 1
+    },
+    {
+      "id": "rd",
+      "name": "Wellington's Ridge",
+      "x": 45.0,
+      "z": -54.0,
+      "r": 21.6,
+      "value": 3,
+      "owner": 1
+    },
+    {
+      "id": "pa",
+      "name": "Papelotte",
+      "x": 132.0,
+      "z": -30.0,
+      "r": 15.6,
+      "value": 1.5,
+      "owner": 1
+    },
+    {
+      "id": "pl",
+      "name": "Plancenoit",
+      "x": 150.0,
+      "z": 93.0,
+      "r": 15.6,
+      "value": 2.5,
+      "owner": 0
+    }
+  ],
+  "entry": [
+    {
+      "x": 0.0,
+      "z": 220.5
+    },
+    {
+      "x": 0.0,
+      "z": -220.5
+    }
+  ],
+  "rpStart": [
+    30,
+    20
+  ],
+  "rpRate": [
+    0.6,
+    0.55
+  ],
+  "reserves": [
+    {
+      "line": 3,
+      "artillery": 1,
+      "cuirassier": 1
+    },
+    {
+      "line": 3,
+      "artillery": 1
+    }
+  ],
+  "abilities": [
+    [
+      "barrage",
+      "cavalry"
+    ],
+    [
+      "barrage",
+      "rockets",
+      "cavalry"
+    ]
+  ],
+  "cavalryName": [
+    "Ney's Grand Cavalry",
+    "Union Brigade"
+  ],
+  "nat": [
+    "fr",
+    "gb"
+  ],
+  "bot": [
+    "attack",
+    "defend"
+  ],
+  "forces": [
+    [
+      {
+        "type": "line",
+        "n": 10,
+        "x": -150.0,
+        "z": 120.0,
+        "dx": 33.0
+      },
+      {
+        "type": "guard",
+        "n": 3,
+        "x": -30.0,
+        "z": 183.0,
+        "dx": 30.0
+      },
+      {
+        "type": "skirmisher",
+        "n": 3,
+        "x": -135.0,
+        "z": 93.0,
+        "dx": 135.0
+      },
+      {
+        "type": "lancer",
+        "n": 3,
+        "x": -180.0,
+        "z": 144.0,
+        "dx": 180.0
+      },
+      {
+        "type": "cuirassier",
+        "n": 3,
+        "x": -60.0,
+        "z": 150.0,
+        "dx": 60.0
+      },
+      {
+        "type": "artillery",
+        "n": 5,
+        "x": -90.0,
+        "z": 93.0,
+        "dx": 45.0
+      },
+      {
+        "type": "commander",
+        "n": 1,
+        "x": 0.0,
+        "z": 204.0,
+        "names": [
+          "Napoleon"
+        ],
+        "nat": "fr"
+      }
+    ],
+    [
+      {
+        "type": "line",
+        "n": 5,
+        "x": -135.0,
+        "z": -42.0,
+        "dx": 33.0,
+        "names": [
+          "Byng's Guards (Hougoumont)",
+          "Maitland's Guards",
+          "Halkett's Brigade",
+          "Kielmansegge's Hanoverians",
+          "Du Plat's KGL"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "line",
+        "n": 4,
+        "x": 15.0,
+        "z": -45.0,
+        "dx": 37.5,
+        "names": [
+          "Pack's Highlanders",
+          "Kempt's Brigade",
+          "Lambert's Brigade",
+          "Bylandt's Dutch-Belgians"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "skirmisher",
+        "n": 3,
+        "x": -105.0,
+        "z": -9.0,
+        "dx": 105.0,
+        "names": [
+          "Hougoumont Light Companies",
+          "95th Rifles at La Haye Sainte",
+          "Nassau Sharpshooters"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "cuirassier",
+        "n": 2,
+        "x": 0.0,
+        "z": -93.0,
+        "dx": 60.0,
+        "names": [
+          "Household Brigade",
+          "Union Brigade"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "lancer",
+        "n": 2,
+        "x": 82.5,
+        "z": -82.5,
+        "dx": 60.0,
+        "names": [
+          "Vivian's Hussars",
+          "Vandeleur's Light Dragoons"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "artillery",
+        "n": 4,
+        "x": -30.0,
+        "z": -66.0,
+        "dx": 37.5,
+        "names": [
+          "Mercer's Horse Artillery",
+          "Bull's Howitzers",
+          "Ramsay's Troop",
+          "Lloyd's Foot Battery"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "commander",
+        "n": 1,
+        "x": 0.0,
+        "z": -114.0,
+        "names": [
+          "Wellington"
+        ]
+      }
+    ]
+  ],
+  "timeline": [
+    {
+      "t": 0,
+      "type": "msg",
+      "msg": "Dawn broke after a night of storms. The ground is too soft for the guns. Napoleon delays the attack."
+    },
+    {
+      "t": 220,
+      "type": "weather",
+      "weather": "clear",
+      "msg": "The ground has dried. The Grand Battery is ready."
+    },
+    {
+      "t": 300,
+      "type": "msg",
+      "msg": "Jérôme's division opens the battle with a diversionary assault on Hougoumont."
+    },
+    {
+      "t": 560,
+      "type": "msg",
+      "msg": "Ney leads the great cavalry charges against the ridge. Squares hold."
+    },
+    {
+      "t": 760,
+      "type": "msg",
+      "msg": "Dust on the eastern horizon. Is it Grouchy, or Blücher?"
+    },
+    {
+      "t": 800,
+      "type": "reinforce",
+      "side": 1,
+      "delayIfWon": {
+        "ligny": 200
+      },
+      "units": [
+        {
+          "type": "line",
+          "n": 3,
+          "x": 0.0,
+          "z": 0.0,
+          "names": [
+            "Bülow: Hiller's Brigade",
+            "Bülow: Hacke's Brigade",
+            "Bülow: Ryssel's Brigade"
+          ],
+          "nat": "pr"
+        },
+        {
+          "type": "cuirassier",
+          "n": 1,
+          "x": 0.0,
+          "z": 0.0,
+          "name": "Prussian Hussars",
+          "nat": "pr"
+        },
+        {
+          "type": "artillery",
+          "n": 1,
+          "x": 0.0,
+          "z": 0.0,
+          "name": "Bülow's Battery",
+          "nat": "pr"
+        }
+      ],
+      "entry": {
+        "x": 220.5,
+        "z": 82.5
+      },
+      "go": {
+        "x": 165.0,
+        "z": 105.0
+      },
+      "spreadX": 0,
+      "spreadZ": 1.6,
+      "msg": "It is Blücher! Bülow's IV Corps attacks Plancenoit."
+    },
+    {
+      "t": 1020,
+      "type": "reinforce",
+      "side": 1,
+      "delayIfWon": {
+        "ligny": 150
+      },
+      "units": [
+        {
+          "type": "line",
+          "n": 3,
+          "x": 0.0,
+          "z": 0.0,
+          "names": [
+            "Zieten: Steinmetz",
+            "Zieten: Pirch II",
+            "Zieten: Jagow"
+          ],
+          "nat": "pr"
+        }
+      ],
+      "entry": {
+        "x": 220.5,
+        "z": -37.5
+      },
+      "go": {
+        "x": 135.0,
+        "z": -37.5
+      },
+      "spreadX": 0,
+      "spreadZ": 1.6,
+      "msg": "Zieten's I Corps reaches Papelotte and the Allied left flank is saved."
+    },
+    {
+      "t": 1100,
+      "type": "reinforce",
+      "side": 0,
+      "units": [
+        {
+          "type": "line",
+          "n": 2,
+          "x": 0.0,
+          "z": 0.0,
+          "names": [
+            "Lobau's VI Corps: Simmer",
+            "Lobau's VI Corps: Jeannin"
+          ]
+        }
+      ],
+      "entry": {
+        "x": 150.0,
+        "z": 210.0
+      },
+      "go": {
+        "x": 150.0,
+        "z": 135.0
+      },
+      "spreadX": 1.6,
+      "msg": "Lobau's VI Corps holds Plancenoit against the Prussians."
+    },
+    {
+      "t": 1180,
+      "type": "rp",
+      "side": 0,
+      "amount": 70,
+      "msg": "Napoleon commits the Imperial Guard. The last gamble."
+    }
+  ],
+  "strength": [
+    1,
+    0.95
+  ]
+}

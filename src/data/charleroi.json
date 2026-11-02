@@ -1,0 +1,352 @@
+{
+  "id": "charleroi",
+  "title": "Crossing the Sambre",
+  "date": "15 June 1815",
+  "blurb": "The Army of the North has crossed the frontier at dawn. Prussian outposts under Zieten hold the Sambre bridges at Charleroi, Marchienne and Châtelet. Seize the bridges and Gilly before the Prussians can concentrate. A warm-up for the real work to come.",
+  "hint": "Take the bridges with infantry in column, cover them with your guns, and send lancers around the flanks.",
+  "duration": 864,
+  "clock": {
+    "start": "04:00",
+    "hours": 10
+  },
+  "weather": "clear",
+  "map": {
+    "size": 330,
+    "hills": [
+      {
+        "x": 30.0,
+        "z": -105.0,
+        "rx": 60.0,
+        "rz": 27.0,
+        "h": 5
+      },
+      {
+        "x": -90.0,
+        "z": 75.0,
+        "rx": 45.0,
+        "rz": 30.0,
+        "h": 3
+      }
+    ],
+    "woods": [
+      {
+        "x": -127.5,
+        "z": -75.0,
+        "r": 21.0
+      },
+      {
+        "x": 127.5,
+        "z": -60.0,
+        "r": 18.0
+      },
+      {
+        "x": 67.5,
+        "z": 75.0,
+        "r": 15.0
+      }
+    ],
+    "villages": [
+      {
+        "name": "Charleroi",
+        "x": 0.0,
+        "z": -6.0,
+        "r": 14.4
+      },
+      {
+        "name": "Marchienne",
+        "x": -93.0,
+        "z": -9.0,
+        "r": 9.6
+      },
+      {
+        "name": "Châtelet",
+        "x": 87.0,
+        "z": -9.0,
+        "r": 9.6
+      },
+      {
+        "name": "Gilly",
+        "x": 15.0,
+        "z": -93.0,
+        "r": 9.6
+      }
+    ],
+    "rivers": [
+      {
+        "pts": [
+          [
+            -165.0,
+            0.0
+          ],
+          [
+            -82.5,
+            -6.0
+          ],
+          [
+            0.0,
+            -3.0
+          ],
+          [
+            82.5,
+            -7.5
+          ],
+          [
+            165.0,
+            0.0
+          ]
+        ],
+        "width": 10.8,
+        "bridges": [
+          [
+            -90.0,
+            -6.0
+          ],
+          [
+            0.0,
+            -3.0
+          ],
+          [
+            87.0,
+            -7.5
+          ]
+        ]
+      }
+    ]
+  },
+  "zones": [
+    {
+      "id": "ch",
+      "name": "Charleroi Bridge",
+      "x": 0.0,
+      "z": -3.0,
+      "r": 14.4,
+      "value": 4,
+      "owner": 1
+    },
+    {
+      "id": "ma",
+      "name": "Marchienne Bridge",
+      "x": -90.0,
+      "z": -6.0,
+      "r": 12.0,
+      "value": 2,
+      "owner": 1
+    },
+    {
+      "id": "cl",
+      "name": "Châtelet Bridge",
+      "x": 87.0,
+      "z": -7.5,
+      "r": 12.0,
+      "value": 2,
+      "owner": 1
+    },
+    {
+      "id": "gi",
+      "name": "Gilly",
+      "x": 15.0,
+      "z": -93.0,
+      "r": 15.6,
+      "value": 3,
+      "owner": 1
+    }
+  ],
+  "entry": [
+    {
+      "x": 0.0,
+      "z": 157.5
+    },
+    {
+      "x": 0.0,
+      "z": -157.5
+    }
+  ],
+  "rpStart": [
+    0,
+    0
+  ],
+  "rpRate": [
+    0.6,
+    0.4
+  ],
+  "reserves": [
+    {
+      "line": 2,
+      "skirmisher": 1
+    },
+    {
+      "line": 1
+    }
+  ],
+  "abilities": [
+    [
+      "barrage",
+      "cavalry"
+    ],
+    []
+  ],
+  "cavalryName": [
+    "Reserve Cuirassiers",
+    "Reserve Dragoons"
+  ],
+  "nat": [
+    "fr",
+    "pr"
+  ],
+  "bot": [
+    "attack",
+    "defend"
+  ],
+  "forces": [
+    [
+      {
+        "type": "line",
+        "n": 5,
+        "x": -75.0,
+        "z": 105.0,
+        "dx": 37.5
+      },
+      {
+        "type": "skirmisher",
+        "n": 2,
+        "x": -45.0,
+        "z": 78.0,
+        "dx": 90.0
+      },
+      {
+        "type": "lancer",
+        "n": 2,
+        "x": -112.5,
+        "z": 127.5,
+        "dx": 225.0
+      },
+      {
+        "type": "artillery",
+        "n": 1,
+        "x": 0.0,
+        "z": 82.5
+      },
+      {
+        "type": "commander",
+        "n": 1,
+        "x": 0.0,
+        "z": 148.5,
+        "names": [
+          "Napoleon"
+        ],
+        "nat": "fr"
+      }
+    ],
+    [
+      {
+        "type": "line",
+        "n": 3,
+        "x": -67.5,
+        "z": -37.5,
+        "dx": 67.5,
+        "names": [
+          "1st Westphalian Landwehr",
+          "Pirch II's Brigade",
+          "Steinmetz's Brigade"
+        ]
+      },
+      {
+        "type": "skirmisher",
+        "n": 3,
+        "x": -90.0,
+        "z": -15.0,
+        "dx": 90.0,
+        "name": "Prussian Jäger"
+      },
+      {
+        "type": "lancer",
+        "n": 1,
+        "x": 45.0,
+        "z": -60.0,
+        "name": "1st Silesian Uhlans"
+      },
+      {
+        "type": "artillery",
+        "n": 1,
+        "x": 7.5,
+        "z": -42.0,
+        "name": "Zieten's Foot Battery"
+      },
+      {
+        "type": "commander",
+        "n": 1,
+        "x": 0.0,
+        "z": -81.0,
+        "names": [
+          "Zieten"
+        ]
+      }
+    ]
+  ],
+  "timeline": [
+    {
+      "t": 40,
+      "type": "morale",
+      "side": 0,
+      "amount": -8,
+      "msg": "General de Bourmont has deserted to the Prussians — doubt spreads in the ranks."
+    },
+    {
+      "t": 220,
+      "type": "reinforce",
+      "side": 1,
+      "units": [
+        {
+          "type": "line",
+          "n": 2,
+          "x": 0.0,
+          "z": 0.0,
+          "dx": 0.0,
+          "names": [
+            "Jagow's Brigade",
+            "Henckel's Brigade"
+          ]
+        }
+      ],
+      "entry": {
+        "x": 0.0,
+        "z": -157.5
+      },
+      "go": {
+        "x": 7.5,
+        "z": -75.0
+      },
+      "spreadX": 1.6,
+      "msg": "Prussian reinforcements are marching to hold Gilly."
+    },
+    {
+      "t": 450,
+      "type": "reinforce",
+      "side": 1,
+      "units": [
+        {
+          "type": "line",
+          "n": 2,
+          "x": 0.0,
+          "z": 0.0
+        },
+        {
+          "type": "lancer",
+          "n": 1,
+          "x": 0.0,
+          "z": 0.0
+        }
+      ],
+      "entry": {
+        "x": 0.0,
+        "z": -157.5
+      },
+      "go": {
+        "x": 15.0,
+        "z": -82.5
+      },
+      "spreadX": 1.6,
+      "msg": "Late Prussian columns arrive from Fleurus."
+    }
+  ]
+}
