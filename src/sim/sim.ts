@@ -332,7 +332,8 @@ export function step(sim: Sim, dt: number) {
   const seen: Set<number>[] = [new Set(), new Set()];
   for (const e of live) {
     if (!s.fog) { seen[1 - e.side].add(e.id); continue; }
-    const vis = (e.fired < tu.sight.reveal) || live.some((f: any) => f.side !== e.side && Math.hypot(f.x - e.x, f.z - e.z) < (tu.sight[f.type] ?? 70) * (s.weather === 'storm' ? tu.sight.storm : s.weather === 'rain' ? tu.sight.rain : 1) * (featureAt(scn, e.x, e.z).kind === 'wood' ? 0.6 : 1) && !smokeBlocked(sim, f.x, f.z, e.x, e.z));
+    const wood = featureAt(scn, e.x, e.z).kind === 'wood' ? 0.6 : 1;
+    const vis = (e.fired < tu.sight.reveal) || live.some((f: any) => f.side !== e.side && Math.hypot(f.x - e.x, f.z - e.z) < (tu.sight[f.type] ?? 70) * (s.weather === 'storm' ? tu.sight.storm : s.weather === 'rain' ? tu.sight.rain : 1) * wood && !smokeBlocked(sim, f.x, f.z, e.x, e.z));
     if (vis) seen[1 - e.side].add(e.id);
   }
   s.seen = [[...seen[0]], [...seen[1]]];

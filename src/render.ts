@@ -23,11 +23,35 @@ const WEATHER: Record<string, any> = {
 function rgb(c: { r: number; g: number; b: number }) { return { sr: c.r, sg: c.g, sb: c.b }; }
 
 const hash = (n: number) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+// ground detail tile (TTT/OpenKTG style: textures are code): RGBA = grass, wheat, plough, cobbles; each channel a tileable grey pattern, mean forced to 0.5
+const DN = 64, DTEX = 0.25; // tile texels, world units per texel (~2 render px at the default zoom)
+const ih = (x: number, y: number, s: number) => { let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s, 1274126177)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+export function detailPixels() {
+  const px = new Uint8Array(DN * DN * 4), ch = [0, 1, 2, 3].map(() => new Float32Array(DN * DN));
+  const vn = (x: number, y: number, p: number, s: number) => { // value noise whose lattice wraps at the tile
+    const c = DN / p, gx = x / c, gy = y / c, ix = Math.floor(gx), iy = Math.floor(gy), fx = gx - ix, fy = gy - iy, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), a = (i: number, j: number) => ih((ix + i) % p, (iy + j) % p, s);
+    return (a(0, 0) * (1 - u) + a(1, 0) * u) * (1 - v) + (a(0, 1) * (1 - u) + a(1, 1) * u) * v;
+  };
+  for (let y = 0; y < DN; y++) for (let x = 0; x < DN; x++) {
+    const i = y * DN + x;
+    ch[0][i] = vn(x, y, 8, 1) * 0.5 + vn(x, y, 16, 2) * 0.3 + vn(x, y, 32, 3) * 0.2 + (ih(x, y, 4) > 0.93 ? 0.4 : 0); // clumps + tuft specks
+    const k = x & 3; ch[1][i] = [0.2, 1, 0.65, 0.2][k] * (0.6 + 0.4 * ih(x >> 2, y >> 2, 5)) * (ih(x >> 2, y, 6) > 0.1 ? 1 : 0.3); // stalk rows along y, jittered
+    ch[2][i] = 0.5 + 0.5 * Math.sin((y / 16) * Math.PI * 2 + 2 * vn(x, y, 8, 7)) + (ih(x, y, 8) > 0.9 ? 0.5 : 0); // furrows (wobbly) + clods
+    let f1 = 99, f2 = 99, id = 0; const cx = x >> 4, cy = y >> 4; // 4x4 voronoi cells => cobbles
+    for (let j = -1; j <= 1; j++) for (let k2 = -1; k2 <= 1; k2++) {
+      const nx = cx + k2, ny = cy + j, wx = (nx + 4) % 4, wy = (ny + 4) % 4, d = Math.hypot(x - (nx + ih(wx, wy, 9)) * 16, y - (ny + ih(wx, wy, 10)) * 16);
+      if (d < f1) { f2 = f1; f1 = d; id = ih(wx, wy, 11); } else if (d < f2) f2 = d;
+    }
+    ch[3][i] = Math.min(1, (f2 - f1) / 3) * 0.6 + id * 0.4; // dark mortar, per-stone tone
+  }
+  ch.forEach((c, k) => { let m = 0; for (const v of c) m += v; m = m / c.length - 0.5; for (let i = 0; i < c.length; i++) px[i * 4 + k] = Math.max(0, Math.min(255, Math.round((c[i] - m) * 255))); });
+  return px;
+}
 const TILT = (35 * Math.PI) / 180, ISO = Math.PI / 4, CAM_D = 300, ZOOM_K = 0.36, STOPS = [28, 45, 64, 90, 130, 190, 280, 420];
 
 // flat-coloured geometry helpers (vertex colours, non-indexed so toon steps stay crisp)
 function paint(g: THREE.BufferGeometry, hex: number) {
-  g = g.index ? g.toNonIndexed() : g;
+  if (g.index && g.type !== 'BoxGeometry') g = g.toNonIndexed(); // boxes keep their index (24 verts, flat normals already)
   const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
   g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv'); g.computeVertexNormals();
@@ -35,7 +59,7 @@ function paint(g: THREE.BufferGeometry, hex: number) {
 }
 const bx = (w: number, h: number, d: number, x: number, y: number, z: number, hex: number) => paint(new THREE.BoxGeometry(w, h, d).translate(x, y, z), hex);
 const cy = (r0: number, r1: number, h: number, seg: number, x: number, y: number, z: number, hex: number) => paint(new THREE.CylinderGeometry(r0, r1, h, seg).translate(x, y, z), hex);
-const merge = (l: THREE.BufferGeometry[]) => mergeGeometries(l)!;
+const merge = (l: THREE.BufferGeometry[]) => mergeGeometries(l.some(g => !g.index) ? l.map(g => g.index ? g.toNonIndexed() : g) : l)!; // mergeGeometries needs all-or-none indexed
 
 export function createView(host: HTMLElement) {
   // render quality: 0 Guide (strict 480x270 look, fixed zoom stops, 90-degree turns), 1 Fine (360 rows), 2 High (540+ rows), 3 Native (up to 1440 rows)
@@ -77,7 +101,33 @@ export function createView(host: HTMLElement) {
   // 3-step toon ramp shared by everything lit
   const ramp = new THREE.DataTexture(new Uint8Array([120, 190, 255]), 3, 1, THREE.RedFormat);
   ramp.minFilter = ramp.magFilter = THREE.NearestFilter; ramp.needsUpdate = true;
-  const toon = (o: THREE.MeshToonMaterialParameters = {}) => new THREE.MeshToonMaterial({ gradientMap: ramp, ...o });
+  // gunfire flash lights (q1k3 style): fixed pool in shared uniforms, every toon fragment loops all of them, falloff quantized to the toon look
+  const FL = 16, flP = Array.from({ length: FL }, () => new THREE.Vector4(0, -999, 0, 1)), flC = Array.from({ length: FL }, () => new THREE.Vector3());
+  const flU = { uFlP: { value: flP }, uFlC: { value: flC } };
+  const flashHook = (sh: any) => { // one shared function => identical program cache key for every material
+    Object.assign(sh.uniforms, flU);
+    const pars = 'varying vec3 vFlW;';
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\n${pars}`).replace('#include <project_vertex>', `#include <project_vertex>
+      vec4 flW = vec4( transformed, 1.0 );
+      #ifdef USE_INSTANCING
+      flW = instanceMatrix * flW;
+      #endif
+      vFlW = ( modelMatrix * flW ).xyz;`);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\n${pars}\nuniform vec4 uFlP[16]; uniform vec3 uFlC[16];`).replace('#include <opaque_fragment>', `vec3 flash = vec3( 0.0 );
+      for ( int i = 0; i < 16; i ++ ) { float t = clamp( 1.0 - length( uFlP[ i ].xyz - vFlW ) / uFlP[ i ].w, 0.0, 1.0 ); flash += uFlC[ i ] * ( floor( smoothstep( 0.0, 1.0, t ) * 3.0 + 0.5 ) / 3.0 ); }
+      outgoingLight += diffuseColor.rgb * flash;
+      #include <opaque_fragment>`);
+  };
+  // terrain-only: modulate vertex colour by the detail tile; nearest + nearest mips so it stays crisp and fades to flat grey (no shimmer) when zoomed out
+  const detail = new THREE.DataTexture(detailPixels(), DN, DN, THREE.RGBAFormat);
+  detail.wrapS = detail.wrapT = THREE.RepeatWrapping; detail.magFilter = THREE.NearestFilter; detail.minFilter = THREE.NearestMipmapNearestFilter; detail.generateMipmaps = true; detail.needsUpdate = true;
+  const terrainHook = (sh: any) => {
+    flashHook(sh); sh.uniforms.uDetail = { value: detail };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aKind; varying vec4 vKind;').replace('#include <project_vertex>', '#include <project_vertex>\nvKind = aKind;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec4 vKind; uniform sampler2D uDetail;`).replace('#include <color_fragment>', `#include <color_fragment>
+      diffuseColor.rgb *= 1.0 + ( dot( texture2D( uDetail, vFlW.xz / ${(DN * DTEX).toFixed(1)} ), vKind ) - 0.5 * dot( vKind, vec4( 1.0 ) ) ) * 0.25;`); // zero weights (wood, water) => no change
+  };
+  const toon = (o: THREE.MeshToonMaterialParameters = {}, hook = flashHook) => { const m = new THREE.MeshToonMaterial({ gradientMap: ramp, ...o }); m.onBeforeCompile = hook; return m; };
 
   // --- tweenable camera + atmosphere (plain objects driven by Anime.js) ---
   // cam.yaw = 0 is the default iso view (45deg); callers rotate relative to it.
@@ -215,11 +265,11 @@ export function createView(host: HTMLElement) {
     const segs = Math.min(240, Math.round(mapSize / 1.6));
     const geo = new THREE.PlaneGeometry(mapSize, mapSize, segs, segs);
     geo.rotateX(-Math.PI / 2);
-    const pos = geo.attributes.position, colA = new Float32Array(pos.count * 3);
+    const pos = geo.attributes.position, colA = new Float32Array(pos.count * 3), kindA = new Float32Array(pos.count * 4);
     const A = new THREE.Color(P.grassA), B = new THREE.Color(P.grassB), W = new THREE.Color(P.wheat), W2 = new THREE.Color(P.wheatB), R = new THREE.Color(P.ridge), CL = new THREE.Color(P.cliff);
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), z = pos.getZ(i);
-      let h = heightAt(s, x, z), wet = false;
+      let h = heightAt(s, x, z), wet = false, kd = 0; // kd: detail channel 0 grass, 1 wheat, 2 plough, 3 lane/village, -1 none
       const n = hash(Math.round(x * 0.5) * 31 + Math.round(z * 0.5) * 17);
       const field = Math.sin(x * 0.06 + z * 0.02) * Math.sin(z * 0.05 - x * 0.015) > 0.25;
       const plough = !field && Math.sin(x * 0.04 + 1) * Math.sin(z * 0.045 - 2) > 0.6;
@@ -230,9 +280,10 @@ export function createView(host: HTMLElement) {
       col.lerp(R, Math.min(0.55, Math.max(0, Math.floor((h + 0.35 * Math.sin(x * 0.9 + z * 0.5)) / 2) * 2) / 16)); // ridge bands with a zigzag edge
       const slope = (Math.abs(heightAt(s, x + 1.6, z) - heightAt(s, x, z)) + Math.abs(heightAt(s, x, z + 1.6) - heightAt(s, x, z))) / 1.6;
       if (slope > 0.3) col.lerp(CL, Math.min(0.6, (slope - 0.3) * 2)); // cliff faces
-      for (const w of s.map.woods ?? []) if (Math.hypot(x - w.x, z - w.z) < w.r) col.setHex(P.woodFloor);
-      for (const v of s.map.villages ?? []) if (Math.hypot(x - v.x, z - v.z) < v.r) col.setHex(P.lane);
-      for (const l of s.map.lanes ?? []) if (lineDist(l.pts, x, z) < l.w * 0.7) col.setHex(P.lane);
+      kd = field ? 1 : plough ? 2 : 0;
+      for (const w of s.map.woods ?? []) if (Math.hypot(x - w.x, z - w.z) < w.r) { col.setHex(P.woodFloor); kd = -1; }
+      for (const v of s.map.villages ?? []) if (Math.hypot(x - v.x, z - v.z) < v.r) { col.setHex(P.lane); kd = 3; }
+      for (const l of s.map.lanes ?? []) if (lineDist(l.pts, x, z) < l.w * 0.7) { col.setHex(P.lane); kd = 3; }
       for (const r of s.map.rivers ?? []) {
         for (let k = 0; k + 1 < r.pts.length; k++) {
           const [ax, az] = r.pts[k], [bx, bz] = r.pts[k + 1];
@@ -240,12 +291,14 @@ export function createView(host: HTMLElement) {
           if (Math.hypot(x - ax - tt * dx, z - az - tt * dz) < r.width / 2 && !r.bridges.some(([qx, qz]: number[]) => Math.hypot(x - qx, z - qz) < 7)) wet = true;
         }
       }
-      if (wet) { col.setHex(P.water); h -= 0.6; }
+      if (wet) { col.setHex(P.water); h -= 0.6; kd = -1; }
+      if (kd >= 0) kindA[i * 4 + kd] = 1;
       pos.setY(i, Math.round(h / STEP) * STEP + (hash(Math.round(x * 3) * 17 + Math.round(z * 3) * 29) - 0.5) * 0.18); // faceted, low-poly ground
       colA.set([col.r, col.g, col.b], i * 3);
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colA, 3));
-    terrainMesh = new THREE.Mesh(geo.toNonIndexed(), toon({ vertexColors: true }));
+    geo.setAttribute('aKind', new THREE.BufferAttribute(kindA, 4)); // survives toNonIndexed; the fog veil shares the geometry but ignores it
+    terrainMesh = new THREE.Mesh(geo.toNonIndexed(), toon({ vertexColors: true }, terrainHook));
     terrainMesh.geometry.computeVertexNormals();
     terrainMesh.receiveShadow = true;
     fogTex = new THREE.DataTexture(new Uint8Array(FG * FG), FG, FG, THREE.RedFormat);
@@ -412,13 +465,16 @@ export function createView(host: HTMLElement) {
   gunParts.push(bx(0.55, 0.4, 0.6, 0, 0.8, -2.0, 0x4a5a34), bx(0.05, 0.05, 1.7, 0.36, 1.32, 0.2, P.wood), bx(0.1, 0.1, 0.12, 0.36, 1.32, 1.1, 0x8a8576));
   for (const [ax, az] of [[-0.9, -0.5], [-0.75, -0.3], [-1.05, -0.3], [-0.9, -0.1]]) gunParts.push(bx(0.2, 0.2, 0.2, ax, 0.12, az, 0x2a2a2e)); // shot pile
   const gunG = merge(gunParts);
-  const foot = mkI(coatArms, 5000, toon({ color: 0xffffff }), [0, 0.85, 0]);
+  const foot = mkI(coatArms, 5000, toon({ color: 0xffffff }), [0, 0.85, 0], false);
   foot.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(5000 * 3), 3);
-  const kit = mkI(kitG, 5000, toon({ vertexColors: true }), [0, 0.85, 0]);
+  const kit = mkI(kitG, 5000, toon({ vertexColors: true }), [0, 0.85, 0], false);
   // legs hang from the hip so they can swing when the unit marches
   const legG = (x: number) => merge([bx(0.19, 0.2, 0.25, x, -0.44, 0.02, DK), bx(0.18, 0.34, 0.22, x, -0.17, 0, P.pants)]);
-  const legL = mkI(legG(0.13), 5000, toon({ vertexColors: true }), [0, -0.27, 0]);
-  const legR = mkI(legG(-0.13), 5000, toon({ vertexColors: true }), [0, -0.27, 0]);
+  const legL = mkI(legG(0.13), 5000, toon({ vertexColors: true }), [0, -0.27, 0], false);
+  const legR = mkI(legG(-0.13), 5000, toon({ vertexColors: true }), [0, -0.27, 0], false);
+  // one invisible box casts the whole soldier's shadow (4 meshes of 29+ boxes were too heavy); slightly inside the silhouette so it never darkens the figure
+  const shadowP = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 1.8, 0.28).translate(0, 0.9, 0), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), 5000);
+  shadowP.instanceMatrix = foot.instanceMatrix; shadowP.count = 0; shadowP.frustumCulled = false; shadowP.castShadow = true; shadowP.receiveShadow = false; scene.add(shadowP);
   // Guard bearskins, and one standard per infantry regiment (pole + finial, waving banner in the nation's colour, gold eagle)
   const bearM = mkI(merge([bx(0.34, 0.6, 0.32, 0, 1.98, 0, DK), bx(0.14, 0.14, 0.02, 0, 1.84, 0.17, P.brass), bx(0.1, 0.36, 0.1, 0.1, 2.42, 0, 0xd8453a)]), 1500, toon({ vertexColors: true }), null, false);
   const flagM = mkI(merge([bx(0.07, 3.6, 0.07, 0, 1.8, 0, P.wood), bx(0.18, 0.2, 0.18, 0, 3.7, 0, P.brass)]), 400, toon({ vertexColors: true }), [0, 1.8, 0], false);
@@ -581,6 +637,21 @@ export function createView(host: HTMLElement) {
   const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x9be37a, transparent: true, opacity: 0.85, depthTest: false }));
   lines.frustumCulled = false; lines.renderOrder = 4; scene.add(lines);
 
+  type Flash = { x: number; y: number; z: number; r: number; c: THREE.Color; age: number; life: number; w: number };
+  const flashes: Flash[] = [], FLC = [new THREE.Color('#ffd45a'), new THREE.Color('#ffb23e'), new THREE.Color('#e0601f')];
+  const flash = (x: number, y: number, z: number, r: number, c: number, life: number, w: number) => { if (flashes.length < 48) flashes.push({ x, y, z, r, c: FLC[c], age: 0, life, w }); };
+  function lightFlashes(dt: number) {
+    const boost = 1 + 0.7 * Math.max(0, 1 - atm.sun / 2) + 0.3 * atm.tod; // read more at dusk and in storms
+    for (let i = flashes.length - 1; i >= 0; i--) if ((flashes[i].age += dt) >= flashes[i].life) flashes.splice(i, 1);
+    const str = (f: Flash) => { const u = f.age / f.life, a = u < 0.15 ? u / 0.15 : (1 - u) / 0.85; return f.w * a * a / (1 + (Math.hypot(f.x - cam.x, f.z - cam.z) / 70) ** 2); }; // fast attack, quick decay, dimmer far from camera
+    const live = flashes.map(f => [str(f), f] as const).sort((a, b) => b[0] - a[0]);
+    for (let i = 0; i < FL; i++) {
+      const l = live[i]; if (!l) { flC[i].set(0, 0, 0); continue; }
+      const f = l[1], u = f.age / f.life, a = u < 0.15 ? u / 0.15 : (1 - u) / 0.85;
+      flP[i].set(f.x, f.y, f.z, f.r); flC[i].set(f.c.r, f.c.g, f.c.b).multiplyScalar(f.w * a * a * boost * (0.6 + 0.4 / (1 + (Math.hypot(f.x - cam.x, f.z - cam.z) / 70) ** 2)));
+    }
+  }
+
   let prevWeather = '';
   let clock = 0;
 
@@ -590,10 +661,11 @@ export function createView(host: HTMLElement) {
       if (e.k === 'shot') {
         const dx = e.tx - e.x, dz = e.tz - e.z, d = Math.hypot(dx, dz) || 1, y = heightAt(scn, e.x, e.z) + 1.6;
         spawn(1, e.x + (dx / d) * 2, y, e.z + (dz / d) * 2, 0.15, e.a ? 5 : 3);
+        flash(e.x + (dx / d) * 2, y, e.z + (dz / d) * 2, e.a ? 13 : 7, e.a ? 1 : 0, e.a ? 0.25 : 0.12, e.a ? 0.7 : 0.4);
         if (e.a) { spawn(0, e.x + (dx / d) * 3, y + 0.4, e.z + (dz / d) * 3, 4, 3.6, 0.5, 0.5, 0); kick(Math.max(0, 0.25 - dist2(e.x, e.z) / 400)); }
       } else if (e.k === 'boom') {
         const y = heightAt(scn, e.x, e.z);
-        spawn(2, e.x, y + 1.6, e.z, 0.6, 8);
+        spawn(2, e.x, y + 1.6, e.z, 0.6, 8); flash(e.x, y + 2, e.z, 17, 2, 0.5, 0.9);
         spawn(3, e.x - 1.5, y + 0.6, e.z, 0.5, 3); spawn(3, e.x + 1.5, y + 0.6, e.z + 1, 0.5, 3);
         spawn(0, e.x, y + 1.5, e.z, 6, 5, 0.4, 0.6, 0);
         crater(e.x, e.z, 0.9 + Math.random() * 0.9);
@@ -603,7 +675,7 @@ export function createView(host: HTMLElement) {
       else if (e.k === 'rank' && e.side === viewer) popText(e.x, e.z, `* ${['', 'SEASONED', 'VETERAN', 'ELITE'][e.vet]}`, false);
       else if (e.k === 'dead') {
         const y = heightAt(scn, e.x, e.z);
-        spawn(2, e.x, y + 1.6, e.z, 0.6, 11); spawn(0, e.x, y + 2, e.z, 5, 6.5, 0.4, 0.5, 0);
+        spawn(2, e.x, y + 1.6, e.z, 0.6, 11); flash(e.x, y + 2, e.z, 20, 2, 0.5, 1); spawn(0, e.x, y + 2, e.z, 5, 6.5, 0.4, 0.5, 0);
         for (let i = 0; i < 5; i++) spawn(3, e.x + (Math.random() - 0.5) * 9, y + 0.6, e.z + (Math.random() - 0.5) * 5, 0.5, 3);
         crater(e.x, e.z, 1.8); kick(Math.max(0.15, 0.9 - dist2(e.x, e.z) / 110));
       } else if (e.k === 'charge') kick(0.1);
@@ -613,7 +685,7 @@ export function createView(host: HTMLElement) {
   function sync(state: any, dt: number, viewer: number, evs: any[]) {
     clock += dt;
     if (state.weather !== prevWeather) { setWeather(state.weather, prevWeather === ''); prevWeather = state.weather; }
-    eat(evs, viewer);
+    eat(evs, viewer); lightFlashes(dt);
     updateFog(state, viewer);
 
     // time of day: warm light late in the scenario clock
@@ -639,6 +711,9 @@ export function createView(host: HTMLElement) {
     const seenSet = state.fog ? new Set<number>(state.seen?.[viewer] ?? []) : null; // fog of war: enemies you cannot see are not drawn
     const k = 1 - Math.exp(-10 * dt);
     const sl = [0, 0];
+    // cull regiments that are clearly off-screen (no figures placed; smoothing and bookkeeping still run). Not on the first frame or after a camera jump.
+    const still = camReady && Math.hypot(cam.x - lastCam.x, cam.z - lastCam.z) < 20 && Math.abs(cam.dist / lastCam.d - 1) < 0.2 && Math.abs(cam.yaw - lastCam.y) < 0.1 && Math.abs(tl.v - lastCam.t) < 0.1;
+    if (still) frustum.setFromProjectionMatrix(fMat.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     const cw = hudW, ch = hudH; // plates live in HUD pixels
     for (const u of state.units) {
       live.add(u.id);
@@ -654,6 +729,8 @@ export function createView(host: HTMLElement) {
       if (v.n && n < v.n) for (let q = 0; q < Math.min(3, v.n - n); q++) spawn(3, v.x + (Math.random() - 0.5) * 10, heightAt(scn, v.x, v.z) + 0.6, v.z + (Math.random() - 0.5) * 5, 0.5, 2.6); // men falling
       v.n = n;
       if (v.off.length < n * 2) { const o = new Float32Array(n * 2 + 40); o.set(v.off); v.off = o; v.form = ''; }
+      // footprint ~25*FS plus 15 for shadows thrown into view and the one-frame-old camera; stale slot offsets snap when it returns (form = '')
+      const cull = still && !frustum.intersectsSphere(cullS.set(v3.set(v.x, heightAt(scn, v.x, v.z), v.z), 25 * FS + 15));
       const sin = Math.sin(v.f), cos = Math.cos(v.f);
       tmpC.setHex(u.routed ? 0x8d8a82 : NAT[u.nat] ?? 0x888888);
       if (u.hurt < 0.18 && !u.routed) tmpC.lerp(WHITE, 0.6); // hit flash
@@ -674,7 +751,7 @@ export function createView(host: HTMLElement) {
         if (u.type === 'skirmisher') put(skirM, nsk++, x, y, z, ry, sc);
         if (u.type === 'lancer') { put(lanceM, nlc, x, y, z, ry, sc); put(pennM, nlc, x, y, z, ry, sc); pennM.setColorAt(nlc++, tmpC); }
       };
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < (cull ? 0 : n); i++) {
         if (isArt) {
           const g = i >> 1, lx = (g - (nGun - 1) / 2) * 4.2 + (i & 1 ? 1.4 : -1.4), lz = i & 1 ? -2.4 : 0;
           sl[0] = lx; sl[1] = lz;
@@ -699,8 +776,8 @@ export function createView(host: HTMLElement) {
           }
         } else if (nf < 4990) addFig(wx, y + bob, wz, 1.7 * FS, i);
       }
-      v.form = u.form;
-      if ((u.type === 'line' || u.type === 'guard') && !u.routed && nfl < 399) {
+      v.form = cull ? '' : u.form;
+      if (!cull && (u.type === 'line' || u.type === 'guard') && !u.routed && nfl < 399) {
         const gy = heightAt(scn, v.x, v.z), sway = Math.sin(clock * 3 + u.id) * 0.35;
         put(flagM, nfl, v.x, gy, v.z, v.f, 1.3 * FS);
         for (const m of [bannerM, eagleM]) put(m, nfl, v.x, gy, v.z, v.f + sway, 1.3 * FS);
@@ -734,8 +811,11 @@ export function createView(host: HTMLElement) {
     }
     horses.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = pennM.count = nlc; capM.count = ncp; skirM.count = nsk;
     foot.count = kit.count = legL.count = legR.count = nf; plumeM.count = npl; bearM.count = nbr; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
-    for (const m of [foot, kit, legL, legR, horses, guns, plumeM, cuirM, lanceM, pennM, capM, skirM, bearM, bicM, flagM, bannerM, eagleM]) m.instanceMatrix.needsUpdate = true;
-    for (const m of [foot, plumeM, pennM, horses, bannerM]) if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    shadowP.count = nf;
+    // upload only the live [0, count) slice; clear first so ranges never pile up across frames (hull twins share these attributes)
+    const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
+    for (const m of [foot, kit, legL, legR, horses, guns, plumeM, cuirM, lanceM, pennM, capM, skirM, bearM, bicM, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
+    for (const m of [foot, plumeM, pennM, horses, bannerM]) if (m.instanceColor) upl(m.instanceColor, m.count, 3);
     for (const [id, p] of plateMap) if (!live.has(id)) { p.el.remove(); plateMap.delete(id); vis.delete(id); }
     for (const l of vlabels) {
       v3.set(l.x, heightAt(scn, l.x, l.z) + 6, l.z).project(camera);
@@ -761,7 +841,7 @@ export function createView(host: HTMLElement) {
       f.x += f.vx * dt; f.y += f.vy * dt; f.z += f.vz * dt;
       place(f.row, Math.min(FRAMES[f.row] - 1, Math.floor((f.age / f.life) * FRAMES[f.row])), f.x, f.y, f.z, f.size);
     }
-    fxMesh.count = nfx; fxMesh.instanceMatrix.needsUpdate = true; fxAttr.needsUpdate = true;
+    fxMesh.count = nfx; upl(fxMesh.instanceMatrix, nfx, 16); upl(fxAttr, nfx, 3);
 
     // selection rings + order lines
     let nr = 0, nl = 0;
@@ -806,10 +886,13 @@ export function createView(host: HTMLElement) {
 
   // --- camera: ortho iso, snapped to whole buffer pixels so nothing shimmers ---------------------
   const silMat = new THREE.MeshBasicMaterial({ color: 0x14110d }), silBg = new THREE.Color(0xe9e4d6);
-  let S = 3, bw = 480, bh = 270; // S = integer upscale, bw x bh = render buffer
+  let S = 3, bw = 480, bh = 270, dpr = 1; // S = integer upscale in physical pixels, bw x bh = render buffer
   let hs = 2, hudW = 640, hudH = 360; // the HUD always uses the guide's grid (hs = screen height / 270), whatever the world resolution
+  // camera matrices as of the last render(); sync() culls off-screen regiments against them, so a camera jump disables culling for a frame
+  let camReady = false; const lastCam = { x: 0, z: 0, d: 90, y: 0, t: 0 }, frustum = new THREE.Frustum(), fMat = new THREE.Matrix4(), cullS = new THREE.Sphere();
   const tg = new THREE.Vector3(), rightV = new THREE.Vector3(), upV = new THREE.Vector3();
   function render() {
+    if ((devicePixelRatio || 1) !== dpr) resize(); // window dragged to a monitor with different scaling, or browser zoom
     const H = cam.dist * ZOOM_K, Wd = H * (bw / bh), px = H / bh;
     Object.assign(camera, { left: -Wd / 2, right: Wd / 2, top: H / 2, bottom: -H / 2 }); camera.updateProjectionMatrix();
     tg.set(cam.x, scn ? heightAt(scn, cam.x, cam.z) : 0, cam.z);
@@ -837,27 +920,31 @@ export function createView(host: HTMLElement) {
       scene.overrideMaterial = silMat; scene.background = silBg; scene.fog = null; fxMesh.visible = craters.visible = false;
       for (const o of terrain) o.visible = false;
       for (const q of outlined) q.o.visible = false;
+      shadowP.visible = false; // overrideMaterial would paint the invisible shadow box solid
     }
     renderer.setRenderTarget(rt); renderer.render(scene, camera);
     if (silhouette) {
       scene.overrideMaterial = null; scene.background = savedBg; scene.fog = savedFog; fxMesh.visible = craters.visible = true;
       for (const o of terrain) o.visible = true;
       for (const q of outlined) q.o.visible = true;
+      shadowP.visible = true;
     }
+    camReady = true; lastCam.x = cam.x; lastCam.z = cam.z; lastCam.d = cam.dist; lastCam.y = cam.yaw; lastCam.t = tl.v;
 
     renderer.setRenderTarget(null); renderer.render(postScene, postCam);
   }
 
   function resize() {
     const w = host.clientWidth || innerWidth, h = host.clientHeight || innerHeight;
-    hs = Math.max(2, Math.round(h / 360)); // HUD grid: 640x360 at 720p, 1080p and 1440p alike
-    S = quality === 0 ? Math.max(2, Math.floor(h / 270)) : quality === 1 ? Math.max(2, Math.round(h / 360)) : quality === 2 ? Math.max(1, Math.floor(h / 540)) : Math.max(1, Math.ceil(h / 1440));
+    dpr = devicePixelRatio || 1; const W = w * dpr, H = h * dpr; // pick S in physical pixels so each buffer pixel covers whole screen pixels at any OS display scaling
+    hs = Math.max(2, Math.round(h / 360)); // HUD grid: 640x360 at 720p, 1080p and 1440p alike (CSS pixels, so browser zoom still enlarges it)
+    S = quality === 0 ? Math.max(2, Math.floor(H / 270)) : quality === 1 ? Math.max(2, Math.round(H / 360)) : quality === 2 ? Math.max(1, Math.round(H / 540)) : Math.max(1, Math.ceil(H / 1440)); // round, not floor: a ~950px browser window on a 1080p screen gets ~475 rows, not full resolution
     const sm = quality >= 2 ? 4096 : 2048;
     if (sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); sun.shadow.map?.dispose(); (sun.shadow as any).map = null; } // finer shadows at High and Native
-    hudW = (Math.ceil(w / S) * S) / hs; hudH = (Math.ceil(h / S) * S) / hs;
-    bw = Math.ceil(w / S); bh = Math.ceil(h / S);
+    bw = Math.ceil(W / S); bh = Math.ceil(H / S);
+    hudW = (bw * S) / dpr / hs; hudH = (bh * S) / dpr / hs;
     renderer.setSize(bw, bh, false); rt.setSize(bw, bh); post.uniforms.res.value.set(bw, bh);
-    canvas.style.width = bw * S + 'px'; canvas.style.height = bh * S + 'px';
+    canvas.style.width = (bw * S) / dpr + 'px'; canvas.style.height = (bh * S) / dpr + 'px';
     const rs = document.documentElement.style; rs.setProperty('--S', String(hs)); rs.setProperty('--bw', String(Math.ceil(hudW))); rs.setProperty('--bh', String(Math.ceil(hudH))); // HUD and plates are laid out in HUD pixels, scaled by hs
   }
   resize();
