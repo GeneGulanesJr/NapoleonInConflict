@@ -18,6 +18,8 @@ export function settings(el: HTMLElement, view: View, onChange = () => {}) {
     ['Render quality', () => view.quality, () => view.cycleQuality()],
     ['Difficulty', () => TUNING.difficulty.labels[difficulty()], () => setPrefNum('nic-diff', (difficulty() + 1) % 3)],
     ['Fog of war', () => onOff(fogOn()), () => setFog(!fogOn())],
+    ['March in column', () => onOff(pref('nic-col', true)), () => setPref('nic-col', !pref('nic-col', true))],
+    ['Courier orders', () => onOff(pref('nic-courier', false)), () => setPref('nic-courier', !pref('nic-courier', false))],
     ['Deployment phase', () => onOff(pref('nic-deploy', true)), () => setPref('nic-deploy', !pref('nic-deploy', true))],
     ['Tutorial hints', () => onOff(pref('nic-tut', true)), () => setPref('nic-tut', !pref('nic-tut', true))],
     ['Interface size', () => view.uiSize, () => view.cycleUi()],

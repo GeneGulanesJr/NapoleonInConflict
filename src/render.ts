@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { animate } from 'animejs';
 import { heightAt, lineDist, featureAt, riverAt } from './sim/world.ts';
-import { posted } from './sim/sim.ts';
+import { posted, foot } from './sim/sim.ts';
 import { pxUrl } from './pixel.ts';
 
 // palette (sRGB hex, from the style guide)
@@ -704,6 +704,7 @@ export function createView(host: HTMLElement) {
   const rangeGeo = new THREE.RingGeometry(0.985, 1, 72).rotateX(-Math.PI / 2), rangeRings: THREE.Mesh[] = [];
   for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(rangeGeo, new THREE.MeshBasicMaterial({ color: 0xe9e4d6, transparent: true, opacity: 0.35, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 4; scene.add(m); rangeRings.push(m); }
   let refillHint = false, dragLine: { ax: number; az: number; bx: number; bz: number; f: number } | null = null;
+  let ghosts: { u: any; x: number; z: number; f: number | null }[] | null = null; // order preview: where each regiment will stand (sim layout())
   let hoverId = -1, showAll = false; // full name plates only for these (plus selected / in trouble); everyone else gets a pip
 
   // coloured bases: a ribbon round each regiment's footprint on the ground, blue yours, red the enemy's (coats stay historical, and French and Prussian coats are both blue)
@@ -711,7 +712,7 @@ export function createView(host: HTMLElement) {
   baseGeo.setAttribute('position', new THREE.BufferAttribute(basePos, 3).setUsage(THREE.DynamicDrawUsage)); baseGeo.setAttribute('color', new THREE.BufferAttribute(baseCol, 3).setUsage(THREE.DynamicDrawUsage));
   const baseMesh = new THREE.Mesh(baseGeo, new THREE.MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 })); // unlit, so it reads at dusk too
   baseMesh.frustumCulled = false; scene.add(baseMesh);
-  const BASE_COL = { mine: new THREE.Color(0x4f86ff), foe: new THREE.Color(0xe8463a), routed: new THREE.Color(0x8d8a82) };
+  const BASE_COL = { mine: new THREE.Color(0x4f86ff), foe: new THREE.Color(0xe8463a), routed: new THREE.Color(0x8d8a82), ghost: new THREE.Color(0xa9c4ff) };
   /** every side colour from one switch: blue / red, or Okabe–Ito sky blue / orange for colour-blind players */
   function setColourBlind(on: boolean) {
     cb = on;
@@ -1049,6 +1050,7 @@ export function createView(host: HTMLElement) {
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
     for (const m of [...figs, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
     for (const m of [...figs, bannerM]) if (m.instanceColor) upl(m.instanceColor, m.count, 3);
+    for (const g of ghosts ?? []) { const f = g.f ?? g.u.facing; baseRing(g.x, g.z, Math.sin(f), Math.cos(f), foot(g.u, tu), bTh, BASE_COL.ghost); } // ghost footprints on the ground, facing the ordered way
     baseGeo.setDrawRange(0, nb * 6); upl(baseGeo.attributes.position as THREE.BufferAttribute, nb * 6, 3); upl(baseGeo.attributes.color as THREE.BufferAttribute, nb * 6, 3);
     for (const [id, p] of plateMap) if (!live.has(id)) { p.el.remove(); plateMap.delete(id); vis.delete(id); }
     for (const l of vlabels) {
@@ -1230,12 +1232,13 @@ export function createView(host: HTMLElement) {
   const setRefillHint = (on: boolean) => { refillHint = on; };
   const setHover = (id: number | null) => { hoverId = id ?? -1; }, setShowAll = (on: boolean) => { showAll = on; };
   const setDragLine = (d: typeof dragLine) => { dragLine = d; };
+  const setGhosts = (g: typeof ghosts) => { ghosts = g; };
   function setReticle(x: number | null, z = 0, r = 10, color = 0xffffff) {
     if (x == null) { reticle.visible = false; return; }
     reticle.visible = true; reticle.position.set(x, heightAt(scn, x, z) + 1, z); reticle.scale.setScalar(r);
     (reticle.material as THREE.MeshBasicMaterial).color.setHex(color);
   }
 
-  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get quality() { return QUALITY[quality].split(':')[0]; }, get guide() { return guideOn(); }, cycleUi, get uiSize() { return UI[ui]; }, setColourBlind, get colourBlind() { return cb; }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, setHover, setShowAll, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
+  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get quality() { return QUALITY[quality].split(':')[0]; }, get guide() { return guideOn(); }, cycleUi, get uiSize() { return UI[ui]; }, setColourBlind, get colourBlind() { return cb; }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, setGhosts, setHover, setShowAll, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
 }
 export type View = ReturnType<typeof createView>;

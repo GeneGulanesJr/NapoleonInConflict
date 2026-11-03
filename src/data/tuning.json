@@ -11,6 +11,10 @@
   "hold": { "_note": "posted: foot or guns standing still for `after` seconds take `fire` x casualties and `morale` x morale loss, and get +`shock` on the charge morale test", "after": 15, "fire": 0.85, "morale": 0.8, "shock": 0.1 },
   "holdFire": { "_note": "Hold fire stance (line, guard, guns): no fire until a foe is within `range` x the regiment's range (an ordered target excepted); the first volley after `loaded` s without firing does `first` x damage (not on top of the Volley special)", "range": 0.4, "loaded": 10, "first": 1.8 },
   "night": { "_note": "Darkness from the scenario clock: 0 at `dusk`, 1 at `dark` (hours); sight (fog of war, and so what the bot sees) x (1 - dark x `sight`), fire x (1 - dark x `fire`)", "dusk": 20.5, "dark": 22, "sight": 0.6, "fire": 0.5 },
+  "march": { "_note": "'March in column' (a player setting): a line ordered farther than `dist` forms column for the march and forms line again on arrival, or as soon as a foe it can see is within musket range", "dist": 60 },
+  "fallback": { "_note": "Foot or horse ordered to a point behind it (over 120 degrees off its facing) and nearer than `dist` steps back facing the enemy, without wheeling, at `speed` x its pace", "dist": 40, "speed": 0.5 },
+  "doubleTime": { "_note": "Double time (double right-click): marches at `speed` x, tiring at fatigue.run, until it arrives", "speed": 1.4 },
+  "courier": { "_note": "Courier orders (a player setting): an order to a regiment farther than `free` from its nearest general (the entry point once they have all fallen) arrives after (distance - free) / `speed` s; aids, reserves, auto-square and replenishing are not delayed", "free": 40, "speed": 10 },
   "types": {
     "line": {
       "label": "Line Infantry",
