@@ -20,6 +20,7 @@ export const CONTROLS: [string, [string, string][]][] = [
   ['Orders', [['Right-click', 'move or attack'], ['Right-drag', 'form a line facing away from you'], ['Double right-click', 'double time'], ['Alt+right-click / drag', 'move as a block (keep the shape)'], ['Ctrl+right-click', 'face that way (wheel in place)'], ['Right-click just behind', 'fall back facing the enemy'], ['Shift+right-click', 'waypoint'], ['Right-click a farm', 'garrison'], ['A (tap), left-click', 'attack-move'], ['H', 'halt'], ['G', 'stance: hold / attack / hold fire'], ['Minimap right-click', 'move there'], ['Right-click / drag (deployment)', 'place the selection at once'], ['Enter (deployment)', 'start the battle']]],
   ['Formations & specials', [['Z/X/C', 'line / column / square'], ['B', 'auto-square'], ['V', 'unit special'], ['K + click foe', 'bayonet charge']]],
   ['Aids & reserves', [['F1/F2/F3', 'tactical aid'], ['N', 'replenish (on a held objective)'], ['Reserves panel', 'call in a regiment']]],
+  ['Replays', [['Replay bar', 'play/pause, 1-16×, click or drag to jump'], ['Bar markers', 'jump to a turning point']]],
   ['View', [['Space', 'pause'], ['+ / -', 'game speed'], ['J', 'message log'], ['M', 'mute'], ['R', 'radio'], ['L', 'edge scrolling on/off'], ['T', 'dusk'], ['Y/U', 'silhouette / top-down check'], ['P', 'render quality'], ['? / F10', 'this help']]],
 ];
 const GLYPH: Record<string, string> = { line: 'I', guard: 'G', skirmisher: 'S', lancer: 'L', cuirassier: 'C', artillery: 'A', commander: '*' };
