@@ -83,7 +83,7 @@ export function spawn(sim: Sim, side: number, d: any) {
     rid: d.rid ?? null, dead: false, via: null as { x: number; z: number } | null,
     spReady: 0, spUntil: 0, spKind: '', acc: 0, accT: 0,
     xp: d.xp ?? 0, vet: rankOf(sim.tu, d.xp ?? 0), stance: 'hold', auto: false, sq: false, cavSeen: -99, queue: [] as number[][],
-    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false,
+    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false, march: false,
   };
   sim.s.units.push(u);
   return u;
@@ -634,7 +634,7 @@ function runEvent(sim: Sim, e: any) {
     defs.forEach((d, i) => {
       const u = spawn(sim, e.side, { ...d, x: en.x + (d.x ?? 0) + (i - (defs.length - 1) / 2) * 9 * (e.spreadX ?? 1), z: en.z + (d.z ?? 0) + (i - (defs.length - 1) / 2) * 9 * (e.spreadZ ?? 0) });
       if (i === 0) ev(sim, { k: 'arrive', side: e.side, names: defs.map((q: any) => q.name), types: defs.map((q: any) => q.type), x: en.x, z: en.z });
-      if (e.go) { u.tx = e.go.x + (i - (defs.length - 1) / 2) * 10 * (e.spreadX ?? 1); u.tz = e.go.z + (i - (defs.length - 1) / 2) * 10 * (e.spreadZ ?? 0); }
+      if (e.go) { u.tx = e.go.x + (i - (defs.length - 1) / 2) * 10 * (e.spreadX ?? 1); u.tz = e.go.z + (i - (defs.length - 1) / 2) * 10 * (e.spreadZ ?? 0); u.am = true; u.march = true; } // historical arrival route: fight what they meet on the way; the bot takes over once they arrive
     });
   }
 }

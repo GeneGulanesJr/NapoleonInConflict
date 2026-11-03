@@ -307,3 +307,12 @@ test('server applies valid move and stance commands', async () => {
     a.ws.close();
   } finally { server.removeAllListeners('exit'); server.kill(); }
 });
+
+test('a scripted reinforcement keeps to its historical route until it arrives, then the bot takes over', () => {
+  const sim = arena((fr, co) => [Object.assign(fr[0], { x: -170, z: 170 }), Object.assign(co.find((u) => u.type === 'line'), { x: 170, z: -170 })]);
+  sim.tl = [{ t: 0.1, type: 'reinforce', side: 1, units: [{ type: 'line', n: 1, name: 'Bülow', x: 0, z: 0 }], entry: { x: 150, z: 100 }, go: { x: 150, z: -60 } }];
+  const bot = makeBot(sim, 1);
+  run(sim, 12, undefined, () => bot(0.05));
+  const b = sim.s.units.find((u: any) => u.name === 'Bülow');
+  assert.ok(b && b.tz === -60 && b.z < 100 - 30, `still marching on its route (z ${b?.z.toFixed(1)}, target z ${b?.tz})`);
+});
