@@ -1,15 +1,16 @@
 // Bot commander. Uses the same command() API as a human player, so it plays by the same rules.
-import { command, rand, solid, useAbility, type Sim } from './sim.ts';
+import { command, foot, rand, solid, useAbility, type Sim } from './sim.ts';
 
 const dist = (a: any, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
 /** a square too strong for this cavalry regiment to charge */
 const firm = (e: any, cav: any) => e.form === 'square' && !e.routed && solid(e, cav) > 0.5;
 /** u stands in front of e (the sim's aspect test: front when the cosine is over 0.5) */
 const ahead = (u: any, e: any) => ((u.x - e.x) * Math.sin(e.facing) + (u.z - e.z) * Math.cos(e.facing)) / (dist(u, e) || 1) > 0.5;
-/** the point `off` from e square to its facing, on u's side: e's flank */
-function flankOf(e: any, u: any, off: number) {
+/** e's flank on u's side: where u stands square to e's facing, its frontage clear of e's by `gap`, a little behind e's front so the approach swings wide of anyone fighting it from the front */
+function flankOf(e: any, u: any, gap: number, tu: any) {
+  const hw = (q: any) => { const f = foot(q, tu); return (f[1] - f[0]) / 2; }, off = hw(e) + hw(u) + gap;
   const rx = Math.cos(e.facing), rz = -Math.sin(e.facing), sg = Math.sign((u.x - e.x) * rx + (u.z - e.z) * rz) || 1;
-  return { x: e.x + rx * sg * off, z: e.z + rz * sg * off };
+  return { x: e.x + rx * sg * off - Math.sin(e.facing) * 6, z: e.z + rz * sg * off - Math.cos(e.facing) * 6 };
 }
 
 export function makeBot(sim: Sim, side: number) {
@@ -148,7 +149,7 @@ function think(sim: Sim, side: number, mem: any) {
       if (near && nd <= T.range * 1.05) { hold(); if (u.form !== 'line') command(sim, side, { c: 'form', ids: [u.id], f: 'line' }); continue; }
       const ft = stance === 'attack' ? flankTarget(u, 80) : null;
       if (ft) { // go round to its flank and fire into it from there
-        const p = flankOf(ft, u, 26);
+        const p = flankOf(ft, u, T.range * 0.6, tu); // within musket range of its flank
         if (dist(u, p) < 30 && u.form !== 'line') command(sim, side, { c: 'form', ids: [u.id], f: 'line' });
         if (dist(u, p) < 5) hold(); else goto(p.x, p.z);
         continue;
@@ -178,7 +179,7 @@ function think(sim: Sim, side: number, mem: any) {
       const fit = u.morale > 45 && u.men > 0.3 * u.maxMen, ft = fit && !prey ? flankTarget(u, 120) : null;
       if (prey && fit) command(sim, side, { c: 'attack', ids: [u.id], target: prey.id });
       else if (ft) { // ride round to its flank, then charge (defending horse counter-attacks this way too)
-        const p = flankOf(ft, u, 30);
+        const p = flankOf(ft, u, 4, tu);
         if (!ahead(u, ft) || dist(u, p) < 6) command(sim, side, { c: 'attack', ids: [u.id], target: ft.id }); else goto(p.x, p.z);
       } else if (stance === 'attack') {
         const inf = my.filter((f: any) => f.type === 'line' || f.type === 'guard');

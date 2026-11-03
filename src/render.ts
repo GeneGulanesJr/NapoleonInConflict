@@ -768,7 +768,8 @@ export function createView(host: HTMLElement) {
         spawn(2, e.x, y + 1.6, e.z, 0.6, 11); flash(e.x, y + 2, e.z, 20, 2, 0.5, 1); spawn(0, e.x, y + 2, e.z, 5, 6.5, 0.4, 0.5, 0);
         for (let i = 0; i < 5; i++) spawn(3, e.x + (Math.random() - 0.5) * 9, y + 0.6, e.z + (Math.random() - 0.5) * 5, 0.5, 3);
         crater(e.x, e.z, 1.8); kick(Math.max(0.15, 0.9 - dist2(e.x, e.z) / 110));
-      } else if (e.k === 'charge') kick(0.1);
+      } else if (e.k === 'charge') { kick(0.1); if (e.stun) popText(e.x, e.z, 'STUNNED!', e.side === viewer); }
+      else if (e.k === 'falter') popText(e.x, e.z, 'CHARGE FALTERS!', e.side === viewer);
     }
   }
 
@@ -975,8 +976,8 @@ export function createView(host: HTMLElement) {
       const mc = mo > 0.6 ? 'hi' : mo > 0.3 ? 'mid' : 'lo'; if (mc !== p.mc) { p.mor.parentElement!.className = `bar mor ${mc}`; p.mc = mc; }
       if (Math.abs(m - p.lm) > 0.01) { if (p.lm < 0) p.men.style.width = `${Math.round(m * 100)}%`; else animate(p.men, { width: [`${Math.round(p.lm * 100)}%`, `${Math.round(m * 100)}%`], duration: 450, ease: 'outQuad' }); p.lm = m; }
       if (Math.abs(mo - p.lmo) > 0.02) { if (p.lmo < 0) p.mor.style.width = `${Math.round(mo * 100)}%`; else animate(p.mor, { width: [`${Math.round(p.lmo * 100)}%`, `${Math.round(mo * 100)}%`], duration: 450, ease: 'outQuad' }); p.lmo = mo; }
-      const full = showAll || selected.has(u.id) || u.id === hoverId || u.routed || u.eng != null || u.morale < u.maxMorale * 0.4; // in trouble: routed, in melee or shaken
-      const cls = `plate${full ? '' : ' pip'}${selected.has(u.id) ? ' sel' : ''}${u.routed ? ' routed' : u.morale < u.maxMorale * 0.3 ? ' waver' : ''}`;
+      const full = showAll || selected.has(u.id) || u.id === hoverId || u.routed || u.eng != null || u.stun > 0 || u.morale < u.maxMorale * 0.4; // in trouble: routed, in melee, stunned or shaken
+      const cls = `plate${full ? '' : ' pip'}${selected.has(u.id) ? ' sel' : ''}${u.routed ? ' routed' : u.stun > 0 ? ' stun' : u.shaken > 0 ? ' shaken' : u.morale < u.maxMorale * 0.3 ? ' waver' : ''}`;
       if (cls !== p.ls) { p.el.className = cls; p.ls = cls; }
     }
     horses.count = legsF.count = legsH.count = hbaseM.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; baseM.count = nbs; packM.count = npk;

@@ -1,6 +1,12 @@
 {
   "_note": "All gameplay numbers live here. Speeds are world units/s, ranges world units, reload seconds. power = casualties per man per volley at point blank.",
   "difficulty": { "_note": "Easy / Normal / Hard: the bot's regiments (start, reinforcements, reserves) at this share of their scenario strength", "labels": ["Easy", "Normal", "Hard"], "enemyStrength": [0.8, 1, 1.25] },
+  "stun": { "_note": "Foot or guns (not in square or a farm) hit by a cavalry charge are stunned for `time` s x the slope factor x (horse men / foot men, clamped to `size`) x `charge` with the Charge special: they cannot fire, move or change formation, and fight at `melee` x their usual rate", "time": 4, "size": [0.5, 1.5], "charge": 1.5, "melee": 0.6 },
+  "shaken": { "_note": "Fire rattles what it hits: `k` s per 100% of the regiment lost in one blow (so ~4 s for a 10% bite), + flank[aspect] s on a flank or rear hit, + up to `routers` s when broken men run through; capped at `max`. Shaken: reload takes `reload` x as long, fire does `fire` x, no formation changes (it can still move)", "k": 40, "max": 8, "flank": [0, 1.5, 3], "routers": 3, "reload": 1.5, "fire": 0.7 },
+  "falter": { "_note": "A charging regiment (horse on an attack, or a bayonet charge) that loses `share` or more of its men to one volley or round loses its momentum: the charge bonus ends, a bayonet charge stalls into a firefight, and for `time` s its impact shocks and stuns at `impact` x", "share": 0.1, "impact": 0.5, "time": 4 },
+  "screen": { "_note": "Fire at a regiment through its own skirmishers' screen does `fire` x damage; skirmishers firing at a battery do `guns` x (they pick off the crews)", "fire": 0.7, "guns": 2 },
+  "plough": { "_note": "Round shot that hits carries on up to `reach` units behind its target and strikes the next regiment of that side in its path for `carry` x the casualties", "reach": 30, "carry": 0.4 },
+  "breakoff": { "_note": "Horse ordered away from its foe in a melee strikes no blows while it gets clear; the foe hits it at `hit` x the usual rate, with no flank or rear bonus", "hit": 0.5 },
   "hold": { "_note": "posted: foot or guns standing still for `after` seconds take `fire` x casualties and `morale` x morale loss, and get +`shock` on the charge morale test", "after": 15, "fire": 0.85, "morale": 0.8, "shock": 0.1 },
   "types": {
     "line": {

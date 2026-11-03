@@ -590,3 +590,99 @@ test('cavalry ordered away from a melee breaks contact in a couple of seconds an
   assert.ok(cav.eng == null && !cav.routed, `broke contact within 3 s (took ${t.toFixed(1)} s)`);
   assert.ok(cav.morale / cav.maxMorale > 0.5, `kept its nerve (morale ${Math.round((cav.morale / cav.maxMorale) * 100)}%)`);
 });
+
+/** lancers locked in melee with a steady line in hold stance (charged from 60 away, flat ground); charge: with the Charge special */
+function lancersInMelee(infMen = 540, charge = false, setup = (_sim: any) => {}) {
+  let cav: any, inf: any;
+  const sim = arena((fr, co) => {
+    cav = fr.find((u) => u.type === 'lancer'); inf = co.find((u) => u.type === 'line');
+    return [Object.assign(cav, { x: 0, z: -60, facing: 0 }), Object.assign(inf, { x: 0, z: 0, facing: Math.PI, form: 'line', stance: 'hold', men: infMen, morale: 9999, maxMorale: 9999 }), Object.assign(co.find((u) => u !== inf), { x: 170, z: 170 })];
+  });
+  setup(sim);
+  command(sim, 0, { c: 'attack', ids: [cav.id], target: inf.id });
+  if (charge) command(sim, 0, { c: 'special', ids: [cav.id] });
+  run(sim, 30, () => cav.eng != null);
+  return { sim, cav, inf };
+}
+
+test('horse breaking off a melee takes only a parting blow (no rear bonus) and strikes none', () => {
+  const cost = (leave: boolean) => {
+    const { sim, cav, inf } = lancersInMelee(), m = cav.men, mo = cav.morale, im = inf.men;
+    if (leave) command(sim, 0, { c: 'move', ids: [cav.id], x: 0, z: -90 });
+    run(sim, 1.5);
+    return { men: m - cav.men, morale: mo - cav.morale, dealt: im - inf.men };
+  };
+  const off = cost(true), stay = cost(false);
+  assert.ok(off.men < 0.6 * stay.men && off.morale < 0.6 * stay.morale, `breaking off cost ${off.men.toFixed(1)} men / ${off.morale.toFixed(1)} morale; standing ${stay.men.toFixed(1)} / ${stay.morale.toFixed(1)}`);
+  assert.equal(off.dealt, 0, 'no blows struck while riding away');
+});
+
+test('foot hit by a cavalry charge is stunned: it cannot reform until the stun wears off', () => {
+  const { sim, inf } = lancersInMelee();
+  assert.ok(inf.stun > 2 && inf.busy >= inf.stun, `stunned for ${inf.stun.toFixed(1)} s`);
+  command(sim, 1, { c: 'form', ids: [inf.id], f: 'square' });
+  assert.equal(inf.form, 'line', 'cannot form square while stunned');
+  run(sim, 10, () => inf.stun <= 0 || inf.routed);
+  assert.ok(inf.stun <= 0 && !inf.routed, 'the stun wears off');
+  inf.shaken = 0; // (the lancers' blows may have rattled it too)
+  command(sim, 1, { c: 'form', ids: [inf.id], f: 'square' });
+  assert.equal(inf.form, 'square', 'and it can reform again');
+});
+
+test('the stun is in proportion to the impact: a worn regiment longer, a true Charge longer, a faltering one shorter', () => {
+  const full = lancersInMelee().inf.stun, worn = lancersInMelee(200).inf.stun;
+  assert.ok(worn > 1.8 * full, `360 lancers stun 200 men ${worn.toFixed(1)} s, 540 men ${full.toFixed(1)} s`);
+  const steadyHorse = (sim: any) => (sim.tu.shock.pass = -9); // every charge morale test passes (never thrown back): this is about the impact, not their nerve
+  const wornCharge = lancersInMelee(200, true, steadyHorse).inf.stun; // the size factor is at its cap either way, so only the Charge special differs
+  assert.ok(Math.abs(wornCharge / worn - 1.5) < 0.05, `the Charge special stuns ${wornCharge.toFixed(1)} s against ${worn.toFixed(1)} s`);
+  const charge = lancersInMelee(540, true, (sim) => { steadyHorse(sim); sim.tu.falter.share = 9; }).inf.stun; // never faltering
+  const shot = lancersInMelee(540, true, steadyHorse); // the full line's closing volley takes over 10%
+  assert.ok(shot.cav.falter != null && shot.cav.spUntil <= shot.sim.s.t, 'the closing volley took the momentum out of the charge');
+  assert.ok(shot.inf.stun < 0.6 * charge, `a faltering charge stuns ${shot.inf.stun.toFixed(1)} s`);
+});
+
+// ---------------------------------------------------------------- fire effects: shaken, plough, screen, routers
+/** a French battery at the origin facing +z, the given Coalition regiments (steady, standard size); returns hits on `tg` as share-of-men bites */
+function battery(place: (co: any[]) => any[], secs: number, tg: () => any, order = true) {
+  let gun: any;
+  const sim = arena((fr, co) => [gun = Object.assign(fr.find((u) => u.type === 'artillery'), { x: 0, z: 0, facing: 0, morale: 9999, maxMorale: 9999 }), ...place(co).map((u) => Object.assign(u, { facing: Math.PI, morale: 9999, maxMorale: 9999, stance: 'hold' }))]);
+  if (order) command(sim, 0, { c: 'attack', ids: [gun.id], target: tg().id });
+  const bites: { bite: number; shaken: number }[] = [];
+  run(sim, secs, undefined, () => { const t = tg(); if (t.men < (t._m ?? t.maxMen)) bites.push({ bite: ((t._m ?? t.maxMen) - t.men) / (t._m ?? t.maxMen), shaken: t.shaken }); t._m = t.men; });
+  return { sim, gun, bites };
+}
+
+test('round shot shakes what it hits in proportion to the bite: a square far longer than a line; shaken men cannot reform but can move', () => {
+  const first = (form: string) => { let t: any; const b = battery((co) => [t = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 50, form })], 60, () => t); return { ...b.bites[0], t, sim: b.sim }; };
+  const line = first('line'), square = first('square');
+  assert.ok(Math.abs(line.shaken - line.bite * 40) < 0.2, `a ${(line.bite * 100).toFixed(1)}% bite shakes a line ${line.shaken.toFixed(1)} s`);
+  assert.ok(square.shaken > 1.5 * line.shaken, `a square ${square.shaken.toFixed(1)} s`);
+  const { t, sim } = square;
+  t.shaken = 5; command(sim, 1, { c: 'form', ids: [t.id], f: 'line' });
+  assert.equal(t.form, 'square', 'no reforming while shaken');
+  command(sim, 1, { c: 'move', ids: [t.id], x: 0, z: 90 }); const z0 = t.z; run(sim, 8); // a square wheels round first
+  assert.ok(t.z > z0 + 0.5, 'but it can still march out of the fire');
+});
+
+test('round shot ploughs on into the regiment standing behind its target', () => {
+  const behind = (x: number) => { let a: any, b: any; battery((co) => { const [l1, l2] = co.filter((u) => u.type === 'line'); return [a = Object.assign(l1, { x: 0, z: 50 }), b = Object.assign(l2, { x, z: 62 })]; }, 40, () => a); return { a, b }; };
+  const inLine = behind(0), aside = behind(60);
+  assert.ok(inLine.a.men < inLine.a.maxMen && inLine.b.men < inLine.b.maxMen, `the second line behind lost ${Math.round(inLine.b.maxMen - inLine.b.men)} men`);
+  assert.equal(aside.b.men, aside.b.maxMen, 'a regiment off the line of fire is untouched');
+});
+
+test('a skirmish screen soaks up fire at the line behind it; skirmishers pick off gun crews', () => {
+  const avgBite = (screen: boolean) => { let t: any; const { bites } = battery((co) => [t = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 60 }), Object.assign(co.find((u) => u.type === 'skirmisher'), screen ? { x: 0, z: 38 } : { x: 170, z: 170 })], 120, () => t); return bites.reduce((a, b) => a + b.bite, 0) / bites.length; };
+  const open = avgBite(false), screened = avgBite(true);
+  assert.ok(screened < 0.85 * open, `average bite ${(screened * 100).toFixed(1)}% behind the screen, ${(open * 100).toFixed(1)}% in the open`);
+  const crewLoss = (guns: number) => { let gun: any; const sim = arena((fr, co) => [Object.assign(co.find((u) => u.type === 'skirmisher'), { x: 0, z: 0, facing: 0, morale: 9999, maxMorale: 9999 }), gun = Object.assign(fr.find((u) => u.type === 'artillery'), { x: 0, z: 20, facing: Math.PI, morale: 9999, maxMorale: 9999, limbered: true })]); sim.tu.screen.guns = guns; run(sim, 20); return gun.maxMen - gun.men; };
+  const sharp = crewLoss(2), plain = crewLoss(1);
+  assert.ok(sharp > 1.6 * plain, `skirmishers took ${Math.round(sharp)} gunners, ${Math.round(plain)} without the bonus`);
+});
+
+test('broken men running through a formed regiment shake it', () => {
+  let line: any, router: any;
+  const sim = arena((fr, co) => { const [l1, l2] = co.filter((u) => u.type === 'line'); return [line = Object.assign(l1, { x: 0, z: 0, facing: 0 }), router = Object.assign(l2, { x: 0, z: 0, routed: true, morale: 0 }), Object.assign(fr[0], { x: 170, z: 170 })]; });
+  step(sim, 0.05);
+  assert.ok(line.shaken > 2.5, `shaken for ${line.shaken.toFixed(1)} s by ${Math.round(router.men)} fugitives`);
+});

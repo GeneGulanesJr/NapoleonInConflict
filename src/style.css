@@ -258,12 +258,17 @@ button.alt { background: #1b1510; }
 
 /* score bar = the verdict if the battle ended now; the two marks bound the draw band */
 .tug { position: relative; } .tug b { position: absolute; top: 0; bottom: 0; width: 1px; background: #000; }
+/* objective tags stay on one row, shrinking (names ellipsised) rather than wrapping under the score bar */
+.hud .pips { flex-wrap: nowrap; } .hud .pip { min-width: 0; flex: 1 1 0; text-align: center; } /* equal shares, so a short name like Ligny stays whole */
 /* capture progress: a bar under each objective's name, in the colour of the side taking hold */
 .hud .pip { background: linear-gradient(var(--fc, #888), var(--fc, #888)) no-repeat left bottom / calc(var(--f, 0) * 100%) 2px, rgba(0,0,0,.5); }
 /* army bar: room for the control group number before the marks */
 .hud .ac { grid-template-columns: 7px 1fr 15px; }
 /* fog of war: an enemy plate lingers where it was last seen */
 .plates .plate.ghost { border-top-style: dashed; } .plates .plate.ghost .bar { display: none; } .plates .plate.ghost::after { content: '?'; color: #e8463a; }
+/* stunned by a cavalry charge */
+.plate.stun .pn { color: #ffd36a; } .plate.stun .pn::after { content: ' STUNNED'; }
+.plate.shaken .pn { color: #e9c99a; } .plate.shaken .pn::after { content: ' SHAKEN'; }
 /* in-battle menu (Esc) */
 .hud #pm { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 200px; z-index: 4; text-align: center; }
 .hud #pm .hd small { display: block; color: #8e8a7a; margin-top: 1px; }
