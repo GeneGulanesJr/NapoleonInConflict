@@ -2,8 +2,8 @@
   "id": "charleroi",
   "title": "Crossing the Sambre",
   "date": "15 June 1815",
-  "blurb": "The Army of the North has crossed the frontier at dawn. Prussian outposts under Zieten hold the Sambre bridges at Charleroi, Marchienne and Châtelet. Seize the bridges and Gilly before the Prussians can concentrate. A warm-up for the real work to come.",
-  "hint": "Take the bridges with infantry in column, cover them with your guns, and send lancers around the flanks.",
+  "blurb": "The Army of the North has crossed the frontier at dawn. Zieten's Prussian outposts hold the Sambre, a deep river in a steep valley, at the barricaded bridges of Charleroi and Châtelet, five kilometres apart. Beyond Charleroi the Fleurus road climbs through the long street of Gilly; behind a wooded brook Pirch II's brigade waits on the plateau of Soleilmont. Seize the bridges and Gilly before the Prussians can concentrate. A warm-up for the real work to come.",
+  "hint": "The Sambre can only be crossed at the two bridges: Charleroi on your left, Châtelet on your right. Gilly's street is a death trap for cavalry. The Gilly brook can be waded, but the Prussian guns on the Soleilmont plateau look straight down on it: send a column round by the mill or from Châtelet.",
   "duration": 864,
   "clock": {
     "start": "04:00",
@@ -11,105 +11,601 @@
   },
   "weather": "clear",
   "map": {
-    "size": 330,
+    "size": 650,
+    "rough": {
+      "amp": 1,
+      "scale": 55,
+      "seed": 1515
+    },
     "hills": [
       {
-        "x": 30.0,
-        "z": -105.0,
-        "rx": 60.0,
-        "rz": 27.0,
-        "h": 5
+        "x": 300,
+        "z": -175,
+        "rx": 90,
+        "rz": 65,
+        "h": 12.8,
+        "rot": 120
       },
       {
-        "x": -90.0,
-        "z": 75.0,
-        "rx": 45.0,
-        "rz": 30.0,
-        "h": 3
-      }
-    ],
-    "woods": [
-      {
-        "x": -127.5,
-        "z": -75.0,
-        "r": 21.0
+        "x": -275,
+        "z": -300,
+        "rx": 180,
+        "rz": 90,
+        "h": 10.7
       },
       {
-        "x": 127.5,
-        "z": -60.0,
-        "r": 18.0
+        "x": 50,
+        "z": 325,
+        "rx": 130,
+        "rz": 45,
+        "h": 10.9,
+        "rot": 150,
+        "p": 2
       },
       {
-        "x": 67.5,
-        "z": 75.0,
-        "r": 15.0
-      }
-    ],
-    "villages": [
-      {
-        "name": "Charleroi",
-        "x": 0.0,
-        "z": -6.0,
-        "r": 14.4
+        "x": 275,
+        "z": 125,
+        "rx": 180,
+        "rz": 90,
+        "h": -11.1,
+        "rot": 150
       },
       {
-        "name": "Marchienne",
-        "x": -93.0,
-        "z": -9.0,
-        "r": 9.6
+        "x": -100,
+        "z": 225,
+        "rx": 180,
+        "rz": 90,
+        "h": -9
       },
       {
-        "name": "Châtelet",
-        "x": 87.0,
-        "z": -9.0,
-        "r": 9.6
+        "x": -50,
+        "z": -225,
+        "rx": 180,
+        "rz": 90,
+        "h": 8.5,
+        "rot": 90
       },
       {
-        "name": "Gilly",
-        "x": 15.0,
-        "z": -93.0,
-        "r": 9.6
+        "x": -325,
+        "z": 125,
+        "rx": 130,
+        "rz": 65,
+        "h": -6.7,
+        "rot": 30,
+        "p": 2
+      },
+      {
+        "x": 225,
+        "z": -325,
+        "rx": 130,
+        "rz": 45,
+        "h": 8.3
+      },
+      {
+        "x": -250,
+        "z": -75,
+        "rx": 180,
+        "rz": 30,
+        "h": -5.6,
+        "rot": 120
+      },
+      {
+        "x": -100,
+        "z": -25,
+        "rx": 130,
+        "rz": 90,
+        "h": 3.3,
+        "p": 2
+      },
+      {
+        "x": -200,
+        "z": -275,
+        "rx": 90,
+        "rz": 45,
+        "h": -4.6,
+        "p": 2
+      },
+      {
+        "x": 100,
+        "z": -100,
+        "rx": 130,
+        "rz": 45,
+        "h": -5.3,
+        "rot": 60
+      },
+      {
+        "x": 125,
+        "z": 275,
+        "rx": 130,
+        "rz": 45,
+        "h": 4,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": -75,
+        "z": 125,
+        "rx": 90,
+        "rz": 65,
+        "h": 2.7,
+        "rot": 30,
+        "p": 2
+      },
+      {
+        "x": -275,
+        "z": -175,
+        "rx": 45,
+        "rz": 30,
+        "h": 5.5,
+        "rot": 60
       }
     ],
     "rivers": [
       {
         "pts": [
           [
-            -165.0,
-            0.0
+            -325,
+            128
           ],
           [
-            -82.5,
-            -6.0
+            -259,
+            139
           ],
           [
-            0.0,
-            -3.0
+            -232,
+            145
           ],
           [
-            82.5,
-            -7.5
+            -200,
+            158
           ],
           [
-            165.0,
-            0.0
+            -174,
+            173
+          ],
+          [
+            -142,
+            188
+          ],
+          [
+            -82,
+            220
+          ],
+          [
+            -6,
+            238
+          ],
+          [
+            26,
+            243
+          ],
+          [
+            56,
+            252
+          ],
+          [
+            76,
+            245
+          ],
+          [
+            117,
+            223
+          ],
+          [
+            144,
+            204
+          ],
+          [
+            161,
+            184
+          ],
+          [
+            200,
+            157
+          ],
+          [
+            223,
+            144
+          ],
+          [
+            248,
+            138
+          ],
+          [
+            278,
+            123
+          ],
+          [
+            304,
+            105
+          ],
+          [
+            325,
+            96
           ]
         ],
-        "width": 10.8,
+        "width": 10,
         "bridges": [
           [
-            -90.0,
-            -6.0
+            -262,
+            138.5
           ],
           [
-            0.0,
-            -3.0
-          ],
-          [
-            87.0,
-            -7.5
+            300,
+            107.8
           ]
         ]
+      },
+      {
+        "pts": [
+          [
+            156,
+            -245
+          ],
+          [
+            154,
+            -231
+          ],
+          [
+            147,
+            -196
+          ],
+          [
+            138,
+            -185
+          ],
+          [
+            129,
+            -131
+          ],
+          [
+            124,
+            -106
+          ],
+          [
+            122,
+            -97
+          ],
+          [
+            119,
+            -69
+          ],
+          [
+            127,
+            -45
+          ],
+          [
+            135,
+            -32
+          ],
+          [
+            146,
+            -4
+          ],
+          [
+            157,
+            19
+          ],
+          [
+            180,
+            30
+          ],
+          [
+            203,
+            43
+          ],
+          [
+            230,
+            46
+          ],
+          [
+            262,
+            52
+          ]
+        ],
+        "width": 4,
+        "ford": 0.55,
+        "bridges": [
+          [
+            129,
+            -131
+          ],
+          [
+            127,
+            -45
+          ],
+          [
+            157,
+            19
+          ]
+        ]
+      }
+    ],
+    "roads": [
+      {
+        "pts": [
+          [
+            -145,
+            325
+          ],
+          [
+            -155,
+            284
+          ],
+          [
+            -172,
+            246
+          ],
+          [
+            -190,
+            208
+          ],
+          [
+            -230,
+            170
+          ],
+          [
+            -262,
+            139
+          ],
+          [
+            -266,
+            100
+          ],
+          [
+            -282,
+            -51
+          ],
+          [
+            -279,
+            -145
+          ],
+          [
+            -289,
+            -218
+          ],
+          [
+            -305,
+            -275
+          ],
+          [
+            -312,
+            -325
+          ]
+        ],
+        "w": 5
+      },
+      {
+        "pts": [
+          [
+            -266,
+            100
+          ],
+          [
+            -240,
+            40
+          ],
+          [
+            -161,
+            -27
+          ],
+          [
+            -123,
+            -47
+          ],
+          [
+            0,
+            -53
+          ],
+          [
+            34,
+            -65
+          ],
+          [
+            68,
+            -88
+          ],
+          [
+            129,
+            -131
+          ],
+          [
+            207,
+            -198
+          ],
+          [
+            234,
+            -242
+          ],
+          [
+            258,
+            -285
+          ],
+          [
+            280,
+            -325
+          ]
+        ],
+        "w": 5
+      },
+      {
+        "pts": [
+          [
+            34,
+            -65
+          ],
+          [
+            127,
+            -45
+          ],
+          [
+            215,
+            -40
+          ],
+          [
+            255,
+            0
+          ],
+          [
+            275,
+            60
+          ],
+          [
+            300,
+            108
+          ],
+          [
+            315,
+            149
+          ],
+          [
+            325,
+            175
+          ]
+        ],
+        "w": 4
+      },
+      {
+        "pts": [
+          [
+            215,
+            -40
+          ],
+          [
+            279,
+            -83
+          ],
+          [
+            325,
+            -104
+          ]
+        ],
+        "w": 4
+      }
+    ],
+    "woods": [
+      {
+        "x": 215,
+        "z": -262,
+        "r": 30
+      },
+      {
+        "x": 250,
+        "z": -235,
+        "r": 22
+      },
+      {
+        "x": 262,
+        "z": -128,
+        "r": 26
+      },
+      {
+        "x": 300,
+        "z": -205,
+        "r": 24,
+        "dense": true
+      },
+      {
+        "x": 150,
+        "z": -60,
+        "r": 10
+      },
+      {
+        "x": 140,
+        "z": -165,
+        "r": 10
+      },
+      {
+        "x": -40,
+        "z": 290,
+        "r": 26
+      }
+    ],
+    "hedges": [
+      {
+        "pts": [
+          [
+            175,
+            -150
+          ],
+          [
+            215,
+            -112
+          ],
+          [
+            245,
+            -80
+          ]
+        ]
+      }
+    ],
+    "villages": [
+      {
+        "name": "Charleroi",
+        "x": -265,
+        "z": 108,
+        "r": 14
+      },
+      {
+        "name": "Charleroi (Ville-Haute)",
+        "x": -240,
+        "z": 42,
+        "r": 20
+      },
+      {
+        "name": "Marcinelle",
+        "x": -254,
+        "z": 225,
+        "r": 14
+      },
+      {
+        "name": "Lodelinsart",
+        "x": -221,
+        "z": -145,
+        "r": 12
+      },
+      {
+        "name": "Montignies-sur-Sambre",
+        "x": 3,
+        "z": 190,
+        "r": 12
+      },
+      {
+        "name": "Couillet",
+        "x": -81,
+        "z": 296,
+        "r": 12
+      },
+      {
+        "name": "Gilly",
+        "x": 0,
+        "z": -54,
+        "r": 14
+      },
+      {
+        "name": "Gilly",
+        "x": 40,
+        "z": -70,
+        "r": 14
+      },
+      {
+        "name": "Soleilmont Abbey",
+        "x": 168,
+        "z": -222,
+        "r": 10,
+        "garrison": true
+      },
+      {
+        "name": "Châtelineau",
+        "x": 266,
+        "z": 26,
+        "r": 14
+      },
+      {
+        "name": "Châtelet",
+        "x": 315,
+        "z": 150,
+        "r": 12
       }
     ]
   },
@@ -117,48 +613,48 @@
     {
       "id": "ch",
       "name": "Charleroi Bridge",
-      "x": 0.0,
-      "z": -3.0,
-      "r": 14.4,
+      "x": -262,
+      "z": 116,
+      "r": 16,
       "value": 4,
-      "owner": 1
-    },
-    {
-      "id": "ma",
-      "name": "Marchienne Bridge",
-      "x": -90.0,
-      "z": -6.0,
-      "r": 12.0,
-      "value": 2,
-      "owner": 1
-    },
-    {
-      "id": "cl",
-      "name": "Châtelet Bridge",
-      "x": 87.0,
-      "z": -7.5,
-      "r": 12.0,
-      "value": 2,
       "owner": 1
     },
     {
       "id": "gi",
       "name": "Gilly",
-      "x": 15.0,
-      "z": -93.0,
-      "r": 15.6,
+      "x": 20,
+      "z": -62,
+      "r": 18,
       "value": 3,
+      "owner": 1
+    },
+    {
+      "id": "so",
+      "name": "Soleilmont Plateau",
+      "x": 200,
+      "z": -170,
+      "r": 20,
+      "value": 3,
+      "owner": 1
+    },
+    {
+      "id": "cl",
+      "name": "Châtelet Bridge",
+      "x": 290,
+      "z": 90,
+      "r": 13,
+      "value": 2,
       "owner": 1
     }
   ],
   "entry": [
     {
-      "x": 0.0,
-      "z": 157.5
+      "x": -160,
+      "z": 318
     },
     {
-      "x": 0.0,
-      "z": -157.5
+      "x": 272,
+      "z": -318
     }
   ],
   "rpStart": [
@@ -201,36 +697,65 @@
     [
       {
         "type": "line",
-        "n": 5,
-        "x": -75.0,
-        "z": 105.0,
-        "dx": 37.5
+        "n": 3,
+        "x": -290,
+        "z": 215,
+        "dx": 48,
+        "dz": 22,
+        "names": [
+          "Vandamme: Lefol's Division",
+          "Vandamme: Berthezène's Division",
+          "Vandamme: Habert's Division"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 2,
+        "x": 255,
+        "z": 205,
+        "dx": -50,
+        "dz": 10,
+        "names": [
+          "Gérard: Pécheux's Division",
+          "Gérard: Vichery's Division"
+        ]
       },
       {
         "type": "skirmisher",
         "n": 2,
-        "x": -45.0,
-        "z": 78.0,
-        "dx": 90.0
+        "x": -210,
+        "z": 205,
+        "dx": 440,
+        "dz": -20,
+        "names": [
+          "Pontonniers & Sappers of the Guard",
+          "Voltigeurs, Gérard"
+        ]
       },
       {
         "type": "lancer",
         "n": 2,
-        "x": -112.5,
-        "z": 127.5,
-        "dx": 225.0
+        "x": -140,
+        "z": 245,
+        "dx": 300,
+        "dz": -10,
+        "names": [
+          "Pajol's Lancers",
+          "Exelmans' Dragoons"
+        ]
       },
       {
         "type": "artillery",
         "n": 1,
-        "x": 0.0,
-        "z": 82.5
+        "x": -230,
+        "z": 255,
+        "name": "Guard Horse Battery"
       },
       {
         "type": "commander",
         "n": 1,
-        "x": 0.0,
-        "z": 148.5,
+        "x": -200,
+        "z": 295,
         "names": [
           "Napoleon"
         ],
@@ -240,43 +765,69 @@
     [
       {
         "type": "line",
-        "n": 3,
-        "x": -67.5,
-        "z": -37.5,
-        "dx": 67.5,
+        "n": 1,
+        "x": -262,
+        "z": 82,
         "names": [
-          "1st Westphalian Landwehr",
-          "Pirch II's Brigade",
-          "Steinmetz's Brigade"
-        ]
+          "6th Regiment (Charleroi)"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 20,
+        "z": -85,
+        "names": [
+          "Pirch II's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 268,
+        "z": 22,
+        "names": [
+          "2nd Westphalian Landwehr"
+        ],
+        "nat": "pr"
       },
       {
         "type": "skirmisher",
         "n": 3,
-        "x": -90.0,
-        "z": -15.0,
-        "dx": 90.0,
-        "name": "Prussian Jäger"
+        "x": -235,
+        "z": 40,
+        "dx": 205,
+        "dz": -125,
+        "names": [
+          "Silesian Schützen",
+          "Fusiliers of the 28th",
+          "Prussian Jäger"
+        ],
+        "nat": "pr"
       },
       {
         "type": "lancer",
         "n": 1,
-        "x": 45.0,
-        "z": -60.0,
-        "name": "1st Silesian Uhlans"
+        "x": 240,
+        "z": -60,
+        "name": "1st West Prussian Dragoons",
+        "nat": "pr"
       },
       {
         "type": "artillery",
         "n": 1,
-        "x": 7.5,
-        "z": -42.0,
-        "name": "Zieten's Foot Battery"
+        "x": 190,
+        "z": -120,
+        "name": "Foot Battery No. 3",
+        "nat": "pr"
       },
       {
         "type": "commander",
         "n": 1,
-        "x": 0.0,
-        "z": -81.0,
+        "x": 230,
+        "z": -165,
         "names": [
           "Zieten"
         ]
@@ -299,25 +850,26 @@
         {
           "type": "line",
           "n": 2,
-          "x": 0.0,
-          "z": 0.0,
-          "dx": 0.0,
+          "x": 0,
+          "z": 0,
+          "dx": 0,
           "names": [
             "Jagow's Brigade",
             "Henckel's Brigade"
-          ]
+          ],
+          "nat": "pr"
         }
       ],
       "entry": {
-        "x": 0.0,
-        "z": -157.5
+        "x": 272,
+        "z": -318
       },
       "go": {
-        "x": 7.5,
-        "z": -75.0
+        "x": 205,
+        "z": -175
       },
       "spreadX": 1.6,
-      "msg": "Prussian reinforcements are marching to hold Gilly."
+      "msg": "Prussian reinforcements come down the Fleurus road to hold the Soleilmont plateau."
     },
     {
       "t": 450,
@@ -327,23 +879,25 @@
         {
           "type": "line",
           "n": 2,
-          "x": 0.0,
-          "z": 0.0
+          "x": 0,
+          "z": 0,
+          "nat": "pr"
         },
         {
           "type": "lancer",
           "n": 1,
-          "x": 0.0,
-          "z": 0.0
+          "x": 0,
+          "z": 0,
+          "nat": "pr"
         }
       ],
       "entry": {
-        "x": 0.0,
-        "z": -157.5
+        "x": 272,
+        "z": -318
       },
       "go": {
-        "x": 15.0,
-        "z": -82.5
+        "x": 150,
+        "z": -110
       },
       "spreadX": 1.6,
       "msg": "Late Prussian columns arrive from Fleurus."

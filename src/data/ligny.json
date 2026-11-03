@@ -2,8 +2,8 @@
   "id": "ligny",
   "title": "Ligny",
   "date": "16 June 1815, evening",
-  "blurb": "Napoleon himself faces Blücher's Prussians, drawn up behind the Ligny brook in a line of stone villages. Break the centre at Ligny and St. Amand and the Prussian army is finished as a fighting force. The brook is slow to cross except at the village bridges.",
-  "hint": "Grand-battery the villages, then commit the Guard at Ligny once the defenders are shaken. A decisive win here will delay the Prussians at Waterloo.",
+  "blurb": "Napoleon himself faces Blücher's Prussians, drawn up on the gentle slope behind the Ligny brook. The marshy, willow-lined Ligne winds from Wagnelée through St-Amand and Ligny toward Tongrinelle, and every village on it is a fortress of stone farms and orchards. Above them the Bussy windmill watches the whole field. Break the centre at Ligny and the Prussian army is finished as a fighting force.",
+  "hint": "The brook can be waded anywhere, but slowly; the village bridges are faster. Batter the villages from the Fleurus heights, then send the Guard over at Ligny and climb to the Bussy mill. Watch your right: Thielmann holds Sombreffe.",
   "duration": 1320,
   "clock": {
     "start": "14:30",
@@ -11,177 +11,631 @@
   },
   "weather": "clear",
   "map": {
-    "size": 420,
+    "size": 650,
+    "rough": {
+      "amp": 0.8,
+      "scale": 60,
+      "seed": 1615
+    },
     "hills": [
       {
-        "x": -45.0,
-        "z": -72.0,
-        "rx": 135.0,
-        "rz": 21.0,
+        "x": 225,
+        "z": -50,
+        "rx": 180,
+        "rz": 90,
+        "h": -3.7,
+        "rot": 30,
+        "p": 2
+      },
+      {
+        "x": 250,
+        "z": -325,
+        "rx": 90,
+        "rz": 65,
+        "h": 4.5,
+        "rot": 30
+      },
+      {
+        "x": -125,
+        "z": 300,
+        "rx": 180,
+        "rz": 90,
+        "h": 3.2,
+        "rot": 150
+      },
+      {
+        "x": 225,
+        "z": 175,
+        "rx": 180,
+        "rz": 45,
+        "h": 2.3,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": -25,
+        "z": -50,
+        "rx": 180,
+        "rz": 45,
+        "h": -3.4,
+        "rot": 150
+      },
+      {
+        "x": 125,
+        "z": -50,
+        "rx": 65,
+        "rz": 30,
         "h": 5
       },
       {
-        "x": 105.0,
-        "z": 82.5,
-        "rx": 52.5,
-        "rz": 30.0,
-        "h": 3
-      }
-    ],
-    "woods": [
-      {
-        "x": -177.0,
-        "z": -63.0,
-        "r": 21.0
+        "x": -225,
+        "z": 0,
+        "rx": 180,
+        "rz": 90,
+        "h": -1.7,
+        "rot": 60,
+        "p": 2
       },
       {
-        "x": 135.0,
-        "z": -75.0,
-        "r": 19.5
+        "x": 200,
+        "z": 75,
+        "rx": 90,
+        "rz": 20,
+        "h": -3.9,
+        "rot": 150
       },
       {
-        "x": -75.0,
-        "z": 105.0,
-        "r": 15.0
-      }
-    ],
-    "villages": [
-      {
-        "name": "St. Amand",
-        "x": -127.5,
-        "z": -12.0,
-        "r": 13.2
+        "x": 300,
+        "z": -25,
+        "rx": 65,
+        "rz": 20,
+        "h": 4,
+        "rot": 150,
+        "p": 2
       },
       {
-        "name": "Ligny",
-        "x": 0.0,
-        "z": -6.0,
-        "r": 13.2
+        "x": 275,
+        "z": -100,
+        "rx": 45,
+        "rz": 45,
+        "h": -2.8
       },
       {
-        "name": "Tongrinelle",
-        "x": 78.0,
-        "z": -12.0,
-        "r": 9.6
+        "x": -175,
+        "z": -250,
+        "rx": 180,
+        "rz": 90,
+        "h": 1.3,
+        "p": 2
       },
       {
-        "name": "Sombreffe",
-        "x": 37.5,
-        "z": -132.0,
-        "r": 12.0
+        "x": 200,
+        "z": -200,
+        "rx": 65,
+        "rz": 30,
+        "h": 2.4,
+        "rot": 120,
+        "p": 2
       },
       {
-        "name": "Brye",
-        "x": -60.0,
-        "z": -57.0,
-        "r": 8.4
+        "x": -75,
+        "z": 225,
+        "rx": 65,
+        "rz": 45,
+        "h": -1.7,
+        "rot": 60,
+        "p": 2
+      },
+      {
+        "x": 0,
+        "z": 150,
+        "rx": 130,
+        "rz": 65,
+        "h": 1.3,
+        "rot": 90
+      },
+      {
+        "x": -325,
+        "z": 325,
+        "rx": 65,
+        "rz": 30,
+        "h": 3.1
+      },
+      {
+        "x": 325,
+        "z": 225,
+        "rx": 180,
+        "rz": 20,
+        "h": -2.9,
+        "rot": 150
+      },
+      {
+        "x": -275,
+        "z": 150,
+        "rx": 90,
+        "rz": 65,
+        "h": -1.1,
+        "rot": 30,
+        "p": 2
+      },
+      {
+        "x": 125,
+        "z": -250,
+        "rx": 90,
+        "rz": 30,
+        "h": -1.7,
+        "rot": 90,
+        "p": 2
       }
     ],
     "rivers": [
       {
         "pts": [
           [
-            -210.0,
-            -15.0
+            -322,
+            -176
           ],
           [
-            -135.0,
-            -9.0
+            -290,
+            -154
           ],
           [
-            -60.0,
-            -12.0
+            -242,
+            -125
           ],
           [
-            0.0,
-            -6.0
+            -193,
+            -86
           ],
           [
-            67.5,
-            -12.0
+            -190,
+            -64
           ],
           [
-            135.0,
-            -7.5
+            -226,
+            -45
           ],
           [
-            210.0,
-            -15.0
+            -224,
+            -11
+          ],
+          [
+            -196,
+            12
+          ],
+          [
+            -144,
+            22
+          ],
+          [
+            -121,
+            11
+          ],
+          [
+            -88,
+            -9
+          ],
+          [
+            -50,
+            -35
+          ],
+          [
+            -5,
+            -68
+          ],
+          [
+            44,
+            -108
+          ],
+          [
+            88,
+            -138
+          ],
+          [
+            114,
+            -144
+          ],
+          [
+            127,
+            -114
+          ],
+          [
+            151,
+            -106
+          ],
+          [
+            183,
+            -113
+          ],
+          [
+            236,
+            -124
+          ],
+          [
+            266,
+            -108
+          ],
+          [
+            276,
+            -82
+          ],
+          [
+            266,
+            -57
+          ],
+          [
+            242,
+            -49
+          ],
+          [
+            209,
+            -6
+          ],
+          [
+            216,
+            22
+          ],
+          [
+            235,
+            44
+          ],
+          [
+            264,
+            49
+          ],
+          [
+            325,
+            33
           ]
         ],
-        "width": 8.4,
+        "width": 6,
+        "ford": 0.4,
         "bridges": [
           [
-            -127.5,
-            -9.0
+            -260,
+            -136
           ],
           [
-            -7.5,
-            -6.0
+            -225,
+            -30
           ],
           [
-            75.0,
-            -12.0
+            -170,
+            17
+          ],
+          [
+            -88,
+            -9
+          ],
+          [
+            -28,
+            -51
+          ],
+          [
+            29,
+            -96
+          ],
+          [
+            234,
+            -123
+          ],
+          [
+            250,
+            -52
+          ],
+          [
+            225,
+            32
           ]
         ]
+      }
+    ],
+    "roads": [
+      {
+        "pts": [
+          [
+            -218,
+            -325
+          ],
+          [
+            -169,
+            -318
+          ],
+          [
+            -94,
+            -295
+          ],
+          [
+            -17,
+            -272
+          ],
+          [
+            32,
+            -258
+          ],
+          [
+            87,
+            -242
+          ],
+          [
+            124,
+            -225
+          ],
+          [
+            190,
+            -213
+          ],
+          [
+            250,
+            -201
+          ],
+          [
+            325,
+            -189
+          ]
+        ],
+        "w": 5
+      },
+      {
+        "pts": [
+          [
+            -207,
+            325
+          ],
+          [
+            -176,
+            276
+          ],
+          [
+            -124,
+            220
+          ],
+          [
+            -99,
+            196
+          ],
+          [
+            -28,
+            130
+          ],
+          [
+            20,
+            83
+          ],
+          [
+            71,
+            35
+          ],
+          [
+            120,
+            -11
+          ],
+          [
+            159,
+            -49
+          ],
+          [
+            203,
+            -90
+          ],
+          [
+            234,
+            -123
+          ],
+          [
+            277,
+            -161
+          ],
+          [
+            310,
+            -192
+          ],
+          [
+            325,
+            -205
+          ]
+        ],
+        "w": 5
+      }
+    ],
+    "woods": [
+      {
+        "x": -47,
+        "z": -136,
+        "r": 11
+      },
+      {
+        "x": -78,
+        "z": -48,
+        "r": 9
+      },
+      {
+        "x": -212,
+        "z": 34,
+        "r": 9
+      },
+      {
+        "x": -262,
+        "z": -90,
+        "r": 10
+      },
+      {
+        "x": 300,
+        "z": -40,
+        "r": 14
+      }
+    ],
+    "hedges": [
+      {
+        "pts": [
+          [
+            -110,
+            8
+          ],
+          [
+            -75,
+            -6
+          ],
+          [
+            -45,
+            -18
+          ],
+          [
+            -10,
+            -36
+          ],
+          [
+            22,
+            -60
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            -235,
+            40
+          ],
+          [
+            -200,
+            44
+          ],
+          [
+            -160,
+            40
+          ]
+        ]
+      }
+    ],
+    "villages": [
+      {
+        "name": "Wagnelée",
+        "x": -292,
+        "z": -186,
+        "r": 14
+      },
+      {
+        "name": "St-Amand-la-Haye",
+        "x": -236,
+        "z": -60,
+        "r": 13
+      },
+      {
+        "name": "St-Amand",
+        "x": -184,
+        "z": 20,
+        "r": 16,
+        "garrison": true
+      },
+      {
+        "name": "Ligny",
+        "x": -62,
+        "z": -26,
+        "r": 14
+      },
+      {
+        "name": "Ligny",
+        "x": -12,
+        "z": -64,
+        "r": 16,
+        "garrison": true
+      },
+      {
+        "name": "Brye",
+        "x": -135,
+        "z": -191,
+        "r": 14
+      },
+      {
+        "name": "Sombreffe",
+        "x": 160,
+        "z": -178,
+        "r": 16
+      },
+      {
+        "name": "Tongrinelle",
+        "x": 252,
+        "z": -66,
+        "r": 10
+      },
+      {
+        "name": "Boignée",
+        "x": 262,
+        "z": 66,
+        "r": 10
+      },
+      {
+        "name": "Fleurus",
+        "x": -186,
+        "z": 270,
+        "r": 22
       }
     ]
   },
   "zones": [
     {
+      "id": "sh",
+      "name": "St-Amand-la-Haye",
+      "x": -236,
+      "z": -60,
+      "r": 17,
+      "value": 2,
+      "owner": 1
+    },
+    {
       "id": "sa",
       "name": "St. Amand",
-      "x": -127.5,
-      "z": -12.0,
-      "r": 18.0,
+      "x": -184,
+      "z": 20,
+      "r": 20,
       "value": 3,
       "owner": 1
     },
     {
       "id": "li",
       "name": "Ligny",
-      "x": 0.0,
-      "z": -6.0,
-      "r": 16.8,
+      "x": -25,
+      "z": -52,
+      "r": 22,
       "value": 4,
       "owner": 1
     },
     {
       "id": "bw",
       "name": "Bussy Windmill",
-      "x": -45.0,
-      "z": -72.0,
-      "r": 19.2,
+      "x": -82,
+      "z": -160,
+      "r": 20,
+      "value": 3,
+      "owner": 1
+    },
+    {
+      "id": "so",
+      "name": "Sombreffe",
+      "x": 160,
+      "z": -178,
+      "r": 18,
       "value": 3,
       "owner": 1
     },
     {
       "id": "to",
       "name": "Tongrinelle",
-      "x": 78.0,
-      "z": -12.0,
-      "r": 14.4,
+      "x": 252,
+      "z": -66,
+      "r": 15,
       "value": 1.5,
-      "owner": 1
-    },
-    {
-      "id": "so",
-      "name": "Sombreffe",
-      "x": 37.5,
-      "z": -135.0,
-      "r": 16.8,
-      "value": 3,
       "owner": 1
     }
   ],
   "entry": [
     {
-      "x": 0.0,
-      "z": 202.5
+      "x": -140,
+      "z": 308
     },
     {
-      "x": 0.0,
-      "z": -202.5
+      "x": -10,
+      "z": -312
     }
   ],
   "rpStart": [
@@ -227,49 +681,80 @@
     [
       {
         "type": "line",
-        "n": 6,
-        "x": -150.0,
-        "z": 120.0,
-        "dx": 60.0
+        "n": 3,
+        "x": -290,
+        "z": 95,
+        "dx": 55,
+        "names": [
+          "Girard's Division",
+          "Lefol's Division",
+          "Berthezène's Division"
+        ]
       },
       {
-        "type": "guard",
-        "n": 2,
-        "x": -30.0,
-        "z": 168.0,
-        "dx": 60.0
+        "type": "line",
+        "n": 3,
+        "x": -95,
+        "z": 105,
+        "dx": 50,
+        "dz": -8,
+        "names": [
+          "Habert's Division",
+          "Pécheux's Division",
+          "Vichery's Division"
+        ]
       },
       {
         "type": "skirmisher",
         "n": 2,
-        "x": -90.0,
-        "z": 90.0,
-        "dx": 180.0
-      },
-      {
-        "type": "cuirassier",
-        "n": 1,
-        "x": 135.0,
-        "z": 150.0
-      },
-      {
-        "type": "lancer",
-        "n": 1,
-        "x": -165.0,
-        "z": 150.0
+        "x": -205,
+        "z": 85,
+        "dx": 150,
+        "dz": -15,
+        "names": [
+          "Tirailleurs, 12e",
+          "Voltigeurs, Pécheux"
+        ]
       },
       {
         "type": "artillery",
         "n": 3,
-        "x": -90.0,
-        "z": 102.0,
-        "dx": 82.5
+        "x": -150,
+        "z": 150,
+        "dx": 75,
+        "dz": -5,
+        "names": [
+          "Guard Battery",
+          "Battery Ruty",
+          "Battery Mouton"
+        ]
+      },
+      {
+        "type": "guard",
+        "n": 2,
+        "x": -120,
+        "z": 215,
+        "dx": 45
+      },
+      {
+        "type": "cuirassier",
+        "n": 1,
+        "x": 50,
+        "z": 160,
+        "name": "Milhaud's Cuirassiers"
+      },
+      {
+        "type": "lancer",
+        "n": 1,
+        "x": 165,
+        "z": 95,
+        "name": "Pajol's Lancers"
       },
       {
         "type": "commander",
         "n": 1,
-        "x": 0.0,
-        "z": 189.0,
+        "x": -142,
+        "z": 252,
         "names": [
           "Napoleon"
         ],
@@ -279,65 +764,139 @@
     [
       {
         "type": "line",
-        "n": 5,
-        "x": -150.0,
-        "z": -33.0,
-        "dx": 45.0,
+        "n": 1,
+        "x": -180,
+        "z": -10,
         "names": [
-          "Steinmetz's I Corps",
-          "Jagow's Brigade",
-          "Henckel's Brigade",
-          "Pirch II's Brigade",
+          "Jagow's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -248,
+        "z": -82,
+        "names": [
+          "Steinmetz's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -275,
+        "z": -210,
+        "names": [
+          "Tippelskirch's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -12,
+        "z": -88,
+        "names": [
+          "Henckel's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -95,
+        "z": -140,
+        "names": [
+          "Pirch II's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 40,
+        "z": -150,
+        "names": [
           "Krafft's Brigade"
         ],
         "nat": "pr"
       },
       {
         "type": "line",
-        "n": 4,
-        "x": -52.5,
-        "z": -57.0,
-        "dx": 37.5,
+        "n": 1,
+        "x": 160,
+        "z": -200,
         "names": [
-          "Jürgass's Division",
-          "Langen's Division",
-          "Brause's Brigade",
+          "Luck's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 292,
+        "z": -95,
+        "names": [
           "Kemphen's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 285,
+        "z": 15,
+        "names": [
+          "Stülpnagel's Brigade"
         ],
         "nat": "pr"
       },
       {
         "type": "skirmisher",
         "n": 2,
-        "x": 30.0,
-        "z": -15.0,
-        "dx": 60.0,
-        "name": "Prussian Fusiliers",
+        "x": -72,
+        "z": -48,
+        "dx": 368,
+        "dz": -7,
+        "names": [
+          "Westphalian Fusiliers",
+          "Silesian Schützen"
+        ],
         "nat": "pr"
       },
       {
         "type": "lancer",
         "n": 2,
-        "x": -15.0,
-        "z": -120.0,
-        "dx": 60.0,
-        "name": "Lützow's Uhlans",
+        "x": -40,
+        "z": -232,
+        "dx": 140,
+        "dz": 15,
+        "names": [
+          "Lützow's 6th Uhlans",
+          "Brandenburg Uhlans"
+        ],
         "nat": "pr"
       },
       {
         "type": "artillery",
         "n": 3,
-        "x": -90.0,
-        "z": -72.0,
-        "dx": 60.0,
-        "name": "Prussian 12-pdr Battery",
+        "x": -140,
+        "z": -128,
+        "dx": 80,
+        "dz": -10,
+        "names": [
+          "Prussian 12-pdr Battery",
+          "Foot Battery No. 7",
+          "Horse Battery No. 2"
+        ],
         "nat": "pr"
       },
       {
         "type": "commander",
         "n": 1,
-        "x": 0.0,
-        "z": -141.0,
+        "x": -80,
+        "z": -182,
         "names": [
           "Blücher"
         ]
@@ -363,27 +922,27 @@
         {
           "type": "line",
           "n": 3,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "names": [
-            "Thielmann: Borcke",
-            "Thielmann: Stülpnagel",
-            "Pirch I's II Corps"
+            "Pirch I: Brause's Brigade",
+            "Pirch I: Langen's Brigade",
+            "Thielmann: Borcke's Brigade"
           ],
           "nat": "pr"
         }
       ],
       "entry": {
-        "x": 202.5,
-        "z": -90.0
+        "x": -60,
+        "z": -312
       },
       "go": {
-        "x": 105.0,
-        "z": -67.5
+        "x": -150,
+        "z": -120
       },
-      "spreadX": 0,
-      "spreadZ": 1.6,
-      "msg": "Prussian reserves from Sombreffe move up to the brook."
+      "spreadX": 1.6,
+      "spreadZ": 0,
+      "msg": "Pirch I's reserves come down from the Namur road toward St-Amand and the windmill."
     },
     {
       "t": 640,
