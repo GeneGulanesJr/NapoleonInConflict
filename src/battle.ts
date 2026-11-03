@@ -664,7 +664,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       renderSel();
       const sd = st.side[me];
       tweenNumbers([st.side[0].score, st.side[1].score], sd.rp);
-      const pl = `· ${Math.floor(sd.pool ?? 0)} men${sd.earned >= sd.cap ? ' · cap' : ''}`; if (pl !== lastPool) { $(hud, '#pool').textContent = pl; lastPool = pl; } // replacements left; "cap" = no more RP this battle
+      const pl = `Replacements ${Math.floor(sd.pool ?? 0)}${sd.earned >= sd.cap ? ' · RP cap' : ''}`; if (pl !== lastPool) { $(hud, '#pool').textContent = pl; lastPool = pl; } // replacements left; "cap" = no more RP this battle
       const hr = parseInt(scn.clock.start) + (st.t / scn.duration) * scn.clock.hours;
       const clk = `${pad(hr)}:${pad((hr % 1) * 60)}`;
       if (clk !== lastClk) { $(hud, '#clk').textContent = clk; lastClk = clk; }

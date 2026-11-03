@@ -226,3 +226,6 @@ button.alt { background: #1b1510; }
 .plates .plate.pip .pn { display: none; }
 .plates .plate.pip .bar { height: 1px; margin-top: 1px; }
 .plates .plate.pip .bar::after { display: none; }
+
+/* war chest: replacement men left (and RP cap reached) on its own line under the reserves header */
+.hud #pool { display: block; color: #b8b2a0; margin-top: 2px; }
