@@ -1,13 +1,21 @@
 // Bot commander. Uses the same command() API as a human player, so it plays by the same rules.
-import { command, rand, useAbility, type Sim } from './sim.ts';
+import { command, rand, solid, useAbility, type Sim } from './sim.ts';
 
 const dist = (a: any, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
+/** a square too strong for this cavalry regiment to charge */
+const firm = (e: any, cav: any) => e.form === 'square' && !e.routed && solid(e, cav) > 0.5;
 
 export function makeBot(sim: Sim, side: number) {
   let acc = 1.5;
   const mem: { assign: Record<number, { zid: string; ox: number; oz: number }> } = { assign: {} };
   return (dt: number) => {
     acc += dt;
+    // every tick, not every 2s: a galloping regiment must pull up the moment its target forms a firm square
+    // ...and ride back out of musket range instead of idling where the square can shoot it down
+    for (const u of sim.s.units) if (u.side === side && u.chase != null && (u.type === 'lancer' || u.type === 'cuirassier')) {
+      const t = sim.s.units.find((q: any) => q.id === u.chase);
+      if (t && firm(t, u)) { const d = dist(u, t) || 1; command(sim, side, { c: 'move', ids: [u.id], x: t.x + ((u.x - t.x) / d) * 50, z: t.z + ((u.z - t.z) / d) * 50 }); }
+    }
     if (acc < 2) return;
     acc = 0;
     think(sim, side, mem);
@@ -101,9 +109,7 @@ function think(sim: Sim, side: number, mem: any) {
     if (u.garrison != null || u.gTarget != null) continue;
 
     if (u.type === 'line' || u.type === 'guard') {
-      const cavNear = foes.some((e: any) => tu.types[e.type].cav && dist(u, e) < 28);
-      if (cavNear) { if (u.form !== 'square') command(sim, side, { c: 'form', ids: [u.id], f: 'square' }); hold(); continue; }
-      if (u.form === 'square') { command(sim, side, { c: 'form', ids: [u.id], f: 'line' }); continue; }
+      if (u.form === 'square') { hold(); continue; } // auto-square (switched on above) forms and breaks squares; a second rule here made regiments flip-flop
       if (u.chase != null) continue;
       // bayonet charge when clearly stronger locally
       if (stance === 'attack' && near && nd < 22 && u.morale > 60) {
@@ -131,8 +137,8 @@ function think(sim: Sim, side: number, mem: any) {
       let prey: any = null, pd = 95;
       for (const e of enemies) {
         const d = dist(u, e);
-        if (d > pd || e.form === 'square' && !e.routed) continue;
-        const good = e.routed || e.type === 'artillery' || e.type === 'skirmisher' || (!tu.types[e.type].cav && e.morale < 70) || e.form === 'column';
+        if (d > pd || firm(e, u)) continue;
+        const good = e.routed || e.type === 'artillery' || e.type === 'skirmisher' || (!tu.types[e.type].cav && e.morale < 70) || e.form === 'column' || e.form === 'square'; // a square that is not firm is outnumbered
         if (good) { pd = d; prey = e; }
       }
       if (prey && u.morale > 45 && u.men > 0.3 * u.maxMen) command(sim, side, { c: 'attack', ids: [u.id], target: prey.id });
