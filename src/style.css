@@ -149,7 +149,7 @@ button.alt { background: #1b1510; }
 .hud button { font: 8px/8px var(--pf); letter-spacing: 0; padding: 2px 4px; border-width: 1px; box-shadow: 0 0 0 1px #000; }
 .hud kbd { font: 8px/8px var(--pf); padding: 0 1px; margin-left: 2px; background: none; }
 .hud .panel { padding: 3px 4px; border-width: 1px; }
-.hud .topbar { padding: 3px 6px; gap: 8px; background: rgba(20, 17, 13, .72); }
+.hud .topbar { padding: 3px 120px 3px var(--tp, 120px); gap: 8px; /* right room keeps the scores clear of the speed buttons; render.ts drops the left room on narrow grids */ background: rgba(20, 17, 13, .72); }
 .hud .score { gap: 3px; font-size: 8px; } .hud .score b { font-size: 16px; line-height: 16px; min-width: 40px; }
 .hud .center { min-width: 220px; }
 .hud .ttl { font-size: 8px; letter-spacing: 0; } .hud .ttl small { font-size: 8px; }
@@ -170,10 +170,10 @@ button.alt { background: #1b1510; }
 .hud i.b { height: 3px; border-width: 0; }
 .hud .forms { gap: 2px; margin-top: 3px; } .hud .forms button { padding: 1px 3px; font-size: 8px; }
 .hud .bc { bottom: 6px; gap: 4px; }
-.hud .ab { width: 40px; height: 38px; padding: 2px; gap: 0; }
+.hud .ab { width: 40px; height: 46px; padding: 10px 2px 2px; gap: 0; } /* top strip holds the key label, the 36px icon sits below it */
 .hud .ab .nm { display: none; } .hud .ab kbd { top: 1px; left: 1px; } .hud .ab .cd { top: 12px; font-size: 12px; text-shadow: 1px 1px 0 #000; }
 .hud .br { right: 6px; bottom: 6px; gap: 3px; }
-.hud #mini { width: 64px; height: 64px; border-width: 1px; image-rendering: pixelated; }
+.hud #mini { width: 96px; height: 96px; border-width: 1px; image-rendering: pixelated; }
 .hud #res { width: 112px; } .hud #res b { font-size: 8px; margin: 0 1px; }
 .hud .rbtns { gap: 2px; } .hud .rbtns button { gap: 4px; padding: 1px 3px; font-size: 8px; }
 .hud .intro h1 { font-size: 26px; line-height: 30px; letter-spacing: 1px; margin: 2px 0; text-shadow: 2px 2px 0 #000; }
@@ -229,3 +229,29 @@ button.alt { background: #1b1510; }
 
 /* war chest: replacement men left (and RP cap reached) on its own line under the reserves header */
 .hud #pool { display: block; color: #b8b2a0; margin-top: 2px; }
+
+/* ---------- menus on the HUD's pixel grid: --u = one HUD pixel (set in render.ts resize), Silkscreen on its 8px grid ---------- */
+#menu { --u: 2px; font: calc(var(--u) * 8) / calc(var(--u) * 12) var(--pf); letter-spacing: 0; -webkit-font-smoothing: none; text-rendering: optimizeSpeed; }
+#menu .logo { font-size: calc(var(--u) * 24); line-height: 1.1; letter-spacing: calc(var(--u) * 2); text-shadow: calc(var(--u) * 2) calc(var(--u) * 2) 0 #000; }
+#menu .logo em { font-size: calc(var(--u) * 16); letter-spacing: calc(var(--u) * 4); }
+#menu .screen h2 { font-size: calc(var(--u) * 16); letter-spacing: 0; }
+#menu .sub { font-style: normal; margin: calc(var(--u) * 3) 0 calc(var(--u) * 8); }
+#menu .btns { gap: calc(var(--u) * 4); }
+#menu .btns button { font-size: calc(var(--u) * 8); min-width: calc(var(--u) * 120); padding: calc(var(--u) * 4) calc(var(--u) * 8); }
+#menu .btns.row button { min-width: calc(var(--u) * 70); }
+#menu .btns small { font-size: calc(var(--u) * 8); margin-left: calc(var(--u) * 3); }
+#menu .help { font-size: calc(var(--u) * 8); line-height: calc(var(--u) * 12); max-width: calc(var(--u) * 360); }
+#menu .intro-text, #menu .brief p, #menu .hint { font-style: normal; }
+#menu .brief h3 { font-size: calc(var(--u) * 12); } #menu .brief small { font-size: calc(var(--u) * 8); }
+#menu .bcard b { font-size: calc(var(--u) * 12); } #menu .bcard { grid-template-columns: calc(var(--u) * 16) 1fr; }
+#menu .rrow { grid-template-columns: calc(var(--u) * 80) 1fr; }
+#menu .form input, #menu .form select { font: inherit; }
+#menu .btns button { min-width: 0; width: calc(var(--u) * 240); }
+#menu .btns.row button { width: calc(var(--u) * 100); }
+#menu .screen { max-width: calc(var(--u) * 560); padding: calc(var(--u) * 10) calc(var(--u) * 12); }
+#menu .intro-text { max-width: calc(var(--u) * 400); margin-bottom: calc(var(--u) * 8); }
+#menu .rrow { grid-template-columns: calc(var(--u) * 100) 1fr; }
+#menu .cols { gap: calc(var(--u) * 10); }
+#menu .roster h4 small { display: inline; margin: 0; } #menu .cmap { height: calc(var(--u) * 80); margin-bottom: 0; }
+.hud .score .lbl { display: var(--lbl, inline); } /* render.ts hides the side names when the HUD grid is too narrow for them beside the speed buttons */
+#menu code { font: inherit; }
