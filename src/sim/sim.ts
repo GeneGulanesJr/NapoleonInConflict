@@ -1,5 +1,5 @@
 // Pure, deterministic battle simulation. No DOM, no Three.js: runs in the browser and on the Node server.
-import { detour, heightAt, featureAt } from './world.ts';
+import { detour, heightAt, featureAt, los } from './world.ts';
 
 export type Sim = { s: any; scn: any; tu: any; tl: any[] };
 
@@ -230,7 +230,7 @@ export function distToFoot(u: any, tu: any, x: number, z: number): number { cons
 const rectDist = (f: number[], lx: number, lz: number) => Math.hypot(lx - Math.max(f[0], Math.min(f[1], lx)), lz - Math.max(f[2], Math.min(f[3], lz)));
 /** Distance between two formations' edges (<= 0 means they overlap). */
 function gapBetween(a: any, b: any, tu: any): number {
-  if (Math.hypot(a.x - b.x, a.z - b.z) > 170) return 99;
+  if (Math.hypot(a.x - b.x, a.z - b.z) > 170) return 1e9;
   const fa = foot(a, tu), fb = foot(b, tu);
   let m = 1e9;
   for (const [p, q, fp, fq] of [[a, b, fa, fb], [b, a, fb, fa]] as any[]) {
@@ -243,6 +243,13 @@ function gapBetween(a: any, b: any, tu: any): number {
   return m;
 }
 const isInf = (u: any) => u.type === 'line' || u.type === 'guard';
+/** eye height above the ground for sight lines (riders sit higher); targets are seen at 2 */
+const eye = (u: any, tu: any) => (tu.types[u.type].cav ? 3 : 2);
+/** movement multiplier from the ground under u (tuning.terrain): woods and villages by arm, wading, roads for columns, guns and horse not in a fight */
+function terrainSpeed(u: any, f: any, tu: any) {
+  const tt = tu.terrain, T = tu.types[u.type], arm = T.cav ? 'cavalry' : u.type === 'artillery' || u.type === 'skirmisher' ? u.type : 'infantry';
+  return (f.wood ? tt.wood[arm] : 1) * (f.village ? tt.village[arm] : 1) * (f.river ? f.river.ford ?? tt.river : 1) * (f.road && u.eng == null && (T.cav || u.type === 'artillery' || u.form === 'column') ? tt.road : 1);
+}
 
 function damage(sim: Sim, u: any, cas: number, moraleScale = 1, att?: any) {
   if (u.dead) return;
@@ -346,15 +353,19 @@ export function step(sim: Sim, dt: number) {
   const ca = tu.commanderAura, cmds = live.filter((u: any) => u.type === 'commander' && !u.routed);
   for (const u of live) u.aura = u.type !== 'commander' && cmds.some((c: any) => c.side === u.side && Math.hypot(c.x - u.x, c.z - u.z) < ca.radius);
 
-  // fog of war: an enemy is seen when one of your units is within sight (or it has just fired)
-  const seen: Set<number>[] = [new Set(), new Set()];
-  for (const e of live) {
-    if (!s.fog) { seen[1 - e.side].add(e.id); continue; }
-    const wood = featureAt(scn, e.x, e.z).kind === 'wood' ? 0.6 : 1;
-    const vis = (e.fired < tu.sight.reveal) || live.some((f: any) => f.side !== e.side && Math.hypot(f.x - e.x, f.z - e.z) < (tu.sight[f.type] ?? 70) * (s.weather === 'storm' ? tu.sight.storm : s.weather === 'rain' ? tu.sight.rain : 1) * wood && !smokeBlocked(sim, f.x, f.z, e.x, e.z));
-    if (vis) seen[1 - e.side].add(e.id);
+  // fog of war: an enemy is seen when one of your units is within sight with a clear line (ground, woods, smoke), or it has just fired; re-checked 4x a second
+  if (!s.fog || s.t >= (s.seenT ?? 0)) {
+    s.seenT = s.t + 0.25;
+    const sn: number[][] = [[], []];
+    for (const e of live) {
+      if (!s.fog) { sn[1 - e.side].push(e.id); continue; }
+      const wood = featureAt(scn, e.x, e.z).kind === 'wood' ? 0.6 : 1;
+      const vis = (e.fired < tu.sight.reveal) || live.some((f: any) => f.side !== e.side && Math.hypot(f.x - e.x, f.z - e.z) < (tu.sight[f.type] ?? 70) * (s.weather === 'storm' ? tu.sight.storm : s.weather === 'rain' ? tu.sight.rain : 1) * wood && !smokeBlocked(sim, f.x, f.z, e.x, e.z) && los(scn, f.x, f.z, eye(f, tu), e.x, e.z, 2));
+      if (vis) sn[1 - e.side].push(e.id);
+    }
+    s.seen = sn;
   }
-  s.seen = [[...seen[0]], [...seen[1]]];
+  const seen: Set<number>[] = s.seen.map((a: number[]) => new Set(a));
 
   for (const u of live) {
     const T = tu.types[u.type];
@@ -370,7 +381,7 @@ export function step(sim: Sim, dt: number) {
       let dx = en.x - u.x, dz = en.z - u.z;
       if (ne && nd < 60) { dx = u.x - ne.x; dz = u.z - ne.z; } // run from the nearest enemy, else toward home
       const d = Math.hypot(dx, dz) || 1;
-      const sp = T.speed * 1.2 * f.slow * W.move * dt;
+      const sp = T.speed * 1.2 * terrainSpeed(u, f, tu) * W.move * dt;
       u.x += (dx / d) * sp; u.z += (dz / d) * sp;
       u.facing = Math.atan2(dx, dz);
       u.mv = true;
@@ -407,7 +418,7 @@ export function step(sim: Sim, dt: number) {
     if (u.chase != null) {
       const t = byId.get(u.chase);
       if (!t || t.dead) u.chase = null;
-      else { gx = t.x; gz = t.z; stopAt = T.range > 0 ? T.range * 0.98 : 1; const gp = gapBetween(u, t, tu); touch = T.range > 0 ? gp <= T.range * 0.98 : gp < 0.6; } // ranged units halt at max range and shoot; melee-only close in until the edges touch
+      else { gx = t.x; gz = t.z; const gp = gapBetween(u, t, tu), shoot = T.range > 0 && (gp > T.range || los(scn, u.x, u.z, eye(u, tu), t.x, t.z, 2)); stopAt = shoot ? T.range * 0.98 : 1; touch = shoot ? gp <= T.range * 0.98 : gp < 0.6; } // ranged units halt at max range and shoot (once they can see the target over the ground); melee-only close in until the edges touch
     }
     const dd = gx != null && gz != null ? Math.hypot(gx - u.x, gz - u.z) : 0;
     if (gx == null || gz == null || dd <= stopAt) u.via = null;
@@ -422,10 +433,10 @@ export function step(sim: Sim, dt: number) {
       else {
         const fs = T.cav || u.type === 'artillery' || u.type === 'skirmisher' ? 1 : tu.formSpeed[u.form];
         const run = u.spUntil > s.t && (u.spKind === 'sprint' || u.spKind === 'charge') ? 1.7 : 1;
-        const sp = Math.min(d - stopAt + 0.01, T.speed * fs * f.slow * W.move * run * dt);
+        const sp = Math.min(d - stopAt + 0.01, T.speed * fs * terrainSpeed(u, f, tu) * W.move * run * dt);
         const nx = u.x + (dx / d) * sp, nz = u.z + (dz / d) * sp;
         const slope = (heightAt(scn, nx, nz) - heightAt(scn, u.x, u.z)) / Math.max(sp, 0.01);
-        const k = 1 - Math.max(0, Math.min(0.5, slope * 1.5));
+        const k = Math.min((d - stopAt + 0.01) / sp, 1 - Math.max(1 - tu.terrain.downhill, Math.min(0.5, slope * 1.5))); // uphill slows, downhill helps a little (never past the stop)
         u.x += (nx - u.x) * k; u.z += (nz - u.z) * k;
         u.facing = Math.atan2(dx, dz);
         u.mv = true;
@@ -442,14 +453,17 @@ export function step(sim: Sim, dt: number) {
     let c: any = null, cd = 0.8;
     for (const e of live) { if (e.dead || e.side === u.side || Math.hypot(e.x - u.x, e.z - u.z) > 70) continue; const g = gapBetween(u, e, tu); if (g < cd) { cd = g; c = e; } }
     if (c) {
+      // horse charging downhill hits harder, uphill weaker: ground fall across 16 units through the contact, scaled and clamped to +-30%
+      const ex = c.x - u.x, ez = c.z - u.z, el = Math.hypot(ex, ez) || 1;
+      const hc = T.cav ? Math.max(0.7, Math.min(1.3, 1 + (tu.terrain.charge * (heightAt(scn, u.x - (ex / el) * 8, u.z - (ez / el) * 8) - heightAt(scn, u.x + (ex / el) * 8, u.z + (ez / el) * 8))) / 16)) : 1;
       if (u.eng !== c.id) {
         u.eng = c.id;
         { const want = Math.atan2(c.x - u.x, c.z - u.z), dd = Math.atan2(Math.sin(want - u.facing), Math.cos(want - u.facing)); u.facing += Math.max(-1, Math.min(1, dd)); } // turn once, at most ~57 degrees, no per-tick swinging
-        if (T.cav && !c.routed && c.form !== 'square' && !tu.types[c.type].cav) { c.morale -= tu.chargeShock; ev(sim, { k: 'charge', x: c.x, z: c.z }); }
+        if (T.cav && !c.routed && c.form !== 'square' && !tu.types[c.type].cav) { c.morale -= tu.chargeShock * hc; ev(sim, { k: 'charge', x: c.x, z: c.z }); }
       }
       const asp = aspect(u, c), gm = c.garrison != null ? (T.cav ? tu.garrison.meleeCav : tu.garrison.meleeInf) : 1;
       if (asp && s.t - c.flankT > 6) { c.flankT = s.t; ev(sim, { k: 'flank', x: c.x, z: c.z, side: c.side, kind: asp }); chron(sim, 1 - c.side, `${asp === 2 ? 'Rear' : 'Flank'} attack on ${c.name}`); }
-      damage(sim, c, u.men * T.melee * meleeMult(u, c) * gm * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.melee) * tu.meleeRate * (u.spUntil > s.t && u.spKind === 'charge' ? 1.6 : 1) * dt, tu.flank.morale[asp], u);
+      damage(sim, c, u.men * T.melee * meleeMult(u, c) * hc * gm * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.melee) * tu.meleeRate * (u.spUntil > s.t && u.spKind === 'charge' ? 1.6 : 1) * dt, tu.flank.morale[asp], u);
       if (c.dead) u.eng = null;
       continue;
     }
@@ -457,8 +471,13 @@ export function step(sim: Sim, dt: number) {
 
     // ranged fire (only when standing still, not changing formation)
     if (T.range <= 0 || u.mv || u.busy > 0 || u.reload > 0) continue;
-    let tg: any = null, td = T.range;
-    for (const e of live) { if (e.dead || e.side === u.side || !seen[u.side].has(e.id)) continue; const d = Math.max(0, gapBetween(u, e, tu)); if (d < td && !smokeBlocked(sim, u.x, u.z, e.x, e.z) && !masked(u, e, live, tu)) { td = d; tg = e; } } // range is measured to the nearest part of the target formation
+    let tg: any = null, td = 1e9;
+    const hu = heightAt(scn, u.x, u.z);
+    for (const e of live) {
+      if (e.dead || e.side === u.side || !seen[u.side].has(e.id)) continue;
+      const d = Math.max(0, gapBetween(u, e, tu)), reach = T.range * (u.type === 'artillery' ? Math.max(1, Math.min(1.3, 1 + tu.terrain.gunReach * (hu - heightAt(scn, e.x, e.z)))) : 1); // guns on high ground reach further
+      if (d < td && d < reach && !smokeBlocked(sim, u.x, u.z, e.x, e.z) && !masked(u, e, live, tu) && los(scn, u.x, u.z, eye(u, tu), e.x, e.z, 2)) { td = d; tg = e; } // range is measured to the nearest part of the target formation; no shooting over a crest
+    }
     if (!tg) continue;
     // round shot falls short or wide more often the further it flies; canister at close range always tells
     const canister = u.spUntil > s.t && u.spKind === 'canister', volley = u.spUntil > s.t && u.spKind === 'volley', close = td < tu.canisterRange * (canister ? 2.2 : 1);

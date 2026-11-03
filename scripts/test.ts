@@ -8,6 +8,7 @@ import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
 import { createSim, step, command } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
+import { heightAt, groundAt } from '../src/sim/world.ts';
 
 // ---------------------------------------------------------------- unit-vs-unit rules
 const data = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.json`, import.meta.url), 'utf8'));
@@ -121,6 +122,80 @@ test('a dragged line order spreads the group over the drag and wheels it to face
   for (const u of ls) assert.ok(Math.abs(u.facing - Math.PI / 2) < 1e-6 && Math.abs(u.x) < 1, `${u.name} stands on the line facing +x (x ${u.x.toFixed(1)}, facing ${u.facing.toFixed(2)})`);
   const [a, b] = ls.map((u: any) => u.z).sort((p: number, q: number) => p - q);
   assert.ok(b - a > 60, `spread over the drag (${(b - a).toFixed(1)} apart)`);
+});
+
+// ---------------------------------------------------------------- terrain
+const FLAT = { amp: 0, scale: 50, seed: 1 }; // rough ground with no amplitude = a dead-flat board
+
+test('heightAt follows the map schema (rough ground, rotated plateau hills) and its cache equals the analytic value', () => {
+  const scn = { map: { size: 500, rough: { amp: 1.2, scale: 60, seed: 7 }, hills: [{ x: 30, z: -40, rx: 80, rz: 20, h: 10, rot: 30, p: 2 }, { x: -100, z: 90, rx: 40, rz: 40, h: -4 }] } };
+  let worst = 0;
+  for (let x = -250; x <= 250; x += 14) for (let z = -250; z <= 250; z += 14) {
+    assert.equal(heightAt(scn, x, z), groundAt(scn.map, x, z), `grid point ${x},${z}`);
+    worst = Math.max(worst, Math.abs(heightAt(scn, x + 0.7, z + 1.3) - groundAt(scn.map, x + 0.7, z + 1.3)));
+  }
+  assert.ok(worst < 0.15, `between grid points the cache stays close (${worst.toFixed(3)})`);
+  const ridge = { map: { size: 200, rough: FLAT, hills: [{ x: 0, z: 0, rx: 50, rz: 10, h: 10, rot: 90, p: 2 }] } }; // turned to run north-south
+  assert.ok(Math.abs(heightAt(ridge, 0, 30) - 10 * Math.exp(-(0.36 ** 2))) < 0.01, 'a rotated plateau ridge runs along its long axis');
+  assert.ok(heightAt(ridge, 30, 0) < 0.01, 'and is narrow across it');
+});
+
+test('a ridge between two regiments blocks their fire; open ground does not', () => {
+  const shots = (hills: any[]) => {
+    const sim = arena((fr, co) => [Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: -14, facing: 0, form: 'line' }), Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 14, facing: Math.PI, form: 'line' })], { size: 400, rough: FLAT, hills });
+    let n = 0;
+    run(sim, 20, undefined, () => { n += sim.s.events.filter((e: any) => e.k === 'shot').length; sim.s.events.length = 0; });
+    return n;
+  };
+  assert.ok(shots([]) > 0, 'on open ground they trade volleys');
+  assert.equal(shots([{ x: 0, z: 0, rx: 300, rz: 5, h: 8, p: 2 }]), 0, 'with a ridge between them nobody fires');
+});
+
+/** distance a unit covers in `secs` heading east from x=-60 over the given map */
+function march(type: string, form: string, secs: number, map: any) {
+  let u: any;
+  const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === type), { x: -60, z: 0, facing: Math.PI / 2, form }), Object.assign(co[0], { x: 170, z: 170 })], map);
+  command(sim, 0, { c: 'move', ids: [u.id], x: 100, z: 0 });
+  run(sim, secs);
+  return u.x + 60;
+}
+
+test('woods slow cavalry more than infantry', () => {
+  const ratio = (type: string, form: string) => march(type, form, 4, { size: 400, rough: FLAT, woods: [{ x: 0, z: 0, r: 120 }] }) / march(type, form, 4, { size: 400, rough: FLAT });
+  const cav = ratio('lancer', 'line'), inf = ratio('line', 'line');
+  assert.ok(cav < inf - 0.15, `cavalry keeps ${cav.toFixed(2)} of its pace in woods, infantry ${inf.toFixed(2)}`);
+});
+
+test('a column marches faster on a road', () => {
+  const road = march('line', 'column', 5, { size: 400, rough: FLAT, roads: [{ pts: [[-200, 0], [200, 0]], w: 4 }] }), off = march('line', 'column', 5, { size: 400, rough: FLAT });
+  assert.ok(road > off * 1.2, `road ${road.toFixed(1)} vs open ${off.toFixed(1)}`);
+});
+
+test('units wade a fordable river instead of detouring, but go round a deep one by the bridge', () => {
+  const cross = (ford?: number) => {
+    let u: any, wide = 0;
+    const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: 0, z: -30, facing: 0, form: 'column' }), Object.assign(co[0], { x: 170, z: 170 })], { size: 400, rough: FLAT, rivers: [{ pts: [[-200, 0], [200, 0]], width: 8, bridges: [[24, 0]], ...(ford ? { ford } : {}) }] });
+    command(sim, 0, { c: 'move', ids: [u.id], x: 0, z: 30 });
+    run(sim, 30, undefined, () => { wide = Math.max(wide, Math.abs(u.x)); });
+    return { wide, there: Math.hypot(u.x, u.z - 30) < 1.5 };
+  };
+  const ford = cross(0.5), deep = cross();
+  assert.ok(ford.there && ford.wide < 3, `waded straight over the ford (strayed ${ford.wide.toFixed(1)})`);
+  assert.ok(deep.wide > 15, `went round by the bridge over deep water (strayed ${deep.wide.toFixed(1)})`);
+});
+
+test('a cavalry charge downhill hits harder than one uphill', () => {
+  const charge = (hz: number) => {
+    let cav: any, inf: any;
+    const sim = arena((fr, co) => [cav = Object.assign(fr.find((u) => u.type === 'lancer'), { x: 0, z: -30, facing: 0 }), inf = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 0, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999, reload: 1e9 })], { size: 400, rough: FLAT, hills: [{ x: 0, z: hz, rx: 1000, rz: 40, h: 14 }] });
+    command(sim, 0, { c: 'attack', ids: [cav.id], target: inf.id });
+    run(sim, 30, () => cav.eng != null);
+    const m0 = inf.men;
+    run(sim, 3);
+    return m0 - inf.men;
+  };
+  const down = charge(-28), up = charge(28);
+  assert.ok(down > up * 1.4, `downhill charge kills ${down.toFixed(0)}, uphill ${up.toFixed(0)}`);
 });
 
 // ---------------------------------------------------------------- campaign roster
