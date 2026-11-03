@@ -1,7 +1,7 @@
 // In-battle controller: input, HUD, and all the Anime.js presentation (banners, popups, counters, intro, outro).
 import { animate, createTimeline, stagger, steps } from 'animejs';
 import { ICONS, pxCanvas } from './pixel.ts';
-import { distToFoot, manPrice } from './sim/sim.ts';
+import { distToFoot, manPrice, posted } from './sim/sim.ts';
 import type { View } from './render.ts';
 import { SIDE_COLOR } from './render.ts';
 import type { Source } from './game.ts';
@@ -260,6 +260,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     if ((u.fat ?? 0) >= 0.05 || (u.mcap ?? u.maxMorale) < u.maxMorale) ls.push(`Fatigue ${Math.round((u.fat ?? 0) * 100)}%${u.mcap < u.maxMorale ? ` · morale can only reach ${Math.round((u.mcap / u.maxMorale) * 100)}%` : ''}`); // tired and badly hurt units are shakier
     if (u.type === 'artillery') ls.push(u.limT > 0 ? (u.limbered ? 'Unlimbering…' : 'Limbering up…') : u.limbered ? 'Limbered (cannot fire)' : 'Unlimbered (cannot move)');
     if (u.bay != null) ls.push('Charging with the bayonet!');
+    else if (posted(u, TUNING)) ls.push('Posted: steadier under fire'); // stood still long enough for the defensive bonus
     if (u.garrison != null) ls.push(`Garrison: ${esc(scn.map.villages?.[u.garrison]?.name ?? 'farm')}`);
     if (u.routed) ls.push('<i class="no">Routed</i>');
     const sel = st.units.filter((q: any) => selection.includes(q.id) && !q.routed);
