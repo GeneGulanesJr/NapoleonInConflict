@@ -6,7 +6,7 @@ import { WebSocket } from 'ws';
 import { applyResult, type CampaignState } from '../src/sim/roster.ts';
 import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
-import { createSim, step, command } from '../src/sim/sim.ts';
+import { createSim, step, command, manPrice } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
 import { heightAt, groundAt } from '../src/sim/world.ts';
 
@@ -102,22 +102,37 @@ test('artillery misses more the further it shoots', () => {
 test('replenishing on an objective we hold (a depot) trickles men in at the deploy rate', () => {
   let home: any;
   const sim = arena((fr, co) => [home = fr.find((u) => u.type === 'line'), Object.assign(co[0], { x: 170, z: 170 })]);
-  sim.scn = { ...sim.scn, rpRate: [0, 0] }; sim.s.side[0].rp = 100;
+  sim.tu.rpPerObjective = 0; sim.s.side[0].rp = 100; // no objective income during the test
   const z = Object.assign(sim.s.zones[0], { owner: 0, p: 1 });
   Object.assign(home, { x: z.x, z: z.z, men: 270 });
   command(sim, 0, { c: 'replenish', ids: [home.id] });
   assert.ok(!sim.s.units.some((u: any) => u.draftFor != null), 'no draft needed at a depot');
   run(sim, 20);
   assert.equal(Math.round(home.men), home.maxMen, 'the regiment on our objective is back to full strength');
-  const cost = (30 * (home.maxMen - 270)) / home.maxMen; // line infantry deploys for 30 pts
+  const m = home.maxMen - 270, cost = (30 / home.maxMen) * (m + (sim.tu.refillRise * m * m) / (2 * home.maxMen)); // deploy price (line = 30 pts), rising as the regiment fills
   assert.ok(Math.abs(sim.s.side[0].rp - (100 - cost)) < 0.5, `paid ${cost} pts (rp left ${sim.s.side[0].rp.toFixed(1)})`);
   assert.equal(home.refill, false, 'the order clears itself once full');
+});
+
+test('the war chest is finite: RP comes only from objectives held and stops at the cap; the replacement pool runs dry', () => {
+  let a: any, b: any;
+  const sim = arena((fr, co) => { [a, b] = fr.filter((u) => u.type === 'line'); return [a, b, Object.assign(co[0], { x: 170, z: 170 })]; });
+  const sd = sim.s.side[0], z = sim.s.zones[0];
+  sim.s.zones.forEach((q: any) => Object.assign(q, { owner: null, p: 0 })); sd.rp = 0;
+  run(sim, 10); assert.equal(sd.rp, 0, 'no objectives held, no income');
+  Object.assign(z, { owner: 0, p: 1 }); sd.cap = 5;
+  run(sim, 200); assert.ok(Math.abs(sd.rp - 5) < 1e-9 && sd.earned === 5, `income from the objective stops at the cap (rp ${sd.rp.toFixed(2)})`);
+  Object.assign(a, { x: z.x - 6, z: z.z, men: 300 }); Object.assign(b, { x: z.x + 6, z: z.z, men: 300 }); sd.rp = 1e6; sd.pool = 100;
+  command(sim, 0, { c: 'replenish', ids: [a.id, b.id] });
+  run(sim, 40);
+  assert.ok(Math.round(a.men + b.men) === 700 && sd.pool < 1, `only the 100-man pool came in (${Math.round(a.men + b.men - 600)} men)`);
+  assert.ok(sim.tu.refillRise > 0 && Math.abs(manPrice(sim.tu, { type: 'line', maxMen: 540, refilled: 270 }) / manPrice(sim.tu, { type: 'line', maxMen: 540, refilled: 0 }) - 1.5) < 1e-9, 'half a regiment of replacements already in: +50% per man');
 });
 
 test('off our objectives a draft marches in from our map edge at double cost and joins the regiment', () => {
   let reg: any;
   const sim = arena((fr, co) => [reg = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: 100, men: 270 }), Object.assign(co[0], { x: 170, z: -170 })]);
-  sim.scn = { ...sim.scn, rpRate: [0, 0] }; sim.s.side[0].rp = 100; sim.s.zones = []; // no depots anywhere
+  sim.s.side[0].rp = 100; sim.s.zones = []; // no depots (and so no income) anywhere
   command(sim, 0, { c: 'replenish', ids: [reg.id] });
   const d = sim.s.units.find((u: any) => u.draftFor === reg.id), cost = (2 * 30 * (reg.maxMen - 270)) / reg.maxMen;
   assert.ok(d && Math.max(Math.abs(d.x), Math.abs(d.z)) > 195 && d.men === reg.maxMen - 270, `a ${d?.men}-man draft sets out from the map edge (${d?.x.toFixed(0)}, ${d?.z.toFixed(0)})`);

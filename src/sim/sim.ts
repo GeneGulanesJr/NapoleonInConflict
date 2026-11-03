@@ -56,6 +56,13 @@ export function createSim(scn: any, tu: any, opts: { seed?: number; roster?: any
     spawn(sim, 0, { ...d, ...(r ? { name: r.name, men: r.men, maxMen: r.maxMen, rid: r.rid, xp: r.xp ?? 0 } : {}) });
   }
   for (const d of expandForces(scn.forces[1])) spawn(sim, 1, d);
+  // war chest: a finite pool of replacement men, and a cap on RP earned from objectives (enough for the listed reserves plus the pool), so refills can't be farmed
+  for (let i = 0; i < 2; i++) {
+    const sd = s.side[i], men = s.units.filter((u: any) => u.side === i && u.type !== 'commander').reduce((a: number, u: any) => a + u.maxMen, 0);
+    const res = Object.entries(sd.reserves).reduce((a: number, [t, n]: any) => a + n * tu.types[t].cost, 0);
+    sd.pool = scn.replacements?.[i] ?? Math.round(tu.replacePool * men);
+    sd.cap = scn.rpCap?.[i] ?? Math.round(res + sd.pool * (tu.types.line.cost / tu.types.line.men) * 1.5); sd.earned = 0;
+  }
   log(sim, scn.title + ' — the battle begins.');
   return sim;
 }
@@ -83,7 +90,7 @@ export function spawn(sim: Sim, side: number, d: any) {
     rid: d.rid ?? null, dead: false, via: null as { x: number; z: number } | null,
     spReady: 0, spUntil: 0, spKind: '', acc: 0, accT: 0,
     xp: d.xp ?? 0, vet: rankOf(sim.tu, d.xp ?? 0), stance: 'hold', auto: false, sq: false, cavSeen: -99, queue: [] as number[][],
-    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false, march: false, draftFor: null as number | null,
+    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false, march: false, draftFor: null as number | null, refilled: 0,
   };
   sim.s.units.push(u);
   return u;
@@ -147,9 +154,9 @@ export function command(sim: Sim, side: number, c: Cmd) {
     for (const u of dep) u.refill = on;
     for (const u of us) {
       if (held(s, u) || s.units.some((d: any) => d.draftFor === u.id && !d.dead)) continue; // one draft at a time
-      const per = (sim.tu.types[u.type].cost / u.maxMen) * sim.tu.refillOffCost, men = Math.min(u.maxMen - u.men, Math.floor(s.side[side].rp / per));
-      if (men < u.maxMen * 0.05) continue; // can't afford a useful draft
-      s.side[side].rp -= men * per;
+      const sd = s.side[side], per = manPrice(sim.tu, u) * sim.tu.refillOffCost, men = Math.min(u.maxMen - u.men, Math.floor(sd.rp / per), Math.floor(sd.pool));
+      if (men < u.maxMen * 0.05) continue; // can't afford a useful draft (or the depots are empty)
+      sd.rp -= men * per; sd.pool -= men; u.refilled += men;
       const p = homeEdge(sim, side, u.x, u.z), d = spawn(sim, side, { type: u.type, name: `Draft for ${u.name}`, men, maxMen: men, x: p.x, z: p.z, nat: u.nat, form: isInf(u) ? 'column' : undefined });
       d.draftFor = u.id; d.tx = u.x; d.tz = u.z;
       log(sim, `A draft of ${men} men marches to ${u.name}.`);
@@ -179,6 +186,8 @@ export function command(sim: Sim, side: number, c: Cmd) {
   else if (c.c === 'deploy') deploy(sim, side, c.type);
 }
 
+/** RP for one replacement man: a whole regiment at its deploy price, rising as the regiment has already been topped up (refillRise 1 = +50% after half its strength) */
+export const manPrice = (tu: any, u: any) => (tu.types[u.type].cost / u.maxMen) * (1 + (tu.refillRise * (u.refilled ?? 0)) / u.maxMen);
 /** standing on an objective its side holds: a depot, where replacements trickle in */
 const held = (s: any, u: any) => s.zones.some((z: any) => z.owner === u.side && Math.hypot(u.x - z.x, u.z - z.z) < z.r);
 /** the point on a side's home map edge (the one its entry point lies by) nearest to (x, z): drafts set out from there */
@@ -354,8 +363,8 @@ export function step(sim: Sim, dt: number) {
 
   // economy + cooldowns
   for (let i = 0; i < 2; i++) {
-    const sd = s.side[i];
-    sd.rp += (scn.rpRate?.[i] ?? 0) * dt;
+    const sd = s.side[i], inc = Math.min(sd.cap - sd.earned, tu.rpPerObjective * s.zones.reduce((a: number, z: any) => a + (z.owner === i ? z.value : 0), 0) * dt); // income only from objectives held, until the battle's cap
+    if (inc > 0) { sd.rp += inc; sd.earned += inc; }
     for (const k of Object.keys(sd.cd)) sd.cd[k] = Math.max(0, sd.cd[k] - dt);
   }
 
@@ -608,10 +617,11 @@ export function step(sim: Sim, dt: number) {
   for (const u of live) {
     if (!u.refill || u.dead) continue;
     if (u.routed || u.men >= u.maxMen) { if (!u.routed) log(sim, `${u.name} is back to full strength.`); u.refill = false; continue; }
+    const sd = s.side[u.side];
+    if (sd.pool < 1) { u.refill = false; log(sim, `${u.side === 0 ? 'French' : 'Coalition'} depots are empty: no more replacements.`); continue; }
     if (u.eng != null || u.hurt < 3 || !held(s, u)) continue; // paused: fighting, under fire, or off our depots (elsewhere a draft marches in, see command)
-    const sd = s.side[u.side], per = tu.types[u.type].cost / u.maxMen; // RP per man: a whole regiment costs its deploy price
-    const add = Math.min((u.maxMen / tu.refillTime) * dt, u.maxMen - u.men, sd.rp / per);
-    u.men += add; sd.rp -= add * per;
+    const per = manPrice(tu, u), add = Math.min((u.maxMen / tu.refillTime) * dt, u.maxMen - u.men, sd.rp / per, sd.pool);
+    u.men += add; sd.rp -= add * per; sd.pool -= add; u.refilled += add;
   }
 
   // smoke ageing

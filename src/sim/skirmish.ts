@@ -43,7 +43,7 @@ function makeSkirmishBase(seed: number): any {
     strength: [1, 1.5], duration: 600, clock: { start: '12:00', hours: 4 }, weather: pick(['clear', 'clear', 'rain']),
     map: { size, rough: { amp: 0.6 + r() * 0.6, scale: rr(30, 55), seed: rr(1, 9999) }, hills: [0, 1].map(() => ({ x: rr(-60, 60), z: rr(-50, 50), rx: rr(25, 55), rz: rr(10, 18), h: rr(3, 7), rot: rr(-40, 40), p: pick([1, 2]) })),
       roads: [{ pts: [[rr(-30, 30), 110], [vs[1].x, vs[1].z], [rr(-30, 30), -110]], w: 4 }], woods: [0, 1, 2].map(() => ({ x: rr(-85, 85), z: rr(-45, 45), r: rr(9, 16) })), rivers: river, villages: vs, hedges: [{ pts: [[-60, rr(-40, -26)], [60, rr(-40, -26)]] }] },
-    zones, entry: [{ x: 0, z: 102 }, { x: 0, z: -102 }], rpStart: [20, 20], rpRate: [0.5, 0.5], reserves: [{ line: 2, artillery: 1 }, { line: 2, artillery: 1 }],
+    zones, entry: [{ x: 0, z: 102 }, { x: 0, z: -102 }], rpStart: [20, 20], reserves: [{ line: 2, artillery: 1 }, { line: 2, artillery: 1 }],
     abilities: [['barrage', 'cavalry'], ['barrage', 'rockets']], cavalryName: ['Reserve Cavalry', 'Reserve Cavalry'], nat: ['fr', 'gb'], bot: ['attack', 'defend'],
     forces: [army(0), army(1)], timeline: [{ t: 240, type: 'reinforce', side: 1, units: [{ type: 'line', n: 2, x: 0, z: 0 }], entry: { x: 0, z: -102 }, go: { x: 0, z: -40 } }],
   };

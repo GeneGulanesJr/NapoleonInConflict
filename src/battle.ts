@@ -1,7 +1,7 @@
 // In-battle controller: input, HUD, and all the Anime.js presentation (banners, popups, counters, intro, outro).
 import { animate, createTimeline, stagger, steps } from 'animejs';
 import { ICONS, pxCanvas } from './pixel.ts';
-import { distToFoot } from './sim/sim.ts';
+import { distToFoot, manPrice } from './sim/sim.ts';
 import type { View } from './render.ts';
 import { SIDE_COLOR } from './render.ts';
 import type { Source } from './game.ts';
@@ -63,7 +63,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       return `<button class="ab" data-ab="${a}" title="${ab.label}"><span class="ico"></span><span class="nm">${ab.label}</span><kbd>${ab.key}</kbd><span class="cd"></span><i class="sweep"></i></button>`;
     }).join('')}</div>
     <div class="br">
-      <div class="panel" id="res"><div class="hd">Reserves <b id="rp">0</b> pts</div>
+      <div class="panel" id="res"><div class="hd">Reserves <b id="rp">0</b> pts <small id="pool"></small></div>
         <div class="rbtns">${reserveTypes.map((t) => `<button data-res="${t}"><span>${TUNING.types[t].label}</span><em>${TUNING.types[t].cost}</em><u></u></button>`).join('')}</div></div>
       <canvas id="mini" width="64" height="64"></canvas>
     </div>
@@ -197,7 +197,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const rfB = $<HTMLElement>(hud, '[data-refill]'), hurt = sel0.filter((u: any) => u.type !== 'commander' && u.men < u.maxMen);
     if (hurt.length) { // a whole regiment costs its reserve price on an objective we hold, refillOffCost times that anywhere else
       const onOurs = (u: any) => st.zones.some((z: any) => z.owner === me && Math.hypot(u.x - z.x, u.z - z.z) < z.r);
-      const cost = Math.ceil(hurt.reduce((a: number, u: any) => a + ((u.maxMen - u.men) * TUNING.types[u.type].cost * (onOurs(u) ? 1 : TUNING.refillOffCost)) / u.maxMen, 0));
+      const cost = Math.ceil(hurt.reduce((a: number, u: any) => a + (u.maxMen - u.men) * manPrice(TUNING, u) * (onOurs(u) ? 1 : TUNING.refillOffCost), 0)); // at today's price; it rises as the regiment fills
       rfB.style.display = ''; rfB.classList.toggle('on', hurt.every((u: any) => u.refill)); rfB.classList.remove('off');
       rfB.innerHTML = `Replenish <kbd>N</kbd> ${cost} pts${hurt.every(onOurs) ? '' : ' · draft marches in'}`;
       rfB.title = `On an objective you hold, fresh men trickle in (deploy price). Elsewhere a draft sets out from your map edge at ${TUNING.refillOffCost}× the price and joins on arrival; it can be caught on the way.`;
@@ -587,7 +587,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   }
 
   // ---------------------------------------------------------------- per-frame
-  let last = performance.now(), hudAcc = 0, lastWx = '', lastClk = '';
+  let last = performance.now(), hudAcc = 0, lastWx = '', lastClk = '', lastPool = '';
   function frame(now: number) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
@@ -654,6 +654,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       renderSel();
       const sd = st.side[me];
       tweenNumbers([st.side[0].score, st.side[1].score], sd.rp);
+      const pl = `· ${Math.floor(sd.pool ?? 0)} men${sd.earned >= sd.cap ? ' · cap' : ''}`; if (pl !== lastPool) { $(hud, '#pool').textContent = pl; lastPool = pl; } // replacements left; "cap" = no more RP this battle
       const hr = parseInt(scn.clock.start) + (st.t / scn.duration) * scn.clock.hours;
       const clk = `${pad(hr)}:${pad((hr % 1) * 60)}`;
       if (clk !== lastClk) { $(hud, '#clk').textContent = clk; lastClk = clk; }
