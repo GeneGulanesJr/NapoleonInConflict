@@ -1,5 +1,6 @@
 // Pure, deterministic battle simulation. No DOM, no Three.js: runs in the browser and on the Node server.
-import { detour, heightAt, featureAt, los } from './world.ts';
+import { heightAt, featureAt, los } from './world.ts';
+import { route } from './path.ts';
 
 export type Sim = { s: any; scn: any; tu: any; tl: any[] };
 
@@ -87,7 +88,7 @@ export function spawn(sim: Sim, side: number, d: any) {
     form: d.form ?? 'line', morale: T.morale, maxMorale: T.morale, routed: false,
     tx: null as number | null, tz: null as number | null, chase: null as number | null,
     reload: rand(sim.s) * (T.reload || 1), busy: 0, hurt: 99, fired: 99, mv: false, eng: null as number | null,
-    rid: d.rid ?? null, dead: false, via: null as { x: number; z: number } | null,
+    rid: d.rid ?? null, dead: false, path: null as number[][] | null,
     spReady: 0, spUntil: 0, spKind: '', acc: 0, accT: 0,
     xp: d.xp ?? 0, vet: rankOf(sim.tu, d.xp ?? 0), stance: 'hold', auto: false, sq: false, cavSeen: -99, queue: [] as number[][],
     garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false, march: false, draftFor: null as number | null, refilled: 0, still: 0,
@@ -135,20 +136,20 @@ export function command(sim: Sim, side: number, c: Cmd) {
       const tx = Math.max(-half, Math.min(half, c.x - dz * off)), tz = Math.max(-half, Math.min(half, c.z + dx * off));
       u.tf = c.f ?? null;
       if (c.q && u.tx != null && u.chase == null) { if (u.queue.length < 6) u.queue.push([tx, tz]); } // shift-click: add a waypoint
-      else { u.tx = tx; u.tz = tz; u.queue = []; u.chase = null; u.via = null; u.garrison = u.gTarget = null; u.am = !!c.am; }
+      else { u.tx = tx; u.tz = tz; u.queue = []; u.chase = null; u.garrison = u.gTarget = null; u.am = !!c.am; }
     });
   } else if (c.c === 'attack') {
     if (!s.units.some((u: any) => u.id === c.target && u.side !== side && !u.dead)) return;
-    for (const u of mine(c.ids)) { u.chase = c.target; u.tx = u.tz = null; u.via = null; u.queue = []; u.garrison = u.gTarget = null; u.am = false; u.tf = null; }
+    for (const u of mine(c.ids)) { u.chase = c.target; u.tx = u.tz = null; u.queue = []; u.garrison = u.gTarget = null; u.am = false; u.tf = null; }
   } else if (c.c === 'bayonet') {
     if (!s.units.some((u: any) => u.id === c.target && u.side !== side && !u.dead && !u.routed)) return;
-    for (const u of mine(c.ids)) if (isInf(u) && u.form !== 'square') { u.chase = u.bay = c.target; u.tested = false; u.tx = u.tz = null; u.via = null; u.queue = []; u.garrison = u.gTarget = null; u.am = false; u.tf = null; }
+    for (const u of mine(c.ids)) if (isInf(u) && u.form !== 'square') { u.chase = u.bay = c.target; u.tested = false; u.tx = u.tz = null; u.queue = []; u.garrison = u.gTarget = null; u.am = false; u.tf = null; }
   } else if (c.c === 'form') {
     for (const u of mine(c.ids)) {
       if ((u.type === 'line' || u.type === 'guard') && u.form !== c.f && sim.tu.formFire[c.f] && !(u.stun > 0) && !(u.shaken > 0)) { u.form = c.f; u.busy = sim.tu.formChangeTime; } // a regiment stunned by a charge or shaken by fire cannot reform
     }
   } else if (c.c === 'stop') {
-    for (const u of mine(c.ids)) { u.tx = u.tz = u.chase = null; u.via = null; u.queue = []; u.garrison = u.gTarget = null; u.am = false; u.tf = null; }
+    for (const u of mine(c.ids)) { u.tx = u.tz = u.chase = null; u.queue = []; u.garrison = u.gTarget = null; u.am = false; u.tf = null; }
   } else if (c.c === 'stance') {
     for (const u of mine(c.ids)) u.stance = c.s === 'aggressive' || c.s === 'skirmish' ? c.s : 'hold';
   } else if (c.c === 'auto') {
@@ -173,7 +174,7 @@ export function command(sim: Sim, side: number, c: Cmd) {
     let free = sim.tu.garrison.capacity - held;
     for (const u of mine(c.ids)) {
       if (!(isInf(u) || u.type === 'skirmisher') || free <= 0) continue;
-      free--; u.chase = null; u.am = false; u.via = null; u.queue = []; u.garrison = null; u.gTarget = c.vid; u.tx = v.x + (free ? -1.8 : 1.8); u.tz = v.z + 0.8;
+      free--; u.chase = null; u.am = false; u.queue = []; u.garrison = null; u.gTarget = c.vid; u.tx = v.x + (free ? -1.8 : 1.8); u.tz = v.z + 0.8;
     }
   } else if (c.c === 'special') {
     for (const u of mine(c.ids)) {
@@ -500,7 +501,7 @@ export function step(sim: Sim, dt: number) {
   }
   const seen: Set<number>[] = s.seen.map((a: number[]) => new Set(a));
   const reaches = () => new Map<any, number>(live.map((u: any) => { const f = foot(u, tu); return [u, Math.max(Math.hypot(f[0], f[2]), Math.hypot(f[0], f[3]), Math.hypot(f[1], f[2]), Math.hypot(f[1], f[3]))]; })); // each formation's reach from its position, for cheap contact culling
-  let fr = reaches();
+  let fr = reaches(), plans = 2; // routes worked out per tick: the rest wait their turn on the next
 
   for (const u of live) {
     const T = tu.types[u.type];
@@ -578,10 +579,15 @@ export function step(sim: Sim, dt: number) {
     }
     let go = false;
     const dd = gx != null && gz != null ? Math.hypot(gx - u.x, gz - u.z) : 0;
-    if (gx == null || gz == null || dd <= stopAt) u.via = null;
-    else if (u.via) { if (Math.hypot(u.via.x - u.x, u.via.z - u.z) < 4) u.via = null; }
-    else if ((Math.floor(s.t / dt) + u.id) % 10 === 0) u.via = detour(scn, u.x, u.z, gx, gz); // wade-free route over a bridge
-    if (u.via && gx != null) { gx = u.via.x; gz = u.via.z; stopAt = 1; }
+    // u.path: waypoints [x, z] to march by, then [goal x, goal z, time] it was planned for; planned again when the goal moves on, a chase every few seconds
+    const pg = u.path?.[u.path.length - 1];
+    if (gx == null || gz == null || dd <= stopAt) u.path = null;
+    else if ((!pg || Math.hypot(gx - pg[0], gz - pg[1]) > 15 || (u.chase != null && s.t - pg[2] > 4)) && plans-- > 0) {
+      const mc = { type: T.cav ? 'lancer' : u.type === 'guard' ? 'line' : u.type, form: u.form === 'column' ? 'column' : 'line' }; // its movement class: the arm, and whether roads speed it
+      u.path = [...(route(scn, tu, mc.type + mc.form, (g) => terrainSpeed(mc, g, tu), u.x, u.z, gx, gz) ?? []), [gx, gz, s.t]];
+    }
+    while (u.path?.length > 1 && Math.hypot(u.path[0][0] - u.x, u.path[0][1] - u.z) < 1) u.path.shift(); // through each corner, not round it: the legs between are what was costed (on the road, over the bridge)
+    if (u.path?.length > 1) { gx = u.path[0][0]; gz = u.path[0][1]; stopAt = 0; } // a corner is never the halt
     if (gx != null && gz != null && u.busy <= 0 && !amHalt) {
       const dx = gx - u.x, dz = gz - u.z, d = Math.hypot(dx, dz);
       // a unit locked in melee stands and fights (it cannot ride through the men it is hitting); only an explicit move order breaks away
@@ -602,7 +608,7 @@ export function step(sim: Sim, dt: number) {
           const passing = (u.jam ?? 0) > tu.passLines.wait, b = blocker(u, mx, mz, live, tu, fr, !passing); // held up long enough: it files through friendly ranks (passage of lines)
           if (b && b.side !== u.side) { mx = u.x; mz = u.z; } // the enemy's ranks stop it: it halts at contact and the melee decides
           else if (b) { // a friendly regiment in the way: step round it, keeping to one side until clear, else try the other side
-            if (u.chase == null && d < 30) { u.tx = u.tz = null; const nxt = u.queue.shift(); if (nxt) { u.tx = nxt[0]; u.tz = nxt[1]; } } // its ground is taken: close enough
+            if (u.chase == null && dd < 30) { u.tx = u.tz = null; const nxt = u.queue.shift(); if (nxt) { u.tx = nxt[0]; u.tz = nxt[1]; } } // its ground is taken: close enough
             u.av ??= Math.sign(dx * (b.z - u.z) - dz * (b.x - u.x)) || (u.id & 1 ? 1 : -1);
             const step = Math.hypot(mx - u.x, mz - u.z), h = Math.atan2(dx, dz);
             let ok = false;

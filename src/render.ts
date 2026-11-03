@@ -1026,8 +1026,9 @@ export function createView(host: HTMLElement) {
       let tx: number | null = u.tx, tz: number | null = u.tz;
       if (u.chase != null) { const t = state.units.find((q: any) => q.id === u.chase); if (t) { tx = t.x; tz = t.z; } }
       if (tx != null && u.queue?.length) { let px = tx, pz = tz as number; for (const q of u.queue) { if (nl >= 58) break; lp.setXYZ(nl * 2, px, heightAt(scn, px, pz) + 1, pz); lp.setXYZ(nl * 2 + 1, q[0], heightAt(scn, q[0], q[1]) + 1, q[1]); nl++; px = q[0]; pz = q[1]; } }
-      if (tx != null && tz != null && nl < 59) {
-        lp.setXYZ(nl * 2, v.x, heightAt(scn, v.x, v.z) + 1, v.z); lp.setXYZ(nl * 2 + 1, tx, heightAt(scn, tx, tz) + 1, tz); nl++;
+      if (tx != null && tz != null) { // by the waypoints of its route (the last path entry is the goal it was planned for)
+        let px = v.x, pz = v.z;
+        for (const q of [...(u.path?.slice(0, -1) ?? []), [tx, tz]]) { if (nl >= 59) break; lp.setXYZ(nl * 2, px, heightAt(scn, px, pz) + 1, pz); lp.setXYZ(nl * 2 + 1, q[0], heightAt(scn, q[0], q[1]) + 1, q[1]); nl++; px = q[0]; pz = q[1]; }
       }
     }
     for (let i = nr; i < selRings.length; i++) selRings[i].visible = false;

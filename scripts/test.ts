@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { createSim, step, command, manPrice, distToFoot, posted, steady } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
 import { heightAt, groundAt } from '../src/sim/world.ts';
+import { route } from '../src/sim/path.ts';
 
 // ---------------------------------------------------------------- unit-vs-unit rules
 const data = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.json`, import.meta.url), 'utf8'));
@@ -685,4 +686,49 @@ test('broken men running through a formed regiment shake it', () => {
   const sim = arena((fr, co) => { const [l1, l2] = co.filter((u) => u.type === 'line'); return [line = Object.assign(l1, { x: 0, z: 0, facing: 0 }), router = Object.assign(l2, { x: 0, z: 0, routed: true, morale: 0 }), Object.assign(fr[0], { x: 170, z: 170 })]; });
   step(sim, 0.05);
   assert.ok(line.shaken > 2.5, `shaken for ${line.shaken.toFixed(1)} s by ${Math.round(router.men)} fugitives`);
+});
+
+// ---------------------------------------------------------------- WS1 pathfinding
+/** one French regiment of `type` marches from `a` to `b` over `map`: the track it took and how long it was on the way */
+function trek(type: string, form: string, a: number[], b: number[], map: any, secs = 150) {
+  let u: any;
+  const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === type), { x: a[0], z: a[1], facing: Math.atan2(b[0] - a[0], b[1] - a[1]), form }), Object.assign(co[0], { x: 170, z: 170 })], map);
+  command(sim, 0, { c: 'move', ids: [u.id], x: b[0], z: b[1] });
+  const track: number[][] = [];
+  run(sim, secs, () => u.tx == null, () => track.push([u.x, u.z]));
+  return { track, t: track.length * 0.05, there: Math.hypot(u.x - b[0], u.z - b[1]) < 2, near: (x: number, z: number) => Math.min(...track.map((p) => Math.hypot(p[0] - x, p[1] - z))) };
+}
+
+test('a march over two deep rivers finds a bridge on each, taking the nearer of two', () => {
+  const r = trek('line', 'column', [0, -30], [0, 70], { size: 400, rough: FLAT, rivers: [{ pts: [[-200, 0], [200, 0]], width: 8, bridges: [[40, 0], [-150, 0]] }, { pts: [[-200, 40], [200, 40]], width: 8, bridges: [[-40, 40]] }] });
+  assert.ok(r.there, 'arrived');
+  assert.ok(r.near(40, 0) < 6 && r.near(-40, 40) < 6, `crossed by the near bridge (${r.near(40, 0).toFixed(1)} off) and the second river's (${r.near(-40, 40).toFixed(1)} off)`);
+});
+
+test('horse and guns go round a dense wood; skirmishers, slowed less, go straight through', () => {
+  const map = { size: 400, rough: FLAT, woods: [{ x: 0, z: 0, r: 25, dense: true }] }, wide = (r: any) => Math.max(...r.track.map((p: number[]) => Math.abs(p[1])));
+  const cav = trek('lancer', 'line', [-70, 0], [70, 0], map), guns = trek('artillery', 'line', [-70, 0], [70, 0], map), skir = trek('skirmisher', 'line', [-70, 0], [70, 0], map);
+  assert.ok(cav.there && guns.there && skir.there, 'all arrived');
+  assert.ok(wide(cav) > 20 && wide(guns) > 20, `horse strayed ${wide(cav).toFixed(1)}, guns ${wide(guns).toFixed(1)} round the wood`);
+  assert.ok(wide(skir) < 3, `skirmishers kept straight (${wide(skir).toFixed(1)})`);
+});
+
+test('a column takes the road when that is quicker overall; a line, which the road does not speed, marches straight', () => {
+  const road = { size: 400, rough: FLAT, roads: [{ pts: [[-200, 0], [200, 0]], w: 4 }] };
+  const col = trek('line', 'column', [-100, 14], [100, 14], road), off = trek('line', 'column', [-100, 14], [100, 14], { size: 400, rough: FLAT }), line = trek('line', 'line', [-100, 14], [100, 14], road);
+  assert.ok(col.there && line.there, 'arrived');
+  const onRoad = col.track.filter((p) => Math.abs(p[1]) < 4 * 0.7).length / col.track.length; // featureAt's road band
+  assert.ok(onRoad > 0.6, `the column marched ${Math.round(onRoad * 100)}% of the way on the road`);
+  assert.ok(col.t < off.t * 0.95, `and got there sooner: ${col.t.toFixed(0)} s vs ${off.t.toFixed(0)} s across the fields`);
+  assert.ok(Math.max(...line.track.map((p) => Math.abs(p[1] - 14))) < 2, 'the line kept straight');
+});
+
+test('routing every regiment across the biggest maps stays within a few ms', () => {
+  const tu = data('tuning'), tt = tu.terrain, sp = (f: any) => (f.wood ? tt.wood.infantry : 1) * (f.village ? tt.village.infantry : 1) * (f.river ? f.river.ford ?? tt.river : 1) * (f.road ? tt.road : 1); // a column: the road-loving class searches widest
+  for (const id of ['ligny', 'waterloo']) {
+    const sim = createSim(data(id), tu, { seed: 1 }), all = () => sim.s.units.map((u: any) => route(sim.scn, tu, 'linecolumn', sp, u.x, u.z, -u.x * 0.9, -u.z * 0.9));
+    all(); // bake the grid and warm up
+    const t0 = performance.now(), n = all().filter(Boolean).length, ms = performance.now() - t0;
+    assert.ok(ms < 40, `${id}: ${sim.s.units.length} cross-map routes (${n} off the straight line) in ${ms.toFixed(1)} ms`);
+  }
 });
