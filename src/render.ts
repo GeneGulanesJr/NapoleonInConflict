@@ -215,7 +215,7 @@ export function createView(host: HTMLElement) {
   // --- outlined instanced meshes ---------------------------------------------
   // Each mesh gets an inverted-hull twin sharing its matrices; hull grows 1 buffer pixel from a centre point (no corner gaps on boxes).
   const far = () => { const t = Math.max(0, Math.min(1, (cam.dist - 90) / 190)); return t * t * (3 - 2 * t); }; // 0 close .. 1 fully zoomed out: figures are 1-2px, so soften them
-  const hullU = { uW: { value: 0.1 }, uInk: { value: new THREE.Color(P.ink) } }, INK_FAR = new THREE.Color(0x5c5846); // one ink colour for every hull, softened as you zoom out
+  const hullU = { uW: { value: 0.1 }, uInk: { value: new THREE.Color(P.ink) } }; // one ink colour and width for every hull
   const outlined: { m: THREE.InstancedMesh; o: THREE.InstancedMesh }[] = [];
   function hullMat(c: [number, number, number]) {
     return new THREE.ShaderMaterial({
@@ -1081,8 +1081,7 @@ export function createView(host: HTMLElement) {
     sun.position.set(sun.target.position.x - 120, sun.target.position.y + 105, sun.target.position.z + 75);
 
     const fz = Math.max(1, H / 60), fg = scene.fog as THREE.Fog; fg.near = CAM_D + atm.fn * fz; fg.far = CAM_D + atm.ff * fz; // keep haze constant as you zoom out
-    hullU.uW.value = px * 0.95; // 1 buffer pixel
-    hullU.uInk.value.setHex(P.ink).lerp(INK_FAR, far()); // zoomed out, a near-black outline on every tiny soldier is all you see: fade it toward a soft shade
+    hullU.uW.value = px * 0.95 * (1 - far()); // 1 buffer pixel of ink close up, thinning to none zoomed out: a 1px outline of any colour outweighs a 2-3px soldier and greys him
     for (const q of outlined) q.o.count = q.m.count;
 
     const savedBg = scene.background, savedFog = scene.fog;
