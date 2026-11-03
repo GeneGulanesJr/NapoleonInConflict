@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { animate } from 'animejs';
 import { heightAt, lineDist, featureAt, riverAt } from './sim/world.ts';
-import { posted, foot } from './sim/sim.ts';
+import { posted, foot, hour } from './sim/sim.ts';
 import { pxUrl } from './pixel.ts';
 
 // palette (sRGB hex, from the style guide)
@@ -842,8 +842,8 @@ export function createView(host: HTMLElement) {
 
     // time of day: warm light late in the scenario clock
     if (scn.clock) {
-      const hour = parseInt(scn.clock.start) + (state.t / scn.duration) * scn.clock.hours;
-      const tod = duskOn ? 1 : Math.max(0, Math.min(1, (hour - 16) / 4.5));
+      const hr = hour(scn, state.t); // the sim's clock (minutes included), so the light fades as the sim's night falls
+      const tod = duskOn ? 1 : Math.max(0, Math.min(1, (hr - 16) / 4.5));
       if (Math.abs(tod - atm.tod) > 0.005) { atm.tod += (tod - atm.tod) * Math.min(1, dt * 1.2); applyAtm(); }
     }
 
