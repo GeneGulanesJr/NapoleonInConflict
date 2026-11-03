@@ -68,11 +68,11 @@ test('a group move lands regiments side by side without overlapping', () => {
 
 test('bot infantry does not flip-flop formation when cavalry hovers nearby', () => {
   let cav: any, inf: any;
-  const sim = arena((fr, co) => [cav = Object.assign(fr.find((u) => u.type === 'lancer'), { x: 0, z: -31, facing: 0 }), inf = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 0, facing: Math.PI, form: 'line' })]);
+  const sim = arena((fr, co) => [cav = Object.assign(fr.find((u) => u.type === 'lancer'), { x: 0, z: -31, facing: 0, morale: 9999, maxMorale: 9999, men: 9999 }), inf = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 0, facing: Math.PI, form: 'line' })]);
   const bot = makeBot(sim, 1);
-  let changes = 0, last = inf.form;
-  run(sim, 60, undefined, () => { cav.x = 0; cav.z = -31; bot(0.05); if (inf.form !== last) { changes++; last = inf.form; } });
-  assert.ok(changes <= 1, `formed square and stayed (${changes} changes)`);
+  let changes = 0, last = inf.form; // only square in/out counts: marching in column is fine
+  run(sim, 60, undefined, () => { cav.x = inf.x; cav.z = inf.z - 31; bot(0.05); if ((inf.form === 'square') !== (last === 'square')) changes++; last = inf.form; });
+  assert.ok(changes <= 1 && inf.form === 'square', `formed square and stayed (${changes} square changes, ends in ${inf.form})`);
 });
 
 test('bot cavalry pulls up when its target forms a full square', () => {
