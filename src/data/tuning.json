@@ -125,7 +125,8 @@
     "slack": 0.5,
     "arc": 0.7,
     "engage": 1.2,
-    "rout": 3
+    "rout": 3,
+    "breakaway": 3
   },
   "separation": {
     "_note": "Regiments that overlap without being locked in melee are pushed apart: at most `max` units/s in total, shared by weight (the lighter one gives way), so a squadron cannot shove a whole line faster than it can walk. turn.engage is the rate in rad/s at which a regiment wheels to face the foe that has hit it.",

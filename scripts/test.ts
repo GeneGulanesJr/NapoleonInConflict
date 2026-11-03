@@ -496,3 +496,18 @@ test('a routing regiment turns to flee at the rout rate, not in one tick', () =>
   run(sim, 4, () => false, () => { worst = Math.max(worst, Math.abs(Math.atan2(Math.sin(a.facing - last), Math.cos(a.facing - last)))); last = a.facing; });
   assert.ok(worst > 0 && worst <= sim.tu.turn.rout * 0.05 + 1e-6, `facing changed ${worst.toFixed(3)} rad in one tick`);
 });
+
+test('cavalry ordered away from a melee breaks contact in a couple of seconds and keeps its nerve', () => {
+  let cav: any, inf: any;
+  const sim = arena((fr, co) => {
+    cav = fr.find((u) => u.type === 'lancer'); inf = co.find((u) => u.type === 'line');
+    return [Object.assign(cav, { x: 0, z: -60, facing: 0, form: 'line' }), Object.assign(inf, { x: 0, z: 0, facing: Math.PI, form: 'line', stance: 'hold' }), Object.assign(co.find((u) => u !== inf), { x: 170, z: 170 })];
+  });
+  command(sim, 0, { c: 'attack', ids: [cav.id], target: inf.id });
+  run(sim, 30, () => cav.eng != null && sim.s.t > 8);
+  assert.ok(cav.eng != null, 'the lancers are locked in melee');
+  command(sim, 0, { c: 'move', ids: [cav.id], x: 0, z: -90 });
+  let t = 0; run(sim, 3, () => cav.eng == null, () => { t += 0.05; });
+  assert.ok(cav.eng == null && !cav.routed, `broke contact within 3 s (took ${t.toFixed(1)} s)`);
+  assert.ok(cav.morale / cav.maxMorale > 0.5, `kept its nerve (morale ${Math.round((cav.morale / cav.maxMorale) * 100)}%)`);
+});
