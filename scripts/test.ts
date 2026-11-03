@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { WebSocket } from 'ws';
-import { applyResult, type CampaignState } from '../src/sim/roster.ts';
+import { applyResult, reinforce, recruit, fillCost, type CampaignState } from '../src/sim/roster.ts';
+import { runner, type Replay } from '../src/sim/replay.ts';
 import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
 import { createSim, step, command, manPrice, distToFoot, posted, steady } from '../src/sim/sim.ts';
@@ -402,6 +403,70 @@ test('applyResult drops destroyed regiments, heals survivors, advances the campa
   assert.equal(c.roster.length, 3, 'input is not mutated');
   const n2 = applyResult(n1, camp, 'b', { result: { winner: 1 }, out: [] });
   assert.equal(n2.ended, 'waterloo_loss');
+});
+
+test('glory: earned per result, buys replacements weakest first, raises only destroyed regiments', () => {
+  const tu = data('tuning'), camp = { battles: ['a', 'b'], healFraction: 0, glory: { win: 90, draw: 60, loss: 40 }, recruitCost: 1.5, roster: { line: ['A', 'B', 'C'] } };
+  const c: CampaignState = { idx: 0, results: {}, ended: null, roster: [{ rid: 1, type: 'line', name: 'A', men: 270, maxMen: 540 }, { rid: 2, type: 'line', name: 'B', men: 405, maxMen: 540 }] };
+  const n = applyResult(c, camp, 'a', { result: { winner: 0 }, out: [] });
+  assert.equal(n.glory, 90, 'a win earns 90');
+  assert.equal(fillCost(n, tu, 'line'), 23, '405 men missing at 30 glory per 540');
+  n.glory = 10; // 180 men
+  assert.ok(reinforce(n, tu, 'line'));
+  assert.deepEqual(n.roster.map((u) => u.men), [450, 405], 'the weakest regiment is topped up first');
+  assert.equal(n.glory, 0);
+  assert.ok(!recruit(n, camp, tu, 'line'), 'no glory left');
+  n.glory = 45;
+  assert.ok(recruit(n, camp, tu, 'line'));
+  assert.deepEqual(n.roster.map((u) => [u.rid, u.name, u.men]).at(-1), [3, 'C', 540], 'raised under the lost name, at full strength');
+  n.glory = 99;
+  assert.ok(!recruit(n, camp, tu, 'line'), 'nothing left to raise');
+});
+
+// ---------------------------------------------------------------- QoL pass: targeting, replays, bot
+test('a regiment ordered to attack one foe fires at it even when another is nearer', () => {
+  let a: any, near: any, far: any;
+  const sim = arena((fr, co) => { const [c1, c2] = co.filter((u) => u.type === 'line'); return [a = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: 0, facing: 0, form: 'line', morale: 9999, maxMorale: 9999 }), near = Object.assign(c1, { x: -14, z: 8, facing: Math.PI, morale: 9999, maxMorale: 9999 }), far = Object.assign(c2, { x: 22, z: 11, facing: Math.PI, morale: 9999, maxMorale: 9999 })]; }); // both in musket range (without the order it fires at near)
+  command(sim, 0, { c: 'attack', ids: [a.id], target: far.id });
+  const at = { near: 0, far: 0 };
+  run(sim, 30, undefined, () => { for (const e of sim.s.events) if (e.k === 'shot' && e.side === 0) at[e.tx === near.x ? 'near' : 'far']++; sim.s.events.length = 0; });
+  assert.ok(at.far >= 2 && at.near === 0, `volleys at the ordered target ${at.far}, at the nearer one ${at.near}`);
+});
+
+test('a recorded battle replays exactly, orders and bot included', () => {
+  const scn = data('quatrebras'), tu = data('tuning');
+  const rec: Replay = { scn, side: 0, start: JSON.stringify(createSim(scn, tu, { seed: 7 }).s), cmds: [] };
+  const live = runner(tu, rec), ids = live.sim.s.units.filter((u: any) => u.side === 0).map((u: any) => u.id);
+  for (let n = 0; n < 2400; n++) {
+    if (n === 0) live.cmd({ c: 'move', ids, x: 0, z: 0 });
+    if (n === 600) live.cmd({ c: 'form', ids, f: 'column' });
+    if (n === 900) live.cmd({ c: 'stance', ids, s: 'aggressive' });
+    live.tick();
+  }
+  const again = runner(tu, rec, true);
+  for (let n = 0; n < 2400; n++) again.tick();
+  assert.equal(rec.cmds.length, 3);
+  assert.ok(live.sim.s.side[0].lost > 0 && live.sim.s.side[1].lost > 0, 'there was fighting');
+  assert.equal(JSON.stringify(again.sim.s), JSON.stringify(live.sim.s));
+});
+
+test('a worn-down bot regiment falls back to an objective it holds and takes on replacements there', () => {
+  let r: any;
+  const sim = arena((fr, co) => [Object.assign(fr[0], { x: 170, z: 170 }), r = Object.assign(co.find((u) => u.type === 'line'), { x: 60, z: 60, men: 150 })]);
+  Object.assign(sim.s.side[1], { rp: 100, pool: 1000 });
+  sim.scn = { ...sim.scn, bot: ['defend', 'attack'] }; // attacking, it would otherwise march on the French objective (pi), not back to ge
+  const z = sim.s.zones.find((q: any) => q.id === 'ge'), bot = makeBot(sim, 1);
+  run(sim, 240, () => r.men >= 0.95 * r.maxMen, () => bot(0.05));
+  assert.ok(r.men >= 0.95 * r.maxMen && Math.hypot(r.x - z.x, r.z - z.z) < z.r, `refilled to ${Math.round(r.men)} at (${r.x.toFixed(0)}, ${r.z.toFixed(0)})`);
+});
+
+test('bot cavalry rides round to the flank of a foe pinned by its infantry, not into its front', () => {
+  let cav: any, foe: any;
+  const sim = arena((fr, co) => [foe = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 0, facing: 0, form: 'line', morale: 9999, maxMorale: 9999 }), Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: 14, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999 }), cav = Object.assign(fr.find((u) => u.type === 'lancer'), { x: 0, z: 60, facing: Math.PI })]);
+  const bot = makeBot(sim, 0);
+  run(sim, 90, () => cav.eng === foe.id, () => bot(0.05));
+  const k = ((cav.x - foe.x) * Math.sin(foe.facing) + (cav.z - foe.z) * Math.cos(foe.facing)) / Math.hypot(cav.x - foe.x, cav.z - foe.z);
+  assert.ok(cav.eng === foe.id && k <= 0.5, `charged home from the ${k > 0.5 ? 'front' : k < -0.5 ? 'rear' : 'flank'} (cos ${k.toFixed(2)})`);
 });
 
 // ---------------------------------------------------------------- render resolution per monitor

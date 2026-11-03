@@ -149,7 +149,7 @@ button.alt { background: #1b1510; }
 .hud button { font: 8px/8px var(--pf); letter-spacing: 0; padding: 2px 4px; border-width: 1px; box-shadow: 0 0 0 1px #000; }
 .hud kbd { font: 8px/8px var(--pf); padding: 0 1px; margin-left: 2px; background: none; }
 .hud .panel { padding: 3px 4px; border-width: 1px; }
-.hud .topbar { padding: 3px 120px 3px var(--tp, 120px); gap: 8px; /* right room keeps the scores clear of the speed buttons; render.ts drops the left room on narrow grids */ background: rgba(20, 17, 13, .72); }
+.hud .topbar { padding: 3px 166px 3px var(--tp, 166px); gap: 8px; /* right room keeps the scores clear of the speed buttons; render.ts drops the left room on narrow grids */ background: rgba(20, 17, 13, .72); }
 .hud .score { gap: 3px; font-size: 8px; } .hud .score b { font-size: 16px; line-height: 16px; min-width: 40px; }
 .hud .center { min-width: 220px; }
 .hud .ttl { font-size: 8px; letter-spacing: 0; } .hud .ttl small { font-size: 8px; }
@@ -255,3 +255,21 @@ button.alt { background: #1b1510; }
 #menu .roster h4 small { display: inline; margin: 0; } #menu .cmap { height: calc(var(--u) * 80); margin-bottom: 0; }
 .hud .score .lbl { display: var(--lbl, inline); } /* render.ts hides the side names when the HUD grid is too narrow for them beside the speed buttons */
 #menu code { font: inherit; }
+
+/* score bar = the verdict if the battle ended now; the two marks bound the draw band */
+.tug { position: relative; } .tug b { position: absolute; top: 0; bottom: 0; width: 1px; background: #000; }
+/* capture progress: a bar under each objective's name, in the colour of the side taking hold */
+.hud .pip { background: linear-gradient(var(--fc, #888), var(--fc, #888)) no-repeat left bottom / calc(var(--f, 0) * 100%) 2px, rgba(0,0,0,.5); }
+/* army bar: room for the control group number before the marks */
+.hud .ac { grid-template-columns: 7px 1fr 15px; }
+/* fog of war: an enemy plate lingers where it was last seen */
+.plates .plate.ghost { border-top-style: dashed; } .plates .plate.ghost .bar { display: none; } .plates .plate.ghost::after { content: '?'; color: #e8463a; }
+/* in-battle menu (Esc) */
+.hud #pm { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 200px; z-index: 4; text-align: center; }
+.hud #pm .hd small { display: block; color: #8e8a7a; margin-top: 1px; }
+.hud .pmb, .hud #pm .sets { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+.hud #pm .sets b, #menu .sets b { font-weight: 400; color: var(--gold); }
+/* campaign: buying men and regiments with glory */
+#menu .rrow.buy { grid-template-columns: calc(var(--u) * 100) 1fr calc(var(--u) * 46) calc(var(--u) * 50); }
+#menu .rrow.buy button { padding: calc(var(--u) * 1) calc(var(--u) * 2); font-size: calc(var(--u) * 8); }
+#menu .glory { color: var(--gold); font-weight: 400; }

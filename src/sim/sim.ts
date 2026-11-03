@@ -18,8 +18,8 @@ export const natOf = (scn: any, side: number) => scn.nat?.[side] ?? DEF_NAT[side
 export function expandForces(groups: any[]): any[] {
   const out: any[] = [];
   for (const g of groups ?? []) {
-    for (let i = 0; i < (g.n ?? 1); i++)
-      out.push({ ...g, n: undefined, names: undefined, name: g.names?.[i] ?? (g.n > 1 ? `${g.name} ${i + 1}` : g.name), x: g.x + i * (g.dx ?? 0), z: g.z + i * (g.dz ?? 0) });
+    for (let i = 0; i < (g.n ?? 1); i++) // an unnamed group's regiments take the type's label in spawn() (not "undefined 2")
+      out.push({ ...g, n: undefined, names: undefined, name: g.names?.[i] ?? (g.n > 1 && g.name ? `${g.name} ${i + 1}` : g.name), x: g.x + i * (g.dx ?? 0), z: g.z + i * (g.dz ?? 0) });
   }
   return out;
 }
@@ -329,7 +329,7 @@ function chron(sim: Sim, side: number, text: string) {
 }
 
 /** A friendly regiment stands across the line of fire from u to e (muskets can't shoot through their own men; guns fire over them). */
-function masked(u: any, e: any, live: any[], tu: any) {
+export function masked(u: any, e: any, live: any[], tu: any) {
   if (u.type === 'artillery') return false;
   return live.some((f: any) => f !== u && f.side === u.side && !f.dead && !f.routed && Math.hypot(f.x - (u.x + e.x) / 2, f.z - (u.z + e.z) / 2) < Math.hypot(e.x - u.x, e.z - u.z) / 2 + 30
     && [0.25, 0.5, 0.75].some((k) => distToFoot(f, tu, u.x + (e.x - u.x) * k, u.z + (e.z - u.z) * k) < 0.5));
@@ -625,12 +625,13 @@ export function step(sim: Sim, dt: number) {
 
     // ranged fire (only when standing still, not changing formation, guns unlimbered)
     if (T.range <= 0 || u.mv || u.busy > 0 || u.reload > 0 || u.limbered || u.limT > 0) continue;
-    let tg: any = null, td = 1e9;
+    let tg: any = null, td = 1e9, best = 1e9;
     const hu = heightAt(scn, u.x, u.z);
     for (const e of live) {
       if (e.dead || e.side === u.side || !seen[u.side].has(e.id)) continue;
       const d = Math.max(0, gapBetween(u, e, tu)), reach = T.range * (u.type === 'artillery' ? Math.max(1, Math.min(1.3, 1 + tu.terrain.gunReach * (hu - heightAt(scn, e.x, e.z)))) : 1); // guns on high ground reach further
-      if (d < td && d < reach && !smokeBlocked(sim, u.x, u.z, e.x, e.z) && !masked(u, e, live, tu) && los(scn, u.x, u.z, eye(u, tu), e.x, e.z, 2)) { td = d; tg = e; } // range is measured to the nearest part of the target formation; no shooting over a crest
+      const k = e.id === u.chase ? -1 : d; // the ordered target comes first whenever it can be hit, else the nearest
+      if (k < best && d < reach && !smokeBlocked(sim, u.x, u.z, e.x, e.z) && !masked(u, e, live, tu) && los(scn, u.x, u.z, eye(u, tu), e.x, e.z, 2)) { best = k; td = d; tg = e; } // range is measured to the nearest part of the target formation; no shooting over a crest
     }
     if (!tg) continue;
     u.tf = null; // the enemy comes before the ordered facing
@@ -772,14 +773,17 @@ function runEvent(sim: Sim, e: any) {
   }
 }
 
+/** The French share of the verdict if the battle ended now: objectives held count endHeldWeight, points banked the rest. Over 0.5 + drawBand the French win. */
+export function verdict(s: any, tu: any): number {
+  const h = [0, 0], sc = [s.side[0].score, s.side[1].score];
+  for (const z of s.zones) if (z.owner != null) h[z.owner] += z.value;
+  const hr = h[0] + h[1] ? h[0] / (h[0] + h[1]) : 0.5;
+  return tu.endHeldWeight * hr + (1 - tu.endHeldWeight) * (sc[0] / Math.max(1, sc[0] + sc[1]));
+}
+
 function finish(sim: Sim, alive: boolean[]) {
   const s = sim.s, sc = [s.side[0].score, s.side[1].score];
-  // final verdict: objectives held at the end count more than points banked along the way
-  const held = [0, 0];
-  for (const z of s.zones) if (z.owner != null) held[z.owner] += z.value;
-  const hr = held[0] + held[1] ? held[0] / (held[0] + held[1]) : 0.5;
-  const w = sim.tu.endHeldWeight;
-  const ratio = w * hr + (1 - w) * (sc[0] / Math.max(1, sc[0] + sc[1]));
+  const ratio = verdict(s, sim.tu); // objectives held at the end count more than points banked along the way
   let winner = -1;
   if (!alive[0] && alive[1]) winner = 1;
   else if (alive[0] && !alive[1]) winner = 0;
