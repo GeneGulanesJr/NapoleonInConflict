@@ -184,7 +184,7 @@
   },
   "shock": {
     "_note": "Morale test when charged: steadiness = morale/max - loss*(share of men lost) - fat*fatigue + square/garrison - flank[aspect] - size*(charger men/own men - 1, 0..1) - fresh*(own fat - charger fat, >=0) + vet*rank + aura - cav (foot not in square vs horse) +- spread/2; holds at >= pass.",
-    "pass": 0.5,
+    "pass": 0.35,
     "loss": 0.5,
     "fat": 0.4,
     "square": 0.35,
@@ -198,7 +198,7 @@
     "fresh": 0.3,
     "vet": 0.05,
     "aura": 0.1,
-    "cav": 0.3,
+    "cav": 0.15,
     "spread": 0.3
   },
   "smoke": {

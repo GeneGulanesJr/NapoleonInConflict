@@ -221,7 +221,7 @@ test('a bayonet charge breaks a shaken regiment before contact; a steady one giv
     run(sim, 30, () => d.routed || a.eng != null || a.chase == null, () => { if (a.eng != null) contact = true; shots += sim.s.events.filter((e: any) => e.k === 'shot' && e.side === 1).length; sim.s.events.length = 0; });
     return { routed: d.routed, contact, shots, lost: a.maxMen - a.men };
   };
-  const shaken = charge(25), steadyR = charge(100);
+  const shaken = charge(15), steadyR = charge(100);
   assert.ok(shaken.routed && !shaken.contact && shaken.shots === 0, `shaken regiment broke before contact (${JSON.stringify(shaken)})`);
   assert.ok(!steadyR.routed && steadyR.shots === 1 && steadyR.lost > 20, `steady regiment stood and fired (${JSON.stringify(steadyR)})`);
 });
