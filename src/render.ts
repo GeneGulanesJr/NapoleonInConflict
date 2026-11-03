@@ -200,11 +200,12 @@ export function createView(host: HTMLElement) {
 
   // --- outlined instanced meshes ---------------------------------------------
   // Each mesh gets an inverted-hull twin sharing its matrices; hull grows 1 buffer pixel from a centre point (no corner gaps on boxes).
-  const hullU = { uW: { value: 0.1 } };
+  const far = () => { const t = Math.max(0, Math.min(1, (cam.dist - 90) / 190)); return t * t * (3 - 2 * t); }; // 0 close .. 1 fully zoomed out: figures are 1-2px, so soften them
+  const hullU = { uW: { value: 0.1 }, uInk: { value: new THREE.Color(P.ink) } }, INK_FAR = new THREE.Color(0x5c5846); // one ink colour for every hull, softened as you zoom out
   const outlined: { m: THREE.InstancedMesh; o: THREE.InstancedMesh }[] = [];
   function hullMat(c: [number, number, number]) {
     return new THREE.ShaderMaterial({
-      uniforms: { uW: hullU.uW, uC: { value: new THREE.Vector3(...c) }, uInk: { value: new THREE.Color(P.ink) } },
+      uniforms: { uW: hullU.uW, uC: { value: new THREE.Vector3(...c) }, uInk: hullU.uInk },
       vertexShader: `uniform float uW; uniform vec3 uC; void main(){ float sc = length(instanceMatrix[0].xyz);
         vec3 p = position + normalize(position - uC + vec3(0.,.001,0.)) * (uW / sc); gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(p, 1.); }`,
       fragmentShader: 'uniform vec3 uInk; void main(){ gl_FragColor = vec4(uInk, 1.); }',
@@ -750,7 +751,7 @@ export function createView(host: HTMLElement) {
     const live = new Set<number>();
     const seenSet = state.fog ? new Set<number>(state.seen?.[viewer] ?? []) : null; // fog of war: enemies you cannot see are not drawn
     const k = 1 - Math.exp(-10 * dt);
-    const sl = [0, 0];
+    const sl = [0, 0], farT = far(); // zoomed out the men grow a little so ranks read as solid blocks, not speckle
     // cull regiments that are clearly off-screen (no figures placed; smoothing and bookkeeping still run). Not on the first frame or after a camera jump.
     const still = camReady && Math.hypot(cam.x - lastCam.x, cam.z - lastCam.z) < 20 && Math.abs(cam.dist / lastCam.d - 1) < 0.2 && Math.abs(cam.yaw - lastCam.y) < 0.1 && Math.abs(tl.v - lastCam.t) < 0.1;
     if (still) frustum.setFromProjectionMatrix(fMat.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
@@ -778,7 +779,7 @@ export function createView(host: HTMLElement) {
       plumeC.setHex(u.type === 'skirmisher' ? 0x4a8a3a : PLUME[u.nat] ?? 0xe9e4d6);
       const moving = u.mv ?? true;
       const addFig = (x: number, y: number, z: number, sc0: number, fi: number, rider = false) => {
-        const sc = sc0 * (0.95 + hash(u.id * 13 + fi * 7) * 0.1), ry = v!.f + (hash(u.id * 5 + fi * 3) - 0.5) * 0.14; // no two soldiers identical
+        const sc = sc0 * (1 + 0.3 * farT) * (0.95 + hash(u.id * 13 + fi * 7) * 0.1), ry = v!.f + (hash(u.id * 5 + fi * 3) - 0.5) * 0.14; // no two soldiers identical
         put(foot, nf, x, y, z, ry, sc); put(kit, nf, x, y, z, ry, sc);
         tmpC2.copy(tmpC).multiplyScalar(0.94 + hash(u.id * 3 + fi * 11) * 0.12); foot.setColorAt(nf, tmpC2);
         const sw = !rider && moving ? Math.sin(clock * (u.routed ? 13 : 8) + fi * 1.7) * 0.55 : 0; // marching stride
@@ -973,6 +974,7 @@ export function createView(host: HTMLElement) {
 
     const fz = Math.max(1, H / 60), fg = scene.fog as THREE.Fog; fg.near = CAM_D + atm.fn * fz; fg.far = CAM_D + atm.ff * fz; // keep haze constant as you zoom out
     hullU.uW.value = px * 0.95; // 1 buffer pixel
+    hullU.uInk.value.setHex(P.ink).lerp(INK_FAR, far()); // zoomed out, a near-black outline on every tiny soldier is all you see: fade it toward a soft shade
     for (const q of outlined) q.o.count = q.m.count;
 
     const savedBg = scene.background, savedFog = scene.fog;

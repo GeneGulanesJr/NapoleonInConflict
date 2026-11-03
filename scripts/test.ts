@@ -464,3 +464,24 @@ test('a scripted reinforcement keeps to its historical route until it arrives, t
   const b = sim.s.units.find((u: any) => u.name === 'Bülow');
   assert.ok(b && b.tz === -60 && b.z < 100 - 30, `still marching on its route (z ${b?.z.toFixed(1)}, target z ${b?.tz})`);
 });
+
+test('a regiment hit on the flank wheels into contact at a limited rate, not in one tick', () => {
+  let cav: any, inf: any;
+  const sim = arena((fr, co) => {
+    cav = fr.find((u) => u.type === 'lancer'); inf = co.find((u) => u.type === 'line');
+    return [Object.assign(cav, { x: -80, z: 0, facing: Math.PI / 2, form: 'line' }), Object.assign(inf, { x: 0, z: 0, facing: Math.PI, form: 'line', stance: 'hold' }), Object.assign(co.find((u) => u !== inf), { x: 170, z: 170 })];
+  });
+  command(sim, 0, { c: 'attack', ids: [cav.id], target: inf.id });
+  let worst = 0, last = inf.facing;
+  run(sim, 16, () => inf.routed, () => { worst = Math.max(worst, Math.abs(Math.atan2(Math.sin(inf.facing - last), Math.cos(inf.facing - last)))); last = inf.facing; }); // until it breaks: a routing line turns at the faster rout rate
+  assert.ok(inf.facing !== Math.PI, 'the line turned to face the horse');
+  assert.ok(worst <= sim.tu.turn.engage * 0.05 + 1e-6, `facing changed ${worst.toFixed(3)} rad in one tick (cap ${(sim.tu.turn.engage * 0.05).toFixed(3)})`);
+});
+
+test('a routing regiment turns to flee at the rout rate, not in one tick', () => {
+  let a: any;
+  const sim = arena((fr, co) => { a = fr.find((u) => u.type === 'line'); return [Object.assign(a, { x: 0, z: 0, facing: 0, form: 'line', routed: true, morale: 0 }), Object.assign(co[0], { x: 30, z: -10 })]; });
+  let worst = 0, last = a.facing;
+  run(sim, 4, () => false, () => { worst = Math.max(worst, Math.abs(Math.atan2(Math.sin(a.facing - last), Math.cos(a.facing - last)))); last = a.facing; });
+  assert.ok(worst > 0 && worst <= sim.tu.turn.rout * 0.05 + 1e-6, `facing changed ${worst.toFixed(3)} rad in one tick`);
+});
