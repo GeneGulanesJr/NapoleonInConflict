@@ -1,7 +1,7 @@
 // In-battle controller: input, HUD, and all the Anime.js presentation (banners, popups, counters, intro, outro).
 import { animate, createTimeline, stagger, steps } from 'animejs';
 import { ICONS, pxCanvas } from './pixel.ts';
-import { distToFoot, manPrice, posted, masked, verdict } from './sim/sim.ts';
+import { distToFoot, manPrice, posted, masked, verdict, layout } from './sim/sim.ts';
 import { los } from './sim/world.ts';
 import type { View } from './render.ts';
 import { SIDE_COLOR } from './render.ts';
@@ -75,7 +75,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     <div class="panel" id="help" style="display:none"><div class="hd">Controls <small>? / F10 / Esc to close</small></div><div class="hcols">${CONTROLS.map(([g, ks]) => `<div><b>${g}</b>${ks.map(([k, d]) => `<p><kbd>${k}</kbd> ${d}</p>`).join('')}</div>`).join('')}</div></div>
     <div class="panel" id="pm" style="display:none"><div class="hd">${src.mode === 'local' ? 'Paused' : 'Menu'}</div>
       <div class="pmb"><button data-pm="resume">Resume</button>${src.mode === 'local' ? `<button data-pm="retry">Restart ${src.replay ? 'replay' : 'battle'}</button>` : ''}<button data-pm="menu">${opts.campaign ? 'Save and quit' : 'Quit to menu'}</button></div>
-      <div class="hd">Settings <small>difficulty and fog apply from the next battle</small></div><div class="sets"></div></div>
+      <div class="hd">Settings <small>difficulty, fog and couriers apply from the next battle</small></div><div class="sets"></div></div>
     <div class="intro" id="intro"><small></small><h1></h1><p></p></div>
     <div class="fade" id="fade"></div>
     <div class="result" id="result"></div>`;
@@ -225,7 +225,9 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   // army bar: one card per regiment, DOM touched only when a card's values change (like the plates)
   const army = $<HTMLElement>(hud, '#army'), selPanel = $<HTMLElement>(hud, '#sel'), topbar = $<HTMLElement>(hud, '.topbar'), toasts = $<HTMLElement>(hud, '#toasts');
   const cards = new Map<number, { el: HTMLElement; m: HTMLElement; o: HTMLElement; em: HTMLElement; sig: string }>();
-  const isIdle = (u: any) => !u.routed && u.type !== 'commander' && u.tx == null && u.chase == null && !u.queue?.length && u.garrison == null && u.eng == null;
+  /** courier orders: seconds until the next order still on the road reaches u, or null */
+  const due = (u: any) => { const ts = (src.state.orders ?? []).filter((o: any) => o.c.ids[0] === u.id).map((o: any) => o.t); return ts.length ? Math.min(...ts) - src.state.t : null; };
+  const isIdle = (u: any) => !u.routed && u.type !== 'commander' && u.tx == null && u.chase == null && !u.queue?.length && u.garrison == null && u.eng == null && due(u) == null;
   function drawArmy(st: any) {
     const us = st.units.filter(mine), live = new Set(us.map((u: any) => u.id));
     for (const [id, c] of cards) if (!live.has(id)) { c.el.remove(); cards.delete(id); }
@@ -233,7 +235,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       let c = cards.get(u.id);
       if (!c) {
         const el = document.createElement('div');
-        el.className = 'ac'; el.dataset.id = String(u.id); el.title = `${u.name} (${TUNING.types[u.type].label})\n1-9 control group · R routed · + replenishing · G garrisoned · ? idle`;
+        el.className = 'ac'; el.dataset.id = String(u.id); el.title = `${u.name} (${TUNING.types[u.type].label})\n1-9 control group · R routed · + replenishing · G garrisoned · > orders on the way · ? idle`;
         el.innerHTML = `<b>${GLYPH[u.type] ?? '?'}</b><i class="b m"><s></s></i><i class="b o"><s></s></i><em></em>`;
         army.appendChild(el);
         c = { el, m: $(el, '.m s'), o: $(el, '.o s'), em: $(el, 'em'), sig: '' };
@@ -241,7 +243,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       }
       const mp = Math.round((u.men / u.maxMen) * 100), op = Math.max(0, Math.round((u.morale / u.maxMorale) * 100));
       const grp = Object.keys(groups).find((n) => groups[Number(n)].includes(u.id)) ?? ''; // its control group, first
-      const mk = grp + (u.routed ? 'R' : `${u.refill || drafting(u) ? '+' : ''}${u.garrison != null ? 'G' : ''}${isIdle(u) ? '?' : ''}`); // '?' = awaiting orders (a pixel-font z reads as 2)
+      const mk = grp + (u.routed ? 'R' : `${u.refill || drafting(u) ? '+' : ''}${u.garrison != null ? 'G' : ''}${due(u) != null ? '>' : ''}${isIdle(u) ? '?' : ''}`); // '?' = awaiting orders (a pixel-font z reads as 2)
       const cls = `ac${selection.includes(u.id) ? ' sel' : ''}${u.routed ? ' routed' : op < 30 ? ' waver' : ''}`;
       const sig = `${mp}|${op}|${mk}|${cls}`;
       if (sig === c.sig) continue;
@@ -271,6 +273,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     if (u.bay != null) ls.push('Charging with the bayonet!');
     else if (posted(u, TUNING)) ls.push('Posted: steadier under fire'); // stood still long enough for the defensive bonus
     if (u.garrison != null) ls.push(`Garrison: ${esc(scn.map.villages?.[u.garrison]?.name ?? 'farm')}`);
+    const od = u.side === me ? due(u) : null;
+    if (od != null) ls.push(`Orders arrive in ${Math.ceil(od)}s`);
     if (u.routed) ls.push('<i class="no">Routed</i>');
     const sel = st.units.filter((q: any) => selection.includes(q.id) && !q.routed);
     if (u.side !== me && sel.length) {
@@ -327,7 +331,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
           const st = src.state, foeOk = (u: any) => u.side !== me && !u.dead && !u.routed && (!st.fog || st.seen?.[me]?.includes(u.id));
           const foe = (g && unitAt(g, foeOk)) ?? view.pickUnit(st, e.clientX, e.clientY, foeOk, 34);
           if (foe) src.cmd({ c: 'bayonet', ids: selection, target: foe.id });
-        } else if (g && targeting === 'amove') src.cmd({ c: 'move', ids: selection, x: g.x, z: g.z, q: e.shiftKey, am: true });
+        } else if (g && targeting === 'amove') src.cmd({ c: 'move', ids: selection, x: g.x, z: g.z, q: e.shiftKey, am: true, col: col() });
         else if (g) {
           src.cmd({ c: 'ability', name: targeting, x: g.x, z: g.z });
           const btn = $<HTMLElement>(hud, `[data-ab="${targeting}"]`);
@@ -342,7 +346,9 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       if (selection.length) rdrag = { x: e.clientX, y: e.clientY, g: groundOf(e) }; // a click or a drag: decided on release
     }
   };
-  /** right-click: attack a foe, man a farm, or move (shift adds a waypoint) */
+  const col = () => pref('nic-col', true); // the 'March in column' setting
+  let lastR = { x: 0, y: 0, t: -1e9 };
+  /** right-click: attack a foe, man a farm, or move (shift adds a waypoint, alt keeps the group's shape, the same spot twice quickly is double time) */
   function rightClick(e: PointerEvent) {
     const st = src.state;
     const seenFoe = (u: any) => u.side !== me && !u.dead && (!st.fog || st.seen?.[me]?.includes(u.id));
@@ -352,7 +358,11 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     if (!g0) return;
     const vi = (scn.map.villages ?? []).findIndex((v: any) => v.garrison && Math.hypot(v.x - g0.x, v.z - g0.z) < v.r + 2);
     if (vi >= 0 && !e.shiftKey) src.cmd({ c: 'garrison', ids: selection, vid: vi }); // right-click a farm to man it
-    else src.cmd({ c: 'move', ids: selection, x: g0.x, z: g0.z, q: e.shiftKey });
+    else {
+      const now = performance.now(), run = now - lastR.t < 350 && Math.hypot(e.clientX - lastR.x, e.clientY - lastR.y) < 12;
+      lastR = { x: e.clientX, y: e.clientY, t: run ? -1e9 : now };
+      src.cmd({ c: 'move', ids: selection, x: g0.x, z: g0.z, q: e.shiftKey, keep: e.altKey, col: col(), run });
+    }
   }
   /** right-drag: the dragged line is where the group stands, facing away from where it is now */
   let rdrag: { x: number; y: number; g: { x: number; z: number } | null } | null = null;
@@ -375,7 +385,10 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     Object.assign(mouse, { x: e.clientX, y: e.clientY, in: true, view: e.target === dom });
     placeTip();
     if (rot && !view.guide) { view.cam.yaw -= (e.clientX - rot.x) * 0.006; rot.x = e.clientX; }
-    if (rdrag && Math.hypot(e.clientX - rdrag.x, e.clientY - rdrag.y) > 10) view.setDragLine(dragOrder(e));
+    if (rdrag && Math.hypot(e.clientX - rdrag.x, e.clientY - rdrag.y) > 10) { // the dragged line, and ghost footprints where each regiment will stand and face
+      const o = dragOrder(e), us = src.state.units.filter((u: any) => selection.includes(u.id) && !u.routed);
+      view.setDragLine(o); view.setGhosts(o && !e.ctrlKey && us.length ? layout(us, { x: o.mx, z: o.mz, f: o.f, w: o.w, keep: e.altKey }, TUNING, scn.map.size / 2 - 2) : null);
+    }
     if (drag && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 6) {
       const b = drag.box.style;
       b.display = 'block'; b.left = `${Math.min(drag.x, e.clientX)}px`; b.top = `${Math.min(drag.y, e.clientY)}px`;
@@ -391,10 +404,11 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   function onUp(e: PointerEvent) {
     if (e.button === 1) rot = null;
     if (e.button === 2 && rdrag) {
-      const o = Math.hypot(e.clientX - rdrag.x, e.clientY - rdrag.y) > 10 ? dragOrder(e) : null;
-      if (o) src.cmd({ c: 'move', ids: selection, x: o.mx, z: o.mz, f: o.f, w: o.w, q: e.shiftKey });
-      else rightClick(e);
-      rdrag = null; view.setDragLine(null);
+      const o = Math.hypot(e.clientX - rdrag.x, e.clientY - rdrag.y) > 10 ? dragOrder(e) : null, g = e.ctrlKey ? groundOf(e) : null;
+      if (g) src.cmd({ c: 'face', ids: selection, x: g.x, z: g.z }); // ctrl: wheel in place toward the point
+      else if (o) src.cmd({ c: 'move', ids: selection, x: o.mx, z: o.mz, f: o.f, w: o.w, q: e.shiftKey, keep: e.altKey, col: col() });
+      else if (!e.ctrlKey) rightClick(e);
+      rdrag = null; view.setDragLine(null); view.setGhosts(null);
       return;
     }
     if (e.button !== 0 || !drag) return;
@@ -528,7 +542,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   mini.oncontextmenu = (e) => e.preventDefault();
   mini.onpointerdown = (e) => { // left: look there; right: send the selection there
     const r = mini.getBoundingClientRect(), S = view.mapSize, x = ((e.clientX - r.left) / r.width - 0.5) * S, z = ((e.clientY - r.top) / r.height - 0.5) * S;
-    if (e.button === 2) { if (selection.length) src.cmd({ c: 'move', ids: selection, x, z, q: e.shiftKey }); }
+    if (e.button === 2) { if (selection.length) src.cmd({ c: 'move', ids: selection, x, z, q: e.shiftKey, col: col() }); }
     else view.flyTo(x, z, undefined, 600);
   };
   const ghosts = new Map<number, { x: number; z: number; t: number }>(); // fog of war: where each enemy regiment was last seen

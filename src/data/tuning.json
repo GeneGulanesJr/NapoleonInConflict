@@ -8,6 +8,10 @@
   "plough": { "_note": "Round shot that hits carries on up to `reach` units behind its target and strikes the next regiment of that side in its path for `carry` x the casualties", "reach": 30, "carry": 0.4 },
   "breakoff": { "_note": "Horse ordered away from its foe in a melee strikes no blows while it gets clear; the foe hits it at `hit` x the usual rate, with no flank or rear bonus", "hit": 0.5 },
   "hold": { "_note": "posted: foot or guns standing still for `after` seconds take `fire` x casualties and `morale` x morale loss, and get +`shock` on the charge morale test", "after": 15, "fire": 0.85, "morale": 0.8, "shock": 0.1 },
+  "march": { "_note": "'March in column' (a player setting): a line ordered farther than `dist` forms column for the march and forms line again on arrival, or as soon as a foe it can see is within musket range", "dist": 60 },
+  "fallback": { "_note": "Foot or horse ordered to a point behind it (over 120 degrees off its facing) and nearer than `dist` steps back facing the enemy, without wheeling, at `speed` x its pace", "dist": 40, "speed": 0.5 },
+  "doubleTime": { "_note": "Double time (double right-click): marches at `speed` x, tiring at fatigue.run, until it arrives", "speed": 1.4 },
+  "courier": { "_note": "Courier orders (a player setting): an order to a regiment farther than `free` from its nearest general (the entry point once they have all fallen) arrives after (distance - free) / `speed` s; aids, reserves, auto-square and replenishing are not delayed", "free": 40, "speed": 10 },
   "types": {
     "line": {
       "label": "Line Infantry",

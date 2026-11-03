@@ -1,7 +1,7 @@
 // A "source" gives the UI a battle state and a way to send commands, locally or over a WebSocket.
 import { createSim, type Cmd } from './sim/sim.ts';
 import { runner, DT, type Replay } from './sim/replay.ts';
-import { TUNING, fogOn, difficulty } from './campaign.ts';
+import { TUNING, fogOn, difficulty, pref } from './campaign.ts';
 
 export interface Source {
   mode: 'local' | 'remote';
@@ -46,7 +46,7 @@ export function localSource(scn: any, opts: { roster?: any[]; won?: Record<strin
   const side = opts.side ?? 0, strength = [...(scn.strength ?? [1, 1])];
   strength[1 - side] *= TUNING.difficulty.enemyStrength[difficulty()];
   const s2 = { ...scn, strength };
-  const s0 = opts.resume ?? createSim(s2, TUNING, { roster: opts.roster, won: opts.won, fog: fogOn(), seed: opts.seed ?? (Date.now() & 0x7fffffff) }).s;
+  const s0 = opts.resume ?? createSim(s2, TUNING, { roster: opts.roster, won: opts.won, fog: fogOn(), courier: pref('nic-courier', false), seed: opts.seed ?? (Date.now() & 0x7fffffff) }).s;
   return drive(TUNING, { scn: s2, won: opts.won, side, start: JSON.stringify(s0), cmds: [] }, false);
 }
 

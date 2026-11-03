@@ -517,6 +517,7 @@ test('server survives malformed packets and keeps state finite', async () => {
       { t: 'cmd', c: { c: 'deploy', type: 'constructor' } },
       { t: 'cmd', c: { c: 'ability', name: 'barrage' } },
       { t: 'cmd', c: { c: 'attack', ids: [u.id] } }, { t: 'cmd', c: { c: 'bayonet', ids: [u.id], target: 'x' } },
+      { t: 'cmd', c: { c: 'move', ids: [u.id], x: 1, z: 1, run: 'yes', keep: {} } }, { t: 'cmd', c: { c: 'face', ids: [u.id], x: 'a', z: 1 } }, { t: 'cmd', c: { c: 'face', ids: 'all', x: 1, z: 1 } },
     ];
     for (const m of bad) a.send(m);
     const evil = await connect('', false);
@@ -536,12 +537,15 @@ test('server applies valid move and stance commands', async () => {
   try {
     const a = await connect('quatrebras');
     const u = a.last.units.find((x: any) => x.side === a.side && x.type === 'line');
-    a.send({ t: 'cmd', c: { c: 'move', ids: [u.id], x: u.x + 30, z: u.z - 30 } });
+    const v = a.last.units.find((x: any) => x.side === a.side && x.type === 'line' && x.id !== u.id);
+    a.send({ t: 'cmd', c: { c: 'move', ids: [u.id], x: u.x + 30, z: u.z - 30, run: true, col: true, keep: false, pace: 0 } }); // pace is the sim's own: a client's is dropped
     a.send({ t: 'cmd', c: { c: 'stance', ids: [u.id], s: 'aggressive' } });
+    a.send({ t: 'cmd', c: { c: 'face', ids: [v.id], x: v.x + 40, z: v.z } });
     await wait(4500);
-    const u2 = a.last.units.find((x: any) => x.id === u.id);
-    assert.ok(Math.hypot(u2.x - u.x, u2.z - u.z) > 3, 'unit moved');
+    const u2 = a.last.units.find((x: any) => x.id === u.id), v2 = a.last.units.find((x: any) => x.id === v.id);
+    assert.ok(Math.hypot(u2.x - u.x, u2.z - u.z) > 3 && u2.run === true, 'unit moved at double time');
     assert.equal(u2.stance, 'aggressive');
+    assert.ok(Math.abs(v2.facing - v.facing) > 0.5 && Math.hypot(v2.x - v.x, v2.z - v.z) < 1, 'the other wheeled in place');
     a.ws.close();
   } finally { server.removeAllListeners('exit'); server.kill(); }
 });
@@ -685,4 +689,97 @@ test('broken men running through a formed regiment shake it', () => {
   const sim = arena((fr, co) => { const [l1, l2] = co.filter((u) => u.type === 'line'); return [line = Object.assign(l1, { x: 0, z: 0, facing: 0 }), router = Object.assign(l2, { x: 0, z: 0, routed: true, morale: 0 }), Object.assign(fr[0], { x: 170, z: 170 })]; });
   step(sim, 0.05);
   assert.ok(line.shaken > 2.5, `shaken for ${line.shaken.toFixed(1)} s by ${Math.round(router.men)} fugitives`);
+});
+
+// ---------------------------------------------------------------- WS2 orders & movement
+import { layout } from '../src/sim/sim.ts';
+
+test('march in column: a line sent far forms column and deploys on arrival, or early once a foe is within musket range', () => {
+  const go = (foe: boolean, col = true) => {
+    let a: any;
+    const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: -120, facing: 0, form: 'line', morale: 9999, maxMorale: 9999 }), Object.assign(co.find((u) => u.type === 'line'), foe ? { x: 0, z: 0, facing: Math.PI, form: 'line', stance: 'hold', morale: 9999, maxMorale: 9999, reload: 1e9 } : { x: 170, z: 170 })]);
+    command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: -20, col });
+    const forms: string[] = [];
+    let at: any = null; // where it was when it formed line again, and whether it was still marching
+    run(sim, 90, undefined, () => { if (forms.at(-1) !== a.form) { forms.push(a.form); if (a.form === 'line' && forms.length > 1) at = { z: a.z, marching: a.tx != null }; } });
+    return { forms, at, a };
+  };
+  const open = go(false), near = go(true), off = go(false, false);
+  assert.deepEqual(open.forms, ['column', 'line'], 'formed column for the march, line again at the end');
+  assert.ok(!open.at.marching && Math.abs(open.a.z + 20) < 1, `deployed on arrival (z ${open.at.z.toFixed(1)})`);
+  assert.ok(near.at?.marching && near.at.z < -24, `deployed early with the foe in musket range (z ${near.at?.z.toFixed(1)})`);
+  assert.deepEqual(off.forms, ['line'], 'with the setting off it marches in line');
+});
+
+test('a group order marches at its slowest member\'s pace until it arrives', () => {
+  const march2 = (both: boolean) => {
+    let col: any, gun: any;
+    const sim = arena((fr, co) => [col = Object.assign(fr.find((u) => u.type === 'line'), { x: -20, z: -80, facing: 0, form: 'column' }), gun = Object.assign(fr.find((u) => u.type === 'artillery'), { x: 20, z: -80, facing: 0 }), Object.assign(co[0], { x: 170, z: 170 })]);
+    command(sim, 0, { c: 'move', ids: both ? [col.id, gun.id] : [col.id], x: 0, z: 40 });
+    const d0 = Math.hypot(col.tx - col.x, col.tz - col.z);
+    run(sim, 10);
+    return { sim, col, covered: d0 - Math.hypot(col.tx - col.x, col.tz - col.z) };
+  };
+  const alone = march2(false), group = march2(true);
+  assert.ok(alone.covered > 25 && group.covered < 16.5, `the column alone covered ${alone.covered.toFixed(1)} in 10 s, with the guns ${group.covered.toFixed(1)}`);
+  run(group.sim, 120);
+  assert.equal(group.col.pace, null, 'the pace ends on arrival');
+});
+
+test('keep the shape: a block move keeps each regiment\'s offset and facing; a dragged facing turns the whole block', () => {
+  let a: any, b: any;
+  const sim = arena((fr, co) => { [a, b] = fr.filter((u) => u.type === 'line'); return [Object.assign(a, { x: -30, z: 0, facing: 0 }), Object.assign(b, { x: 30, z: 10, facing: 0.5 }), Object.assign(co[0], { x: 170, z: 170 })]; });
+  command(sim, 0, { c: 'move', ids: [a.id, b.id], x: 0, z: 100, keep: true });
+  run(sim, 120);
+  assert.ok(Math.hypot(a.x + 30, a.z - 95) < 1.5 && Math.hypot(b.x - 30, b.z - 105) < 1.5, `kept their offsets (${a.x.toFixed(1)}, ${a.z.toFixed(1)}) (${b.x.toFixed(1)}, ${b.z.toFixed(1)})`);
+  assert.ok(Math.abs(a.facing) < 1e-6 && Math.abs(b.facing - 0.5) < 1e-6, `kept their facings (${a.facing.toFixed(2)}, ${b.facing.toFixed(2)})`);
+  const p = layout([{ x: -30, z: 0, facing: 0 }, { x: 30, z: 0, facing: 0 }], { x: 0, z: 0, f: Math.PI / 2, keep: true }, sim.tu, 200);
+  assert.ok(Math.hypot(p[0].x, p[0].z - 30) < 1e-9 && Math.hypot(p[1].x, p[1].z + 30) < 1e-9 && p.every((q) => Math.abs(q.f! - Math.PI / 2) < 1e-9), 'turned a quarter round as a block');
+});
+
+test('a regiment ordered a short way to its rear falls back facing the enemy at half pace; a longer way it wheels round', () => {
+  const back = (dist: number) => { let a: any; const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: 0, facing: 0, form: 'line' }), Object.assign(co[0], { x: 170, z: 170 })]); command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: -dist }); run(sim, 6); return a; };
+  const near = back(20), far = back(60);
+  assert.ok(near.facing === 0 && near.z < -4 && near.z > -6.5, `stepped back ${(-near.z).toFixed(1)} still facing the front`);
+  assert.ok(Math.abs(far.facing) > 1 && Math.abs(far.z) < 0.5, `wheeling round first (facing ${far.facing.toFixed(2)}, z ${far.z.toFixed(1)})`);
+});
+
+test('a face order halts a regiment and wheels it toward the point without moving', () => {
+  let a: any;
+  const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: 0, facing: 0, form: 'line' }), Object.assign(co[0], { x: 170, z: 170 })]);
+  command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: 80 }); run(sim, 1);
+  const x = a.x, z = a.z;
+  command(sim, 0, { c: 'face', ids: [a.id], x: 40, z: a.z });
+  run(sim, 10);
+  assert.ok(Math.abs(a.facing - Math.PI / 2) < 1e-6 && Math.hypot(a.x - x, a.z - z) < 1e-6 && a.tx == null, `faces +x (${a.facing.toFixed(2)}) where it stood`);
+});
+
+test('double time marches 1.4x as fast, tires at the run rate, and ends on arrival', () => {
+  const go = (r: boolean) => { let a: any; const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: -100, facing: 0, form: 'column' }), Object.assign(co[0], { x: 170, z: 170 })]); command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: 100, run: r }); run(sim, 10); return { sim, a }; };
+  const walk = go(false), dbl = go(true), k = (dbl.a.z + 100) / (walk.a.z + 100);
+  assert.ok(k > 1.3 && k < 1.42 && dbl.a.fat > 5 * walk.a.fat, `covered ${k.toFixed(2)}x, fatigue ${dbl.a.fat.toFixed(3)} vs ${walk.a.fat.toFixed(3)}`);
+  run(dbl.sim, 120);
+  assert.equal(dbl.a.run, false, 'double time ends on arrival');
+});
+
+test('courier orders: a distant regiment gets its order (its place in the group kept) after the ride; near ones at once; aids are not delayed', () => {
+  let g: any, a: any, b: any;
+  const sim = arena((fr, co) => { [a, b] = fr.filter((u) => u.type === 'line'); return [g = Object.assign(fr.find((u) => u.type === 'commander'), { x: 0, z: 0 }), Object.assign(a, { x: 20, z: 0, facing: 0 }), Object.assign(b, { x: 140, z: 0, facing: 0 }), Object.assign(co[0], { x: 170, z: 170 })]; });
+  sim.s.courier = true;
+  const c: any = { c: 'move', ids: [a.id, b.id], x: 80, z: 60 }, want = layout([a, b], c, sim.tu, sim.scn.map.size / 2 - 2).find((p) => p.u === b)!;
+  command(sim, 0, c);
+  assert.ok(a.tx != null && b.tx == null && sim.s.orders.length === 1, 'the near regiment marches at once, the far one waits for the courier');
+  command(sim, 0, { c: 'auto', ids: [b.id] });
+  assert.ok(b.auto, 'auto-square is not delayed');
+  run(sim, (140 - 40) / sim.tu.courier.speed - 0.5);
+  assert.equal(b.tx, null, 'still waiting just before the courier arrives');
+  run(sim, 1);
+  assert.ok(Math.abs(b.tx - want.x) < 1e-9 && Math.abs(b.tz - want.z) < 1e-9, `the order arrived with b's place in the group (${b.tx.toFixed(1)}, ${b.tz.toFixed(1)})`);
+  command(sim, 0, { c: 'move', ids: [b.id], x: 0, z: 100 }); command(sim, 0, { c: 'attack', ids: [b.id], target: sim.s.units.find((u: any) => u.side === 1).id });
+  assert.ok(sim.s.orders.length === 1 && sim.s.orders[0].c.c === 'attack', 'a new order countermands the one still on the road');
+  g.dead = true; sim.s.units = sim.s.units.filter((u: any) => !u.dead); // the general has fallen: orders ride from the entry point
+  const e = sim.scn.entry[0], t = (Math.hypot(a.x - e.x, a.z - e.z) - 40) / sim.tu.courier.speed;
+  command(sim, 0, { c: 'stop', ids: [a.id] });
+  const o = sim.s.orders.find((q: any) => q.c.ids[0] === a.id);
+  assert.ok(t > 0 && Math.abs(o.t - sim.s.t - t) < 1e-9, `from the entry point it takes ${t.toFixed(1)} s`);
 });

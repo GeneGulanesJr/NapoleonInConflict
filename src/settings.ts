@@ -17,6 +17,8 @@ export function settings(el: HTMLElement, view: { cycleQuality(): string; qualit
     ['Render quality', () => view.quality, () => view.cycleQuality()],
     ['Difficulty', () => TUNING.difficulty.labels[difficulty()], () => setPrefNum('nic-diff', (difficulty() + 1) % 3)],
     ['Fog of war', () => onOff(fogOn()), () => setFog(!fogOn())],
+    ['March in column', () => onOff(pref('nic-col', true)), () => setPref('nic-col', !pref('nic-col', true))],
+    ['Courier orders', () => onOff(pref('nic-courier', false)), () => setPref('nic-courier', !pref('nic-courier', false))],
   ];
   el.innerHTML = rows.map(([l], i) => `<button data-set="${i}">${l}: <b></b></button>`).join('');
   const paint = () => el.querySelectorAll<HTMLElement>('[data-set]').forEach((b) => (b.querySelector('b')!.textContent = rows[Number(b.dataset.set)][1]()));
