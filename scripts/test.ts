@@ -112,6 +112,16 @@ test('replenishing refills a regiment on held objective ground at the deploy rat
   assert.equal(home.refill, false, 'the order clears itself once full');
 });
 
+test('a dragged line order spreads the group over the drag and wheels it to face the ordered way', () => {
+  const sim = arena((fr, co) => [...fr.filter((u) => u.type === 'line').slice(0, 2).map((u, i) => Object.assign(u, { x: -60, z: (i - 0.5) * 30, facing: 0, form: 'line' })), Object.assign(co[0], { x: 170, z: 170 })]);
+  const ls = sim.s.units.filter((u: any) => u.side === 0);
+  command(sim, 0, { c: 'move', ids: ls.map((u: any) => u.id), x: 0, z: 0, f: Math.PI / 2, w: 100 }); // a 100-wide line along z, facing +x
+  run(sim, 40);
+  for (const u of ls) assert.ok(Math.abs(u.facing - Math.PI / 2) < 1e-6 && Math.abs(u.x) < 1, `${u.name} stands on the line facing +x (x ${u.x.toFixed(1)}, facing ${u.facing.toFixed(2)})`);
+  const [a, b] = ls.map((u: any) => u.z).sort((p: number, q: number) => p - q);
+  assert.ok(b - a > 60, `spread over the drag (${(b - a).toFixed(1)} apart)`);
+});
+
 // ---------------------------------------------------------------- campaign roster
 test('applyResult drops destroyed regiments, heals survivors, advances the campaign', () => {
   const camp = { battles: ['a', 'b'], healFraction: 0.5 };

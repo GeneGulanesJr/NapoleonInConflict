@@ -158,7 +158,7 @@
   "abilities": {
     "barrage": {
       "label": "Artillery Barrage",
-      "key": "1",
+      "key": "F1",
       "cd": 90,
       "delay": 5,
       "dur": 10,
@@ -169,7 +169,7 @@
     },
     "rockets": {
       "label": "Congreve Rockets",
-      "key": "2",
+      "key": "F2",
       "cd": 75,
       "delay": 3,
       "dur": 2,
@@ -180,7 +180,7 @@
     },
     "cavalry": {
       "label": "Cavalry Reserve",
-      "key": "3",
+      "key": "F3",
       "cd": 120,
       "unit": "cuirassier",
       "men": 270

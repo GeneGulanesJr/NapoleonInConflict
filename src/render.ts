@@ -631,6 +631,10 @@ export function createView(host: HTMLElement) {
   const ringGeo = new THREE.RingGeometry(0.88, 1, 24).rotateX(-Math.PI / 2);
   const ringMat = (c: number) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide });
   for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(ringGeo, ringMat(P.brass)); m.visible = false; m.renderOrder = 5; scene.add(m); selRings.push(m); }
+  // firing-range rings for selected regiments (thin, so a 95-unit gun ring doesn't become a band)
+  const rangeGeo = new THREE.RingGeometry(0.985, 1, 72).rotateX(-Math.PI / 2), rangeRings: THREE.Mesh[] = [];
+  for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(rangeGeo, new THREE.MeshBasicMaterial({ color: 0xe9e4d6, transparent: true, opacity: 0.35, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 4; scene.add(m); rangeRings.push(m); }
+  let refillHint = false, dragLine: { ax: number; az: number; bx: number; bz: number; f: number } | null = null;
   const fxRings: THREE.Mesh[] = [];
   for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(ringGeo, ringMat(0xff5533)); m.visible = false; m.renderOrder = 5; scene.add(m); fxRings.push(m); }
   const reticle = new THREE.Mesh(ringGeo, ringMat(0xffffff)); reticle.visible = false; reticle.renderOrder = 6; scene.add(reticle);
@@ -711,7 +715,7 @@ export function createView(host: HTMLElement) {
       const o = zoneObjs[z.id]; if (!o) continue;
       const c = z.contested ? ((Math.floor(clock * 3) & 1) ? 0x6f9bff : 0xff6a5c) : z.owner === 0 ? 0x6f9bff : z.owner === 1 ? 0xff6a5c : 0xe9e2cf;
       (o.ring.material as THREE.MeshBasicMaterial).color.setHex(c);
-      (o.ring.material as THREE.MeshBasicMaterial).opacity = 0.95;
+      (o.ring.material as THREE.MeshBasicMaterial).opacity = refillHint && z.owner === viewer ? 0.55 + 0.4 * Math.sin(clock * 6) : 0.95; // pulse: hurt regiments can replenish here
       (o.ring2.material as THREE.MeshBasicMaterial).color.setHex(c);
       (o.flag.material as THREE.MeshToonMaterial).color.setHex(c);
     }
@@ -870,6 +874,19 @@ export function createView(host: HTMLElement) {
       }
     }
     for (let i = nr; i < selRings.length; i++) selRings[i].visible = false;
+    let nrr = 0;
+    for (const u of state.units) {
+      const range = tu.types[u.type]?.range ?? 0;
+      if (!selected.has(u.id) || range <= 0 || nrr >= rangeRings.length) continue;
+      const v = vis.get(u.id); if (!v) continue;
+      const r = rangeRings[nrr++]; r.visible = true; r.position.set(v.x, heightAt(scn, v.x, v.z) + 0.5, v.z); r.scale.setScalar(range + 3 * FS); // range counts edge to edge, so add about a formation's depth
+    }
+    for (let i = nrr; i < rangeRings.length; i++) rangeRings[i].visible = false;
+    if (dragLine && nl < 58) { // right-drag preview: the line the group will form, plus a tick showing which way it will face
+      const d = dragLine, mx = (d.ax + d.bx) / 2, mz = (d.az + d.bz) / 2;
+      lp.setXYZ(nl * 2, d.ax, heightAt(scn, d.ax, d.az) + 1, d.az); lp.setXYZ(nl * 2 + 1, d.bx, heightAt(scn, d.bx, d.bz) + 1, d.bz); nl++;
+      lp.setXYZ(nl * 2, mx, heightAt(scn, mx, mz) + 1, mz); lp.setXYZ(nl * 2 + 1, mx + Math.sin(d.f) * 8, heightAt(scn, mx, mz) + 1, mz + Math.cos(d.f) * 8); nl++;
+    }
     lineGeo.setDrawRange(0, nl * 2); lp.needsUpdate = true;
     // incoming ability markers
     fxRings.forEach((m, i) => {
@@ -991,12 +1008,14 @@ export function createView(host: HTMLElement) {
     return state.units.filter((u: any) => { if (!filter(u)) return false; const p = toScreen(u.x, u.z); return p.ok && p.x >= a && p.x <= b && p.y >= c && p.y <= d; });
   }
   function setSelection(ids: Iterable<number>) { selected.clear(); for (const i of ids) selected.add(i); }
+  const setRefillHint = (on: boolean) => { refillHint = on; };
+  const setDragLine = (d: typeof dragLine) => { dragLine = d; };
   function setReticle(x: number | null, z = 0, r = 10, color = 0xffffff) {
     if (x == null) { reticle.visible = false; return; }
     reticle.visible = true; reticle.position.set(x, heightAt(scn, x, z) + 1, z); reticle.scale.setScalar(r);
     (reticle.material as THREE.MeshBasicMaterial).color.setHex(color);
   }
 
-  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get guide() { return guideOn(); }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
+  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get guide() { return guideOn(); }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
 }
 export type View = ReturnType<typeof createView>;

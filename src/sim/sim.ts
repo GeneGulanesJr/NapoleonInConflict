@@ -83,7 +83,7 @@ export function spawn(sim: Sim, side: number, d: any) {
     rid: d.rid ?? null, dead: false, via: null as { x: number; z: number } | null,
     spReady: 0, spUntil: 0, spKind: '', acc: 0, accT: 0,
     xp: d.xp ?? 0, vet: rankOf(sim.tu, d.xp ?? 0), stance: 'hold', auto: false, sq: false, cavSeen: -99, queue: [] as number[][],
-    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false,
+    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null,
   };
   sim.s.units.push(u);
   return u;
@@ -91,7 +91,7 @@ export function spawn(sim: Sim, side: number, d: any) {
 
 // ---------------------------------------------------------------- commands
 export type Cmd =
-  | { c: 'move'; ids: number[]; x: number; z: number; q?: boolean }
+  | { c: 'move'; ids: number[]; x: number; z: number; q?: boolean; f?: number; w?: number } // f: facing on arrival (radians), w: frontage to spread the group over
   | { c: 'stance'; ids: number[]; s: string }
   | { c: 'auto'; ids: number[] }
   | { c: 'replenish'; ids: number[] }
@@ -115,13 +115,16 @@ export function command(sim: Sim, side: number, c: Cmd) {
     let dx = c.x - cx, dz = c.z - cz;
     const d = Math.hypot(dx, dz) || 1;
     dx /= d; dz /= d;
+    if (c.f != null) { dx = Math.sin(c.f); dz = Math.cos(c.f); } // a dragged line: lay the group out across the chosen facing
     us.sort((a: any, b: any) => (a.x * -dz + a.z * dx) - (b.x * -dz + b.z * dx));
-    // side by side by real frontage (and never closer than the idle spacing rule), so a group arrives without piling up
+    // side by side by real frontage (and never closer than the idle spacing rule), so a group arrives without piling up; a wider drag spreads them out
     const hw = us.map((u: any) => { const f = foot(u, sim.tu); return Math.max((f[1] - f[0]) / 2 + 2, 0.7 * rad(u) + 0.5); });
-    let acc = -hw.reduce((a: number, b: number) => a + b, 0);
+    const sum = hw.reduce((a: number, b: number) => a + b, 0), extra = c.w && us.length > 1 ? Math.max(0, c.w - 2 * sum) / (us.length - 1) : 0;
+    let acc = -sum - (extra * (us.length - 1)) / 2;
     us.forEach((u: any, i: number) => {
-      const off = acc + hw[i]; acc += 2 * hw[i];
+      const off = acc + hw[i]; acc += 2 * hw[i] + extra;
       const tx = Math.max(-half, Math.min(half, c.x - dz * off)), tz = Math.max(-half, Math.min(half, c.z + dx * off));
+      u.tf = c.f ?? null;
       if (c.q && u.tx != null && u.chase == null) { if (u.queue.length < 6) u.queue.push([tx, tz]); } // shift-click: add a waypoint
       else { u.tx = tx; u.tz = tz; u.queue = []; u.chase = null; u.via = null; u.garrison = u.gTarget = null; }
     });
@@ -415,7 +418,7 @@ export function step(sim: Sim, dt: number) {
       const dx = gx - u.x, dz = gz - u.z, d = Math.hypot(dx, dz);
       // a unit locked in melee stands and fights (it cannot ride through the men it is hitting); only an explicit move order breaks away
       const eT = u.eng != null ? byId.get(u.eng) : null, held = !!eT && !eT.dead && !eT.routed && (u.chase != null || u.tx == null);
-      if (d <= stopAt || touch || held) { if (u.chase == null && d <= stopAt) { u.tx = u.tz = null; const nxt = u.queue.shift(); if (nxt) { u.tx = nxt[0]; u.tz = nxt[1]; } } }
+      if (d <= stopAt || touch || held) { if (u.chase == null && d <= stopAt) { u.tx = u.tz = null; const nxt = u.queue.shift(); if (nxt) { u.tx = nxt[0]; u.tz = nxt[1]; } else if (u.tf != null) { u.facing = u.tf; u.tf = null; } } } // last stop: wheel to the ordered facing
       else {
         const fs = T.cav || u.type === 'artillery' || u.type === 'skirmisher' ? 1 : tu.formSpeed[u.form];
         const run = u.spUntil > s.t && (u.spKind === 'sprint' || u.spKind === 'charge') ? 1.7 : 1;
