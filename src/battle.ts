@@ -266,6 +266,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     if (u.vet) ls.push(`${'*'.repeat(u.vet)} ${VET[u.vet] ?? ''}`);
     if ((u.fat ?? 0) >= 0.05 || (u.mcap ?? u.maxMorale) < u.maxMorale) ls.push(`Fatigue ${Math.round((u.fat ?? 0) * 100)}%${u.mcap < u.maxMorale ? ` · morale can only reach ${Math.round((u.mcap / u.maxMorale) * 100)}%` : ''}`); // tired and badly hurt units are shakier
     if (u.type === 'artillery') ls.push(u.limT > 0 ? (u.limbered ? 'Unlimbering…' : 'Limbering up…') : u.limbered ? 'Limbered (cannot fire)' : 'Unlimbered (cannot move)');
+    if (u.stun > 0) ls.push(`<i class="no">Stunned by the charge (${Math.ceil(u.stun)}s): cannot fire, move or change formation</i>`);
+    else if (u.shaken > 0) ls.push(`<i class="no">Shaken by fire (${Math.ceil(u.shaken)}s): slower to load, weaker fire, cannot change formation</i>`);
     if (u.bay != null) ls.push('Charging with the bayonet!');
     else if (posted(u, TUNING)) ls.push('Posted: steadier under fire'); // stood still long enough for the defensive bonus
     if (u.garrison != null) ls.push(`Garrison: ${esc(scn.map.villages?.[u.garrison]?.name ?? 'farm')}`);
