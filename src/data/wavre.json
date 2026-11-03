@@ -2,8 +2,8 @@
   "id": "wavre",
   "title": "Wavre",
   "date": "18–19 June 1815",
-  "blurb": "While Napoleon fights at Waterloo, Marshal Grouchy follows the Prussians and finds Thielmann's rearguard holding the Dyle at Wavre. Every bridge he fails to take is a Prussian corps that marches to Waterloo.",
-  "hint": "The Dyle can only be crossed at the bridges. Take Limale and Bierges to turn the flank, or force Wavre itself. Farms can be garrisoned.",
+  "blurb": "While Napoleon fights at Waterloo, Marshal Grouchy follows the Prussians down the Namur road and finds Thielmann's rearguard holding the Dyle at Wavre. The rain-swollen river runs in a deep valley; the town and its two stone bridges sit at the bottom, Bierges mill guards the crossing upstream, and Limal bridge lies far to the south. The Prussians hold the steep left-bank heights. Every bridge he fails to take is a Prussian corps that marches to Waterloo.",
+  "hint": "The Dyle can only be crossed at the bridges: Wavre, Bierges mill and Limal. Storming the town head-on is costly; Limal turns the whole line, then climb to the Bierges heights and the Brussels road. Your guns on the right-bank heights see into the valley. Farms and the mill can be garrisoned.",
   "duration": 1080,
   "clock": {
     "start": "15:00",
@@ -11,89 +11,508 @@
   },
   "weather": "rain",
   "map": {
-    "size": 360,
+    "size": 600,
+    "rough": {
+      "amp": 1,
+      "scale": 55,
+      "seed": 1618
+    },
     "hills": [
       {
-        "x": 0.0,
-        "z": -90.0,
-        "rx": 135.0,
-        "rz": 24.0,
-        "h": 4
-      }
-    ],
-    "woods": [
-      {
-        "x": -135.0,
-        "z": 30.0,
-        "r": 24.0
+        "x": 200,
+        "z": -175,
+        "rx": 180,
+        "rz": 90,
+        "h": -15.6,
+        "rot": 120
       },
       {
-        "x": 135.0,
-        "z": 45.0,
-        "r": 21.0
+        "x": -50,
+        "z": 100,
+        "rx": 180,
+        "rz": 65,
+        "h": -14.3,
+        "rot": 120
+      },
+      {
+        "x": -300,
+        "z": -275,
+        "rx": 90,
+        "rz": 65,
+        "h": -10.5,
+        "rot": 90,
+        "p": 2
+      },
+      {
+        "x": 125,
+        "z": 250,
+        "rx": 180,
+        "rz": 90,
+        "h": 10.5
+      },
+      {
+        "x": -200,
+        "z": 275,
+        "rx": 130,
+        "rz": 90,
+        "h": -6.9,
+        "rot": 90,
+        "p": 2
+      },
+      {
+        "x": 175,
+        "z": -300,
+        "rx": 130,
+        "rz": 65,
+        "h": 5.3,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": 150,
+        "z": 100,
+        "rx": 130,
+        "rz": 65,
+        "h": 3.9,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": -175,
+        "z": -100,
+        "rx": 180,
+        "rz": 65,
+        "h": 4.6,
+        "rot": 120
+      },
+      {
+        "x": 50,
+        "z": 100,
+        "rx": 130,
+        "rz": 30,
+        "h": -6.1,
+        "rot": 90
+      },
+      {
+        "x": -75,
+        "z": 200,
+        "rx": 65,
+        "rz": 45,
+        "h": 4.1,
+        "rot": 120,
+        "p": 2
+      },
+      {
+        "x": 50,
+        "z": -200,
+        "rx": 65,
+        "rz": 20,
+        "h": -6.1
+      },
+      {
+        "x": 225,
+        "z": 125,
+        "rx": 90,
+        "rz": 45,
+        "h": 2.9,
+        "rot": 120,
+        "p": 2
+      },
+      {
+        "x": 300,
+        "z": 300,
+        "rx": 180,
+        "rz": 20,
+        "h": 5.1
+      },
+      {
+        "x": 275,
+        "z": 25,
+        "rx": 180,
+        "rz": 30,
+        "h": 2.9,
+        "rot": 60
+      },
+      {
+        "x": 100,
+        "z": -50,
+        "rx": 65,
+        "rz": 30,
+        "h": -4.4,
+        "rot": 90
+      },
+      {
+        "x": 300,
+        "z": -225,
+        "rx": 65,
+        "rz": 30,
+        "h": -5.6,
+        "rot": 120,
+        "p": 2
+      },
+      {
+        "x": -125,
+        "z": 0,
+        "rx": 45,
+        "rz": 30,
+        "h": -5.3,
+        "rot": 30
+      },
+      {
+        "x": 250,
+        "z": 200,
+        "rx": 180,
+        "rz": 30,
+        "h": -3.2,
+        "rot": 150,
+        "p": 2
       }
     ],
     "rivers": [
       {
         "pts": [
           [
-            -180.0,
-            -15.0
+            -130,
+            300
           ],
           [
-            -90.0,
-            -21.0
+            -135,
+            251
           ],
           [
-            0.0,
-            -15.0
+            -144,
+            227
           ],
           [
-            90.0,
-            -21.0
+            -132,
+            199
           ],
           [
-            180.0,
-            -15.0
+            -125,
+            174
+          ],
+          [
+            -102,
+            153
+          ],
+          [
+            -97,
+            128
+          ],
+          [
+            -88,
+            124
+          ],
+          [
+            -61,
+            116
+          ],
+          [
+            -57,
+            91
+          ],
+          [
+            -37,
+            75
+          ],
+          [
+            -17,
+            59
+          ],
+          [
+            -10,
+            51
+          ],
+          [
+            9,
+            34
+          ],
+          [
+            31,
+            20
+          ],
+          [
+            50,
+            2
+          ],
+          [
+            62,
+            -18
+          ],
+          [
+            68,
+            -24
+          ],
+          [
+            89,
+            -44
+          ],
+          [
+            101,
+            -64
+          ],
+          [
+            109,
+            -75
+          ],
+          [
+            120,
+            -85
+          ],
+          [
+            141,
+            -103
+          ],
+          [
+            164,
+            -123
+          ],
+          [
+            189,
+            -141
+          ],
+          [
+            212,
+            -165
+          ],
+          [
+            232,
+            -180
+          ],
+          [
+            253,
+            -197
+          ],
+          [
+            278,
+            -202
+          ],
+          [
+            300,
+            -217
           ]
         ],
-        "width": 12.0,
+        "width": 9,
         "bridges": [
           [
-            -93.0,
-            -21.0
+            -126,
+            178
           ],
           [
-            0.0,
-            -15.0
+            35,
+            16
           ],
           [
-            87.0,
-            -21.0
+            95,
+            -54
+          ],
+          [
+            114,
+            -79.5
           ]
         ]
+      }
+    ],
+    "roads": [
+      {
+        "pts": [
+          [
+            165,
+            300
+          ],
+          [
+            160,
+            280
+          ],
+          [
+            147,
+            225
+          ],
+          [
+            145,
+            140
+          ],
+          [
+            144,
+            70
+          ],
+          [
+            148,
+            10
+          ],
+          [
+            150,
+            -25
+          ],
+          [
+            125,
+            -68
+          ],
+          [
+            114,
+            -80
+          ],
+          [
+            112,
+            -100
+          ],
+          [
+            114,
+            -133
+          ],
+          [
+            95,
+            -150
+          ],
+          [
+            61,
+            -176
+          ],
+          [
+            29,
+            -195
+          ],
+          [
+            10,
+            -199
+          ],
+          [
+            -11,
+            -228
+          ],
+          [
+            -31,
+            -265
+          ],
+          [
+            -50,
+            -300
+          ]
+        ],
+        "w": 5
+      }
+    ],
+    "lanes": [
+      {
+        "pts": [
+          [
+            -39,
+            -35
+          ],
+          [
+            -80,
+            -70
+          ],
+          [
+            -130,
+            -95
+          ]
+        ],
+        "w": 4,
+        "depth": 1.2
+      },
+      {
+        "pts": [
+          [
+            -30,
+            -20
+          ],
+          [
+            -70,
+            40
+          ],
+          [
+            -110,
+            108
+          ],
+          [
+            -150,
+            150
+          ]
+        ],
+        "w": 4,
+        "depth": 1
+      }
+    ],
+    "woods": [
+      {
+        "x": -62,
+        "z": -252,
+        "r": 28,
+        "dense": true
+      },
+      {
+        "x": -100,
+        "z": -222,
+        "r": 22
+      },
+      {
+        "x": -250,
+        "z": -40,
+        "r": 34
+      },
+      {
+        "x": -262,
+        "z": 30,
+        "r": 28
+      },
+      {
+        "x": -10,
+        "z": 292,
+        "r": 24
+      },
+      {
+        "x": 250,
+        "z": -110,
+        "r": 18
       }
     ],
     "villages": [
       {
         "name": "Wavre",
-        "x": 0.0,
-        "z": -15.0,
-        "r": 10.8,
+        "x": 104,
+        "z": -104,
+        "r": 24,
         "garrison": true
       },
       {
-        "name": "Limale",
-        "x": 90.0,
-        "z": -21.0,
-        "r": 8.4,
-        "garrison": true
+        "name": "Wavre (right bank)",
+        "x": 142,
+        "z": -55,
+        "r": 12
       },
       {
         "name": "Bierges",
-        "x": -90.0,
-        "z": -21.0,
-        "r": 8.4,
+        "x": -39,
+        "z": -35,
+        "r": 13,
+        "garrison": true
+      },
+      {
+        "name": "Bierges Mill",
+        "x": 20,
+        "z": 3,
+        "r": 8,
+        "garrison": true
+      },
+      {
+        "name": "Limal",
+        "x": -151,
+        "z": 166,
+        "r": 14,
+        "garrison": true
+      },
+      {
+        "name": "Basse-Wavre",
+        "x": 207,
+        "z": -160,
+        "r": 11
+      },
+      {
+        "name": "La Bawette",
+        "x": 21,
+        "z": -245,
+        "r": 8,
         "garrison": true
       }
     ]
@@ -101,40 +520,49 @@
   "zones": [
     {
       "id": "wv",
-      "name": "Wavre Bridge",
-      "x": 0.0,
-      "z": -15.0,
-      "r": 16.8,
+      "name": "Wavre",
+      "x": 100,
+      "z": -104,
+      "r": 20,
       "value": 4,
       "owner": 1
     },
     {
-      "id": "li",
-      "name": "Limale",
-      "x": 90.0,
-      "z": -21.0,
-      "r": 13.2,
+      "id": "bi",
+      "name": "Bierges Mill",
+      "x": 20,
+      "z": 3,
+      "r": 13,
       "value": 2.5,
       "owner": 1
     },
     {
-      "id": "bi",
-      "name": "Bierges",
-      "x": -90.0,
-      "z": -21.0,
-      "r": 13.2,
+      "id": "li",
+      "name": "Limal",
+      "x": -151,
+      "z": 166,
+      "r": 15,
       "value": 2.5,
+      "owner": 1
+    },
+    {
+      "id": "hb",
+      "name": "Heights of Bierges",
+      "x": -125,
+      "z": -95,
+      "r": 20,
+      "value": 3,
       "owner": 1
     }
   ],
   "entry": [
     {
-      "x": 0.0,
-      "z": 168.0
+      "x": 160,
+      "z": 292
     },
     {
-      "x": 0.0,
-      "z": -168.0
+      "x": -45,
+      "z": -292
     }
   ],
   "rpStart": [
@@ -180,24 +608,44 @@
     [
       {
         "type": "line",
-        "n": 5,
-        "x": -90.0,
-        "z": 105.0,
-        "dx": 45.0,
+        "n": 2,
+        "x": 205,
+        "z": -15,
+        "dx": 40,
+        "dz": 35,
         "names": [
-          "Vandamme's 1st",
-          "Vandamme's 2nd",
-          "Gérard's 1st",
-          "Gérard's 2nd",
-          "Habert's Division"
+          "Vandamme: Habert's Division",
+          "Vandamme: Berthezène's Division"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 2,
+        "x": 95,
+        "z": 110,
+        "dx": 60,
+        "dz": 5,
+        "names": [
+          "Vandamme: Lefol's Division",
+          "Gérard: Pécheux's Division"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -25,
+        "z": 240,
+        "names": [
+          "Teste's Division"
         ]
       },
       {
         "type": "skirmisher",
         "n": 2,
-        "x": -30.0,
-        "z": 75.0,
-        "dx": 60.0,
+        "x": 160,
+        "z": 20,
+        "dx": -85,
+        "dz": 70,
         "names": [
           "Voltigeurs, 4e Léger",
           "Tirailleurs, 9e"
@@ -206,27 +654,29 @@
       {
         "type": "lancer",
         "n": 2,
-        "x": -45.0,
-        "z": 132.0,
-        "dx": 90.0,
+        "x": -65,
+        "z": 268,
+        "dx": 165,
+        "dz": -88,
         "names": [
-          "Maurin's Lancers",
+          "Pajol's Lancers",
           "Vallin's Hussars"
         ]
       },
       {
         "type": "cuirassier",
         "n": 1,
-        "x": 0.0,
-        "z": 142.5,
+        "x": 268,
+        "z": -70,
         "name": "Exelmans' Dragoons"
       },
       {
         "type": "artillery",
         "n": 3,
-        "x": -60.0,
-        "z": 90.0,
-        "dx": 60.0,
+        "x": 205,
+        "z": 50,
+        "dx": -75,
+        "dz": 15,
         "names": [
           "Foot Battery 1",
           "Foot Battery 2",
@@ -236,8 +686,8 @@
       {
         "type": "commander",
         "n": 1,
-        "x": 0.0,
-        "z": 159.0,
+        "x": 210,
+        "z": 115,
         "names": [
           "Marshal Grouchy"
         ]
@@ -246,55 +696,83 @@
     [
       {
         "type": "line",
-        "n": 4,
-        "x": -67.5,
-        "z": -52.5,
-        "dx": 45.0,
+        "n": 1,
+        "x": 95,
+        "z": -118,
         "names": [
-          "Stülpnagel's Brigade",
-          "Kemphen's Brigade",
-          "Lück's Brigade",
-          "Hacke's Rearguard"
+          "Zepelin's Detachment"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 50,
+        "z": -142,
+        "names": [
+          "Kämpfen's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -118,
+        "z": -88,
+        "names": [
+          "Stülpnagel's Brigade"
+        ],
+        "nat": "pr"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -15,
+        "z": -128,
+        "names": [
+          "Luck's Brigade"
         ],
         "nat": "pr"
       },
       {
         "type": "skirmisher",
         "n": 2,
-        "x": -45.0,
-        "z": -12.0,
-        "dx": 90.0,
+        "x": 6,
+        "z": -12,
+        "dx": -168,
+        "dz": 160,
         "names": [
           "Silesian Schützen",
-          "Westphalian Jäger"
+          "Stengel's Detachment"
         ],
         "nat": "pr"
       },
       {
         "type": "artillery",
         "n": 2,
-        "x": -30.0,
-        "z": -67.5,
-        "dx": 60.0,
+        "x": 40,
+        "z": -95,
+        "dx": -100,
+        "dz": 55,
         "names": [
-          "Prussian Foot Battery",
-          "Prussian Horse Battery"
+          "Foot Battery No. 18",
+          "Horse Battery No. 20"
         ],
         "nat": "pr"
       },
       {
         "type": "lancer",
         "n": 1,
-        "x": 75.0,
-        "z": -60.0,
-        "name": "Silesian Uhlans",
+        "x": 60,
+        "z": -232,
+        "name": "Kurmark Landwehr Cavalry",
         "nat": "pr"
       },
       {
         "type": "commander",
         "n": 1,
-        "x": 0.0,
-        "z": -120.0,
+        "x": 0,
+        "z": -160,
         "names": [
           "General Thielmann"
         ]
@@ -305,7 +783,7 @@
     {
       "t": 0,
       "type": "msg",
-      "msg": "Rain falls on the Dyle valley. The bridges are narrow."
+      "msg": "Rain falls on the Dyle valley. The river is in flood and the bridges are barricaded."
     },
     {
       "t": 400,
@@ -315,8 +793,8 @@
         {
           "type": "line",
           "n": 2,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "names": [
             "Borcke's Brigade",
             "Ryssel's Brigade"
@@ -325,14 +803,14 @@
         }
       ],
       "entry": {
-        "x": 0.0,
-        "z": -168.0
+        "x": -45,
+        "z": -292
       },
       "go": {
-        "x": 0.0,
-        "z": -60.0
+        "x": -40,
+        "z": -120
       },
-      "msg": "Prussian reinforcements reach the ridge above Wavre."
+      "msg": "Prussian battalions come back down the Brussels road to the heights above Bierges."
     }
   ],
   "strength": [

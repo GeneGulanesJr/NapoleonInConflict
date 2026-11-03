@@ -1,7 +1,7 @@
 import './style.css';
 import { animate, createTimeline, stagger } from 'animejs';
 import { createView } from './render.ts';
-import { runBattle, type Outcome } from './battle.ts';
+import { runBattle, CONTROLS, type Outcome } from './battle.ts';
 import { localSource, remoteSource } from './game.ts';
 import { unlock } from './audio.ts';
 import {
@@ -56,8 +56,7 @@ function title() {
       <button class="stag alt" id="mp">Multiplayer</button>
       <button class="stag alt" id="fog">Fog of war: ${fogOn() ? 'ON' : 'OFF'}</button>
     </div>
-    <p class="help stag">Left-click / drag: select · Double-click: all of that kind on screen · Right-click: move or attack · Right-drag: form a line facing away from you · Shift+1-9: save group, 1-9: recall (tap twice to fly there) · I: next idle regiment · Right-click minimap: move there · WASD: pan · Q/E or middle-drag: rotate · Wheel: zoom · P: render quality · V: unit special · R: radio · T: dusk · Y/U: silhouette / top-down check<br>
-    Z/X/C: line/column/square · B: auto-square · N: replenish (on a held objective) · G: stance · H: halt · Shift+right-click: waypoint · right-click a farm: garrison · F1/F2/F3: tactical aid · Space: pause · F: focus selection · M: mute</p>`, (el) => {
+    <p class="help stag">${CONTROLS.map(([g, ks]) => `<b>${g}</b> ${ks.map(([k, d]) => `${k}: ${d}`).join(' · ')}`).join('<br>')}</p>`, (el) => {
     el.querySelector<HTMLElement>('#new')!.onclick = () => { unlock(); clearSave(); const c = newCampaign(); save(c); campaignScreen(c); };
     el.querySelector<HTMLElement>('#cont')?.addEventListener('click', () => { unlock(); campaignScreen(saved!); });
     el.querySelector<HTMLElement>('#quick')!.onclick = () => { unlock(); quickScreen(); };

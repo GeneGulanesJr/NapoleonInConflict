@@ -199,3 +199,23 @@ button.alt { background: #1b1510; }
 .hud .rep { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; text-align: left; font-size: 8px; margin-bottom: 6px; }
 .hud .rep ul { margin: 2px 0 0; padding: 0; list-style: none; } .hud .rep li { line-height: 9px; }
 .plates .pop.big { font-size: 8px; white-space: nowrap; }
+
+/* QoL: clickable alerts, army bar, hover tooltip, help overlay, wavering plates */
+.hud #toasts { left: 58px; }
+.hud .toast.go { pointer-events: auto; cursor: pointer; } .hud .toast small { color: #8e8a7a; }
+.hud #army { position: absolute; left: 6px; width: 48px; padding: 1px; display: flex; flex-direction: column; gap: 1px; overflow-y: auto; scrollbar-width: none; }
+.hud #army:empty { display: none; }
+.hud .ac { flex: none; display: grid; grid-template-columns: 7px 1fr 11px; grid-template-rows: 3px 3px; column-gap: 2px; row-gap: 1px; align-items: center; padding: 1px; border: 1px solid transparent; cursor: pointer; }
+.hud .ac b { grid-row: 1 / span 2; font-weight: 400; line-height: 7px; color: var(--ink); }
+.hud .ac em { grid-column: 3; grid-row: 1 / span 2; font-style: normal; line-height: 7px; color: var(--gold); white-space: nowrap; overflow: hidden; }
+.hud .ac i.b { height: 3px; }
+.hud .ac:hover { background: #3d2e20; } .hud .ac.sel { border-color: var(--gold); }
+.hud .ac.routed { opacity: .55; } .hud .ac.routed em { color: #ff8a7a; }
+.hud .ac.waver, .plates .plate.waver { animation: waver .6s steps(1) infinite; }
+@keyframes waver { 50% { background: #7a1f14; } }
+.hud #tip { position: absolute; left: 0; top: 0; max-width: 170px; line-height: 9px; pointer-events: none; z-index: 3; }
+.hud #tip b { font-weight: 400; } .hud #tip .ok { font-style: normal; color: #8fd18b; } .hud #tip .no { font-style: normal; color: #ff8a7a; }
+.hud #help { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 520px; max-width: calc(100% - 12px); max-height: calc(100% - 12px); overflow-y: auto; z-index: 4; cursor: pointer; }
+.hud #help .hd small { color: #8e8a7a; margin-left: 6px; }
+.hud .hcols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 8px; }
+.hud .hcols b { display: block; font-weight: 400; color: var(--gold); margin-bottom: 1px; } .hud .hcols p { margin: 0; line-height: 9px; } .hud .hcols kbd { margin: 0 2px 0 0; color: var(--gold); }

@@ -2,8 +2,8 @@
   "id": "quatrebras",
   "title": "Quatre Bras",
   "date": "16 June 1815, afternoon",
-  "blurb": "Marshal Ney is ordered to seize the crossroads of Quatre Bras and cut Wellington off from Blücher. The Prince of Orange's Dutch-Belgians hold it thinly, but Wellington's divisions are marching down the Brussels road, hour by hour. Strike fast, before the crossroads fills.",
-  "hint": "Speed is everything. Take Gemioncourt, then the crossroads, before the Allied reinforcements stack up. Cavalry Reserve can crack a thin line.",
+  "blurb": "Marshal Ney is ordered to seize the crossroads of Quatre Bras, where the Brussels–Charleroi chaussée meets the Nivelles–Namur road, and cut Wellington off from Blücher. The Prince of Orange's Dutch-Belgians hold it thinly: Gemioncourt farm on the chaussée, Pierrepont farm and the dense Bossu wood on the west, the marshy Materne pond to the east. Wellington's divisions are marching in down the Brussels and Nivelles roads, hour by hour. Strike fast, before the crossroads fills.",
+  "hint": "Speed is everything. Take Gemioncourt, then push up the gentle slope to the crossroads. The Bossu wood hides whole brigades and is slow going; the brook east of the road ends in a marsh. Allied help arrives from the north and down the Nivelles road on your left.",
   "duration": 1080,
   "clock": {
     "start": "14:00",
@@ -11,53 +11,469 @@
   },
   "weather": "clear",
   "map": {
-    "size": 360,
+    "size": 520,
+    "rough": {
+      "amp": 0.7,
+      "scale": 50,
+      "seed": 1616
+    },
     "hills": [
       {
-        "x": 0.0,
-        "z": -60.0,
-        "rx": 75.0,
-        "rz": 21.0,
-        "h": 3
+        "x": 195,
+        "z": -155,
+        "rx": 180,
+        "rz": 90,
+        "h": -5.2,
+        "rot": 90
       },
       {
-        "x": 82.5,
-        "z": 45.0,
-        "rx": 30.0,
-        "rz": 21.0,
-        "h": 2
+        "x": -185,
+        "z": -20,
+        "rx": 180,
+        "rz": 90,
+        "h": 3.7,
+        "rot": 150
+      },
+      {
+        "x": 95,
+        "z": 240,
+        "rx": 180,
+        "rz": 45,
+        "h": 3.5,
+        "rot": 30
+      },
+      {
+        "x": 180,
+        "z": -100,
+        "rx": 90,
+        "rz": 30,
+        "h": 3.1,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": -185,
+        "z": 265,
+        "rx": 130,
+        "rz": 65,
+        "h": -3.3
+      },
+      {
+        "x": 215,
+        "z": 55,
+        "rx": 180,
+        "rz": 90,
+        "h": -1.6,
+        "rot": 30
+      },
+      {
+        "x": 265,
+        "z": -240,
+        "rx": 65,
+        "rz": 20,
+        "h": -5.2,
+        "rot": 120
+      },
+      {
+        "x": 175,
+        "z": 45,
+        "rx": 90,
+        "rz": 30,
+        "h": 2.1,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": -120,
+        "z": -265,
+        "rx": 180,
+        "rz": 30,
+        "h": -2.5
+      },
+      {
+        "x": -60,
+        "z": 105,
+        "rx": 90,
+        "rz": 90,
+        "h": 1.4,
+        "rot": 30,
+        "p": 2
+      },
+      {
+        "x": 75,
+        "z": 15,
+        "rx": 65,
+        "rz": 65,
+        "h": -1.2,
+        "p": 2
+      },
+      {
+        "x": 265,
+        "z": 80,
+        "rx": 65,
+        "rz": 30,
+        "h": -2,
+        "p": 2
+      },
+      {
+        "x": 160,
+        "z": 180,
+        "rx": 65,
+        "rz": 20,
+        "h": 1.7,
+        "rot": 120,
+        "p": 2
+      },
+      {
+        "x": 95,
+        "z": -120,
+        "rx": 65,
+        "rz": 30,
+        "h": -1.4,
+        "p": 2
+      }
+    ],
+    "rivers": [
+      {
+        "pts": [
+          [
+            -42,
+            4
+          ],
+          [
+            5,
+            -9
+          ],
+          [
+            31,
+            -14
+          ],
+          [
+            54,
+            -24
+          ],
+          [
+            78,
+            -31
+          ],
+          [
+            90,
+            -26
+          ],
+          [
+            116,
+            -19
+          ],
+          [
+            143,
+            -21
+          ],
+          [
+            151,
+            -25
+          ],
+          [
+            164,
+            -27
+          ],
+          [
+            179,
+            -36
+          ],
+          [
+            205,
+            -51
+          ],
+          [
+            226,
+            -66
+          ],
+          [
+            260,
+            -80
+          ]
+        ],
+        "width": 4,
+        "ford": 0.7,
+        "bridges": [
+          [
+            -20,
+            -3
+          ],
+          [
+            66,
+            -27
+          ],
+          [
+            152,
+            -25
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            86,
+            -26
+          ],
+          [
+            100,
+            -24
+          ],
+          [
+            116,
+            -19
+          ]
+        ],
+        "width": 14,
+        "ford": 0.25,
+        "bridges": []
+      }
+    ],
+    "roads": [
+      {
+        "pts": [
+          [
+            9,
+            -260
+          ],
+          [
+            -1,
+            -230
+          ],
+          [
+            -7,
+            -178
+          ],
+          [
+            -13,
+            -127
+          ],
+          [
+            -14,
+            -97
+          ],
+          [
+            -18,
+            -44
+          ],
+          [
+            -20,
+            -4
+          ],
+          [
+            -19,
+            55
+          ],
+          [
+            -20,
+            90
+          ],
+          [
+            -21,
+            171
+          ],
+          [
+            -27,
+            221
+          ],
+          [
+            -17,
+            260
+          ]
+        ],
+        "w": 5
+      },
+      {
+        "pts": [
+          [
+            -260,
+            -234
+          ],
+          [
+            -232,
+            -223
+          ],
+          [
+            -129,
+            -181
+          ],
+          [
+            -78,
+            -160
+          ],
+          [
+            -37,
+            -142
+          ],
+          [
+            -13,
+            -127
+          ],
+          [
+            7,
+            -115
+          ],
+          [
+            62,
+            -81
+          ],
+          [
+            107,
+            -53
+          ],
+          [
+            146,
+            -29
+          ],
+          [
+            196,
+            2
+          ],
+          [
+            245,
+            32
+          ],
+          [
+            260,
+            40
+          ]
+        ],
+        "w": 5
+      }
+    ],
+    "lanes": [
+      {
+        "pts": [
+          [
+            12,
+            -112
+          ],
+          [
+            62,
+            -81
+          ],
+          [
+            100,
+            -57
+          ]
+        ],
+        "w": 4,
+        "depth": 1.2
       }
     ],
     "woods": [
       {
-        "x": -102.0,
-        "z": -18.0,
-        "r": 33.0
+        "x": -92,
+        "z": -112,
+        "r": 26,
+        "dense": true
       },
       {
-        "x": 105.0,
-        "z": -67.5,
-        "r": 18.0
+        "x": -100,
+        "z": -70,
+        "r": 32,
+        "dense": true
+      },
+      {
+        "x": -106,
+        "z": -25,
+        "r": 32,
+        "dense": true
+      },
+      {
+        "x": -112,
+        "z": 18,
+        "r": 28
+      },
+      {
+        "x": -78,
+        "z": -150,
+        "r": 12
+      },
+      {
+        "x": 125,
+        "z": 48,
+        "r": 12
+      },
+      {
+        "x": 228,
+        "z": -30,
+        "r": 18
+      }
+    ],
+    "hedges": [
+      {
+        "pts": [
+          [
+            -2,
+            -30
+          ],
+          [
+            18,
+            -24
+          ],
+          [
+            22,
+            -8
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            -30,
+            -140
+          ],
+          [
+            -30,
+            -112
+          ],
+          [
+            0,
+            -110
+          ]
+        ]
       }
     ],
     "villages": [
       {
         "name": "Quatre Bras",
-        "x": 0.0,
-        "z": -36.0,
-        "r": 9.6
+        "x": -12,
+        "z": -127,
+        "r": 12
       },
       {
         "name": "Gemioncourt",
-        "x": 0.0,
-        "z": 33.0,
-        "r": 8.4
+        "x": -6,
+        "z": -18,
+        "r": 9,
+        "garrison": true
+      },
+      {
+        "name": "Grand-Pierrepont",
+        "x": -108,
+        "z": 78,
+        "r": 9,
+        "garrison": true
       },
       {
         "name": "Piraumont",
-        "x": 78.0,
-        "z": 42.0,
-        "r": 8.4
+        "x": 124,
+        "z": 31,
+        "r": 9
+      },
+      {
+        "name": "Paradis",
+        "x": 180,
+        "z": -9,
+        "r": 7
+      },
+      {
+        "name": "Frasnes",
+        "x": -34,
+        "z": 250,
+        "r": 16
       }
     ]
   },
@@ -65,48 +481,57 @@
     {
       "id": "xr",
       "name": "Quatre Bras Crossroads",
-      "x": 0.0,
-      "z": -36.0,
-      "r": 18.0,
+      "x": -12,
+      "z": -127,
+      "r": 18,
       "value": 4,
       "owner": 1
     },
     {
       "id": "ge",
       "name": "Gemioncourt Farm",
-      "x": 0.0,
-      "z": 33.0,
-      "r": 14.4,
+      "x": -6,
+      "z": -18,
+      "r": 15,
       "value": 2,
       "owner": 1
     },
     {
       "id": "bw",
       "name": "Bossu Wood",
-      "x": -99.0,
-      "z": -18.0,
-      "r": 20.4,
+      "x": -100,
+      "z": -62,
+      "r": 22,
       "value": 2,
+      "owner": 1
+    },
+    {
+      "id": "pp",
+      "name": "Grand-Pierrepont",
+      "x": -108,
+      "z": 78,
+      "r": 14,
+      "value": 1.5,
       "owner": 1
     },
     {
       "id": "pi",
       "name": "Piraumont",
-      "x": 78.0,
-      "z": 42.0,
-      "r": 13.2,
+      "x": 124,
+      "z": 31,
+      "r": 14,
       "value": 1.5,
       "owner": 0
     }
   ],
   "entry": [
     {
-      "x": 0.0,
-      "z": 168.0
+      "x": -20,
+      "z": 252
     },
     {
-      "x": 0.0,
-      "z": -168.0
+      "x": 2,
+      "z": -252
     }
   ],
   "rpStart": [
@@ -153,41 +578,72 @@
     [
       {
         "type": "line",
-        "n": 4,
-        "x": -67.5,
-        "z": 123.0,
-        "dx": 45.0
+        "n": 1,
+        "x": -125,
+        "z": 165,
+        "names": [
+          "Jérôme's Division"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 2,
+        "x": -55,
+        "z": 140,
+        "dx": 45,
+        "dz": -5,
+        "names": [
+          "Foy: Gauthier's Brigade",
+          "Foy: Jamin's Brigade"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 85,
+        "z": 115,
+        "names": [
+          "Bachelu's Division"
+        ]
       },
       {
         "type": "skirmisher",
         "n": 1,
-        "x": 0.0,
-        "z": 93.0
+        "x": 30,
+        "z": 85,
+        "name": "Tirailleurs, 2e Léger"
       },
       {
         "type": "lancer",
         "n": 1,
-        "x": 90.0,
-        "z": 127.5
+        "x": 160,
+        "z": 135,
+        "name": "Piré's Lancers"
       },
       {
         "type": "cuirassier",
         "n": 1,
-        "x": -105.0,
-        "z": 135.0
+        "x": -75,
+        "z": 210,
+        "name": "Kellermann's Cuirassiers"
       },
       {
         "type": "artillery",
         "n": 2,
-        "x": -30.0,
-        "z": 99.0,
-        "dx": 60.0
+        "x": -40,
+        "z": 115,
+        "dx": 80,
+        "dz": 0,
+        "names": [
+          "Foy's Battery",
+          "Bachelu's Battery"
+        ]
       },
       {
         "type": "commander",
         "n": 1,
-        "x": 0.0,
-        "z": 156.0,
+        "x": -15,
+        "z": 195,
         "names": [
           "Marshal Ney"
         ],
@@ -197,38 +653,55 @@
     [
       {
         "type": "line",
-        "n": 3,
-        "x": -45.0,
-        "z": -30.0,
-        "dx": 45.0,
+        "n": 1,
+        "x": 10,
+        "z": -42,
         "names": [
-          "Bijlevelt's Escort",
-          "Bylandt's Brigade",
-          "Saxe-Weimar's Brigade"
+          "Bylandt's Brigade"
+        ],
+        "nat": "nl"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -55,
+        "z": -82,
+        "names": [
+          "Saxe-Weimar's Nassauers"
+        ],
+        "nat": "nl"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -82,
+        "z": 64,
+        "names": [
+          "Orange-Nassau Regiment"
         ],
         "nat": "nl"
       },
       {
         "type": "skirmisher",
         "n": 1,
-        "x": 0.0,
-        "z": 21.0,
-        "name": "Dutch Jägers",
+        "x": 50,
+        "z": 8,
+        "name": "27th Dutch Jägers",
         "nat": "nl"
       },
       {
         "type": "artillery",
         "n": 1,
-        "x": 7.5,
-        "z": -45.0,
+        "x": 8,
+        "z": -78,
         "name": "Bijleveld's Horse Battery",
         "nat": "nl"
       },
       {
         "type": "commander",
         "n": 1,
-        "x": 0.0,
-        "z": -66.0,
+        "x": -2,
+        "z": -148,
         "names": [
           "Wellington"
         ]
@@ -244,8 +717,8 @@
         {
           "type": "line",
           "n": 2,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "names": [
             "Picton: Kempt's Brigade",
             "Picton: Pack's Brigade"
@@ -254,15 +727,15 @@
         }
       ],
       "entry": {
-        "x": 0.0,
-        "z": -168.0
+        "x": 2,
+        "z": -252
       },
       "go": {
-        "x": 0.0,
-        "z": -67.5
+        "x": 45,
+        "z": -98
       },
       "spreadX": 1.6,
-      "msg": "Picton's 5th Division marches into Quatre Bras!"
+      "msg": "Picton's 5th Division marches down the Brussels road and lines the Namur road!"
     },
     {
       "t": 380,
@@ -272,38 +745,38 @@
         {
           "type": "line",
           "n": 1,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "name": "Brunswick Black Corps",
           "nat": "br"
         },
         {
           "type": "cuirassier",
           "n": 1,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "name": "Brunswick Hussars",
           "nat": "br"
         },
         {
           "type": "artillery",
           "n": 1,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "name": "British Foot Battery",
           "nat": "gb"
         }
       ],
       "entry": {
-        "x": 30.0,
-        "z": -168.0
+        "x": -6,
+        "z": -252
       },
       "go": {
-        "x": 22.5,
-        "z": -60.0
+        "x": -40,
+        "z": -95
       },
       "spreadX": 1.6,
-      "msg": "The Duke of Brunswick's Black Corps arrives."
+      "msg": "The Duke of Brunswick's Black Corps arrives and fills the gap between the road and the wood."
     },
     {
       "t": 480,
@@ -318,8 +791,8 @@
         {
           "type": "line",
           "n": 3,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "names": [
             "Cooke's Guards: Maitland",
             "Cooke's Guards: Byng",
@@ -329,16 +802,16 @@
         }
       ],
       "entry": {
-        "x": -168.0,
-        "z": -30.0
+        "x": -252,
+        "z": -228
       },
       "go": {
-        "x": -90.0,
-        "z": -22.5
+        "x": -95,
+        "z": -110
       },
       "spreadX": 0,
       "spreadZ": 1.6,
-      "msg": "British Guards come up from Nivelles and deploy in Bossu Wood!"
+      "msg": "British Guards come up the Nivelles road and push into the Bossu wood!"
     }
   ]
 }
