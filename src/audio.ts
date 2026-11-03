@@ -1,11 +1,12 @@
 // Procedural WebAudio: no asset files. SFX fall off with distance from the camera and share a small reverb;
 // a drum-and-fife march plays during battles and the drums swell with the amount of shooting.
+import { pref, setPref } from './campaign.ts';
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let sfx: GainNode | null = null;
 let mus: GainNode | null = null;
 let noise: AudioBuffer | null = null;
-export let muted = false;
+export let muted = pref('nic-mute', false);
 
 function init() {
   if (ctx) return ctx;
@@ -27,7 +28,7 @@ function init() {
 }
 /** Call from a user gesture so the browser allows audio. */
 export function unlock() { init()?.resume(); }
-export function toggleMute() { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.5; return muted; }
+export function toggleMute() { muted = !muted; setPref('nic-mute', muted); if (master) master.gain.value = muted ? 0 : 0.5; return muted; }
 
 function burst(vol: number, dur: number, freq: number, q = 0.7, type: BiquadFilterType = 'lowpass', thump = 0, delay = 0) {
   if (!ctx || !sfx || !noise || muted || vol < 0.01) return;
@@ -128,8 +129,8 @@ export function music(on: boolean) {
 }
 
 // ---------------------------------------------------------------- officer radio (browser voice; swap for recorded clips later)
-export let radioOn = true;
-export const toggleRadio = () => (radioOn = !radioOn);
+export let radioOn = pref('nic-radio', true);
+export const toggleRadio = () => { radioOn = !radioOn; setPref('nic-radio', radioOn); return radioOn; };
 let lastSay = 0;
 /** prio 2 interrupts whatever is being said; otherwise lines are dropped if the radio is busy. */
 export function say(text: string, prio = 0) {

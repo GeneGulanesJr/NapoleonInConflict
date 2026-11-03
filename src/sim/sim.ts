@@ -83,7 +83,7 @@ export function spawn(sim: Sim, side: number, d: any) {
     rid: d.rid ?? null, dead: false, via: null as { x: number; z: number } | null,
     spReady: 0, spUntil: 0, spKind: '', acc: 0, accT: 0,
     xp: d.xp ?? 0, vet: rankOf(sim.tu, d.xp ?? 0), stance: 'hold', auto: false, sq: false, cavSeen: -99, queue: [] as number[][],
-    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null,
+    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false,
   };
   sim.s.units.push(u);
   return u;
@@ -91,7 +91,7 @@ export function spawn(sim: Sim, side: number, d: any) {
 
 // ---------------------------------------------------------------- commands
 export type Cmd =
-  | { c: 'move'; ids: number[]; x: number; z: number; q?: boolean; f?: number; w?: number } // f: facing on arrival (radians), w: frontage to spread the group over
+  | { c: 'move'; ids: number[]; x: number; z: number; q?: boolean; f?: number; w?: number; am?: boolean } // f: facing on arrival (radians), w: frontage to spread the group over, am: attack-move (fight what is met on the way)
   | { c: 'stance'; ids: number[]; s: string }
   | { c: 'auto'; ids: number[] }
   | { c: 'replenish'; ids: number[] }
@@ -126,17 +126,17 @@ export function command(sim: Sim, side: number, c: Cmd) {
       const tx = Math.max(-half, Math.min(half, c.x - dz * off)), tz = Math.max(-half, Math.min(half, c.z + dx * off));
       u.tf = c.f ?? null;
       if (c.q && u.tx != null && u.chase == null) { if (u.queue.length < 6) u.queue.push([tx, tz]); } // shift-click: add a waypoint
-      else { u.tx = tx; u.tz = tz; u.queue = []; u.chase = null; u.via = null; u.garrison = u.gTarget = null; }
+      else { u.tx = tx; u.tz = tz; u.queue = []; u.chase = null; u.via = null; u.garrison = u.gTarget = null; u.am = !!c.am; }
     });
   } else if (c.c === 'attack') {
     if (!s.units.some((u: any) => u.id === c.target && u.side !== side && !u.dead)) return;
-    for (const u of mine(c.ids)) { u.chase = c.target; u.tx = u.tz = null; u.via = null; u.queue = []; u.garrison = u.gTarget = null; }
+    for (const u of mine(c.ids)) { u.chase = c.target; u.tx = u.tz = null; u.via = null; u.queue = []; u.garrison = u.gTarget = null; u.am = false; }
   } else if (c.c === 'form') {
     for (const u of mine(c.ids)) {
       if ((u.type === 'line' || u.type === 'guard') && u.form !== c.f && sim.tu.formFire[c.f]) { u.form = c.f; u.busy = sim.tu.formChangeTime; }
     }
   } else if (c.c === 'stop') {
-    for (const u of mine(c.ids)) { u.tx = u.tz = u.chase = null; u.via = null; u.queue = []; u.garrison = u.gTarget = null; }
+    for (const u of mine(c.ids)) { u.tx = u.tz = u.chase = null; u.via = null; u.queue = []; u.garrison = u.gTarget = null; u.am = false; }
   } else if (c.c === 'stance') {
     for (const u of mine(c.ids)) u.stance = c.s === 'aggressive' || c.s === 'skirmish' ? c.s : 'hold';
   } else if (c.c === 'auto') {
@@ -152,7 +152,7 @@ export function command(sim: Sim, side: number, c: Cmd) {
     let free = sim.tu.garrison.capacity - held;
     for (const u of mine(c.ids)) {
       if (!(isInf(u) || u.type === 'skirmisher') || free <= 0) continue;
-      free--; u.chase = null; u.via = null; u.queue = []; u.garrison = null; u.gTarget = c.vid; u.tx = v.x + (free ? -1.8 : 1.8); u.tz = v.z + 0.8;
+      free--; u.chase = null; u.am = false; u.via = null; u.queue = []; u.garrison = null; u.gTarget = c.vid; u.tx = v.x + (free ? -1.8 : 1.8); u.tz = v.z + 0.8;
     }
   } else if (c.c === 'special') {
     for (const u of mine(c.ids)) {
@@ -402,6 +402,20 @@ export function step(sim: Sim, dt: number) {
     }
     if (u.garrison != null) continue; // garrisoned units hold their post (move, stop or attack orders release them)
 
+    // attack-move: keep marching, but stand and fire at a seen foe in range (ranged) or ride down one within 40 (melee-only), then march on
+    let amHalt = false;
+    if (u.am && u.tx == null) u.am = false; // arrived (or the order was overtaken)
+    else if (u.am && (u.chase == null || byId.get(u.chase)?.routed)) {
+      u.chase = null;
+      let ne: any = null, nd = 40;
+      for (const e of live) {
+        if (e.side === u.side || e.routed || !seen[u.side].has(e.id)) continue;
+        if (T.range > 0) { if (gapBetween(u, e, tu) < T.range && !masked(u, e, live, tu)) { amHalt = true; break; } }
+        else if (u.type !== 'commander') { const d = Math.hypot(e.x - u.x, e.z - u.z); if (d < nd) { nd = d; ne = e; } }
+      }
+      if (ne) u.chase = ne.id;
+    }
+
     // chase / move
     let gx = u.tx, gz = u.tz, stopAt = 1, touch = false;
     if (u.chase != null) {
@@ -414,7 +428,7 @@ export function step(sim: Sim, dt: number) {
     else if (u.via) { if (Math.hypot(u.via.x - u.x, u.via.z - u.z) < 4) u.via = null; }
     else if ((Math.floor(s.t / dt) + u.id) % 10 === 0) u.via = detour(scn, u.x, u.z, gx, gz); // wade-free route over a bridge
     if (u.via && gx != null) { gx = u.via.x; gz = u.via.z; stopAt = 1; }
-    if (gx != null && gz != null && u.busy <= 0) {
+    if (gx != null && gz != null && u.busy <= 0 && !amHalt) {
       const dx = gx - u.x, dz = gz - u.z, d = Math.hypot(dx, dz);
       // a unit locked in melee stands and fights (it cannot ride through the men it is hitting); only an explicit move order breaks away
       const eT = u.eng != null ? byId.get(u.eng) : null, held = !!eT && !eT.dead && !eT.routed && (u.chase != null || u.tx == null);

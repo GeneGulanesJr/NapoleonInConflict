@@ -123,6 +123,20 @@ test('a dragged line order spreads the group over the drag and wheels it to face
   assert.ok(b - a > 60, `spread over the drag (${(b - a).toFixed(1)} apart)`);
 });
 
+test('an attack-moving line stops to fire at an enemy it passes; a plain move marches on', () => {
+  const pass = (am: boolean) => {
+    let a: any;
+    const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'line'), { x: -120, z: 0, facing: Math.PI / 2, form: 'line', morale: 9999, maxMorale: 9999 }), Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 30, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999 })]);
+    command(sim, 0, { c: 'move', ids: [a.id], x: 120, z: 0, am });
+    let shots = 0;
+    run(sim, 120, undefined, () => { for (const e of sim.s.events) if (e.k === 'shot' && e.side === 0) shots++; sim.s.events.length = 0; });
+    return { shots, x: a.x };
+  };
+  const am = pass(true), plain = pass(false);
+  assert.ok(am.shots > 0 && am.x < 60, `attack-move halted and fired (${am.shots} shots, at x ${am.x.toFixed(1)})`);
+  assert.ok(plain.shots === 0 && plain.x > 110, `plain move marched past without firing (${plain.shots} shots, at x ${plain.x.toFixed(1)})`);
+});
+
 // ---------------------------------------------------------------- campaign roster
 test('applyResult drops destroyed regiments, heals survivors, advances the campaign', () => {
   const camp = { battles: ['a', 'b'], healFraction: 0.5 };

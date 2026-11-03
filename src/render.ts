@@ -821,7 +821,7 @@ export function createView(host: HTMLElement) {
       const mc = mo > 0.6 ? 'hi' : mo > 0.3 ? 'mid' : 'lo'; if (mc !== p.mc) { p.mor.parentElement!.className = `bar mor ${mc}`; p.mc = mc; }
       if (Math.abs(m - p.lm) > 0.01) { if (p.lm < 0) p.men.style.width = `${Math.round(m * 100)}%`; else animate(p.men, { width: [`${Math.round(p.lm * 100)}%`, `${Math.round(m * 100)}%`], duration: 450, ease: 'outQuad' }); p.lm = m; }
       if (Math.abs(mo - p.lmo) > 0.02) { if (p.lmo < 0) p.mor.style.width = `${Math.round(mo * 100)}%`; else animate(p.mor, { width: [`${Math.round(p.lmo * 100)}%`, `${Math.round(mo * 100)}%`], duration: 450, ease: 'outQuad' }); p.lmo = mo; }
-      const cls = `plate${selected.has(u.id) ? ' sel' : ''}${u.routed ? ' routed' : ''}${cam.dist > 95 && !selected.has(u.id) ? ' far' : ''}`;
+      const cls = `plate${selected.has(u.id) ? ' sel' : ''}${u.routed ? ' routed' : u.morale < u.maxMorale * 0.3 ? ' waver' : ''}${cam.dist > 95 && !selected.has(u.id) ? ' far' : ''}`;
       if (cls !== p.ls) { p.el.className = cls; p.ls = cls; }
     }
     horses.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = pennM.count = nlc; capM.count = ncp; skirM.count = nsk;

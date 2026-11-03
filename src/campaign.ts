@@ -32,7 +32,10 @@ export function clearSave() { try { localStorage.removeItem(KEY); } catch { /* i
 export const wonMap = (c: CampaignState) => Object.fromEntries(Object.entries(c.results).map(([k, v]) => [k, v === 'win']));
 
 /** Fog of war is a player setting (default off, the campaign is balanced without it); the sim only applies it when asked. */
-export const fogOn = () => { try { return localStorage.getItem('nic-fog') === '1'; } catch { return false; } };
-export const setFog = (on: boolean) => { try { localStorage.setItem('nic-fog', on ? '1' : '0'); } catch { /* ignore */ } };
+export const fogOn = () => pref('nic-fog', false);
+export const setFog = (on: boolean) => setPref('nic-fog', on);
+/** on/off player settings remembered across visits (private mode just forgets them) */
+export function pref(k: string, def: boolean) { try { const v = localStorage.getItem(k); return v == null ? def : v === '1'; } catch { return def; } }
+export function setPref(k: string, on: boolean) { try { localStorage.setItem(k, on ? '1' : '0'); } catch { /* ignore */ } }
 
 export { makeSkirmish } from './sim/skirmish.ts';
