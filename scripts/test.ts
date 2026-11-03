@@ -6,7 +6,7 @@ import { WebSocket } from 'ws';
 import { applyResult, type CampaignState } from '../src/sim/roster.ts';
 import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
-import { createSim, step, command, manPrice, distToFoot, posted } from '../src/sim/sim.ts';
+import { createSim, step, command, manPrice, distToFoot, posted, steady } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
 import { heightAt, groundAt } from '../src/sim/world.ts';
 
@@ -24,13 +24,24 @@ function arena(setup: (fr: any[], co: any[]) => any[], map?: any) {
 }
 const run = (sim: any, secs: number, until = () => false, each = () => {}) => { for (let t = 0; t < secs && !until(); t += 0.05) { step(sim, 0.05); each(); } };
 
-test('friendly regiments march through each other without shoving', () => {
-  let a: any, b: any;
+test('a regiment marches round a friendly one in its way, without overlapping or shoving it', () => {
+  let a: any, b: any, worst = 0;
   const sim = arena((fr, co) => { [a, b] = fr.filter((u) => u.type === 'line'); return [Object.assign(a, { x: 0, z: -40, facing: 0, form: 'column' }), Object.assign(b, { x: 0, z: 0, facing: 0, form: 'line' }), Object.assign(co[0], { x: 170, z: 170 })]; });
   command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: 40 });
-  run(sim, 35);
+  run(sim, 60, () => false, () => { worst = Math.min(worst, distToFoot(b, sim.tu, a.x, a.z) > 0 ? 0 : -1); });
   assert.ok(Math.hypot(a.x, a.z - 40) < 2, `marcher arrived (at ${a.x.toFixed(1)}, ${a.z.toFixed(1)})`);
+  assert.equal(worst, 0, 'the marcher never stood inside the other formation');
   assert.ok(Math.hypot(b.x, b.z) < 0.5, 'the standing regiment kept its post');
+});
+
+test('a plain move order cannot march through the enemy: the line halts at contact and fights', () => {
+  let a: any, e: any;
+  const sim = arena((fr, co) => { a = fr.find((u) => u.type === 'line'); e = co.find((u) => u.type === 'line'); return [Object.assign(a, { x: 0, z: -30, facing: 0, form: 'column' }), Object.assign(e, { x: 0, z: 0, facing: Math.PI, form: 'line', stance: 'hold' })]; });
+  command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: 40 });
+  let met = false;
+  run(sim, 25, () => false, () => { met ||= a.eng === e.id; });
+  assert.ok(met, 'the two regiments came to blows');
+  assert.ok(a.z < e.z, `the marcher is still on its own side of the enemy (z ${a.z.toFixed(1)} vs ${e.z.toFixed(1)})`);
 });
 
 test('a square holds against equal cavalry but breaks when badly outnumbered', () => {
@@ -140,7 +151,24 @@ test('a posted regiment (standing still a while) takes fewer casualties than one
   const p = hit(true), m = hit(false);
   assert.ok(p.cas > 0 && p.cas < m.cas * 0.93, `posted lost ${p.cas.toFixed(0)}, shifting lost ${m.cas.toFixed(0)}`);
   assert.ok(p.mor < m.mor * 0.9, `posted morale per man ${p.mor.toFixed(2)}, shifting ${m.mor.toFixed(2)}`);
-  assert.ok(!posted({ still: 99, type: 'artillery', limT: 3 }, data('tuning')), 'guns hitching up to move are not posted');
+});
+
+test('a regiment reforming (busy) or a battery hitching up (limT) loses its posted standing', () => {
+  for (const f of ['busy', 'limT']) {
+    let u: any;
+    const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: 0, z: 100, still: 99 }), Object.assign(co[0], { x: 170, z: -170 })]);
+    assert.ok(posted(u, sim.tu));
+    u[f] = 3; step(sim, 0.05);
+    assert.ok(u.still === 0 && !posted(u, sim.tu), `${f} resets still`);
+  }
+});
+
+test('a posted regiment steadies against a charge by about hold.shock', () => {
+  let d: any, a: any;
+  const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: -12, facing: 0 }), d = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 0, facing: Math.PI })]);
+  sim.tu.shock.spread = 0; // no dice: find the lowest morale at which the line holds
+  const floor = (still: number) => { d.still = still; for (let m = 0; m <= 1.001; m += 0.01) { d.morale = m * d.maxMorale; if (steady(sim, d, a)) return m; } return 9; };
+  assert.ok(Math.abs(floor(0) - floor(99) - sim.tu.hold.shock) < 0.02, `holds from ${floor(0).toFixed(2)} shifting, ${floor(99).toFixed(2)} posted`);
 });
 
 test('off our objectives a draft marches in from our map edge at double cost and joins the regiment', () => {
