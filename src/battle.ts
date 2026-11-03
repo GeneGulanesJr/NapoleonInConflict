@@ -66,7 +66,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     <div class="br">
       <div class="panel" id="res"><div class="hd">Reserves <b id="rp">0</b> pts <small id="pool"></small></div>
         <div class="rbtns">${reserveTypes.map((t) => `<button data-res="${t}"><span>${TUNING.types[t].label}</span><em>${TUNING.types[t].cost}</em><u></u></button>`).join('')}</div></div>
-      <canvas id="mini" width="64" height="64"></canvas>
+      <canvas id="mini" width="96" height="96"></canvas>
     </div>
     <div class="panel" id="army"></div>
     <div class="panel" id="tip" style="display:none"></div>
@@ -218,7 +218,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   }
 
   // army bar: one card per regiment, DOM touched only when a card's values change (like the plates)
-  const army = $<HTMLElement>(hud, '#army'), selPanel = $<HTMLElement>(hud, '#sel'), topbar = $<HTMLElement>(hud, '.topbar');
+  const army = $<HTMLElement>(hud, '#army'), selPanel = $<HTMLElement>(hud, '#sel'), topbar = $<HTMLElement>(hud, '.topbar'), toasts = $<HTMLElement>(hud, '#toasts');
   const cards = new Map<number, { el: HTMLElement; m: HTMLElement; o: HTMLElement; em: HTMLElement; sig: string }>();
   const isIdle = (u: any) => !u.routed && u.type !== 'commander' && u.tx == null && u.chase == null && !u.queue?.length && u.garrison == null && u.eng == null;
   function drawArmy(st: any) {
@@ -241,7 +241,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       if (sig === c.sig) continue;
       c.sig = sig; c.m.style.width = `${mp}%`; c.o.style.width = `${op}%`; c.em.textContent = mk; c.el.className = cls;
     }
-    army.style.top = `${topbar.offsetHeight + 4}px`; army.style.bottom = `${selPanel.offsetHeight + 10}px`; // between the top bar and the selection panel, whatever their heights
+    army.style.top = `${topbar.offsetHeight + 4}px`; toasts.style.top = army.style.top; army.style.maxHeight = `${hud.offsetHeight - topbar.offsetHeight - selPanel.offsetHeight - 14}px`; // fits its cards, capped between the top bar and the selection panel, whatever their heights
   }
   const cardId = (e: MouseEvent) => Number((e.target as HTMLElement).closest<HTMLElement>('.ac')?.dataset.id);
   army.onclick = (e) => { const id = cardId(e); if (id) setSel(e.shiftKey ? [...new Set([...selection, id])] : [id]); };

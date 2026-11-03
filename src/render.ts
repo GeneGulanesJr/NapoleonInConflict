@@ -283,14 +283,15 @@ export function createView(host: HTMLElement) {
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position, colA = new Float32Array(pos.count * 3), kindA = new Float32Array(pos.count * 4);
     const A = new THREE.Color(P.grassA), B = new THREE.Color(P.grassB), W = new THREE.Color(P.wheat), W2 = new THREE.Color(P.wheatB), R = new THREE.Color(P.ridge), CL = new THREE.Color(P.cliff);
+    let lowY = 0; // lowest ground, so the soil plinth never pokes through valleys
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), z = pos.getZ(i);
       let h = heightAt(s, x, z), kd = 0; // kd: detail channel 0 grass, 1 wheat, 2 plough, 3 lane/village/road cobbles, -1 none
       const n = hash(Math.round(x * 0.5) * 31 + Math.round(z * 0.5) * 17);
       const field = Math.sin(x * 0.06 + z * 0.02) * Math.sin(z * 0.05 - x * 0.015) > 0.25;
-      const plough = !field && Math.sin(x * 0.04 + 1) * Math.sin(z * 0.045 - 2) > 0.6;
+      const plough = !field && Math.sin(x * 0.04 + 1) * Math.sin(z * 0.045 - 2) > 0.75; // smaller patches than before: big ones read as mud
       if (field) col.copy((Math.floor((x + z) / 2.4) & 1) ? W : W2);
-      else if (plough) col.setHex(Math.floor(z / 1.6) & 1 ? P.plow : 0x5a4129);
+      else if (plough) col.setHex(Math.floor(z / 3.2) & 1 ? 0x7a5a3a : 0xa07a4c); // furrows two cells wide, or vertex colours average them into flat mud
       else col.copy((Math.floor(x / 2) + Math.floor(z / 2)) & 1 ? A : B);
       col.multiplyScalar(0.94 + n * 0.12);
       col.lerp(R, Math.min(0.6, Math.max(0, Math.floor((h + 0.35 * Math.sin(x * 0.9 + z * 0.5)) / 2) * 2) / 20)); // ridge bands with a zigzag edge, still stepping up to h~12
@@ -305,6 +306,7 @@ export function createView(host: HTMLElement) {
       if (wet) { col.setHex(wet.ford ? P.ford : P.water); h -= wet.ford ? 0.3 : 0.6; kd = -1; } // fords: paler, shallower water
       if (kd >= 0) kindA[i * 4 + kd] = 1;
       pos.setY(i, Math.round(h / STEP) * STEP + (hash(Math.round(x * 3) * 17 + Math.round(z * 3) * 29) - 0.5) * 0.18); // faceted, low-poly ground
+      lowY = Math.min(lowY, pos.getY(i));
       colA.set([col.r, col.g, col.b], i * 3);
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colA, 3));
@@ -324,7 +326,8 @@ export function createView(host: HTMLElement) {
     add(terrainMesh);
     // soil plinth under the board
     const plinth = new THREE.Mesh(new THREE.BoxGeometry(mapSize, 10, mapSize), toon({ color: P.soil }));
-    plinth.position.y = -6.2; add(plinth);
+    plinth.position.y = lowY - 0.3 - 5; // top just under the lowest ground (a fixed -1.2 showed the soil as a brown slab wherever valleys dipped below it)
+    add(plinth);
 
     // trees: two-tier pines
     const treeSpots: [number, number][] = [];
@@ -1049,7 +1052,7 @@ export function createView(host: HTMLElement) {
   // --- camera: ortho iso, snapped to whole buffer pixels so nothing shimmers ---------------------
   const silMat = new THREE.MeshBasicMaterial({ color: 0x14110d }), silBg = new THREE.Color(0xe9e4d6);
   let S = 3, bw = 480, bh = 270, dpr = 1; // S = integer upscale in physical pixels, bw x bh = render buffer
-  let hs = 2, hudW = 640, hudH = 360; // the HUD always uses the guide's grid (hs = screen height / 270), whatever the world resolution
+  let hs = 2, hudW = 640, hudH = 360; // hs = CSS px per HUD pixel, derived from the world pixel size in resize()
   // camera matrices as of the last render(); sync() culls off-screen regiments against them, so a camera jump disables culling for a frame
   let camReady = false; const lastCam = { x: 0, z: 0, d: 90, y: 0, t: 0 }, frustum = new THREE.Frustum(), fMat = new THREE.Matrix4(), cullS = new THREE.Sphere();
   const tg = new THREE.Vector3(), rightV = new THREE.Vector3(), upV = new THREE.Vector3();
@@ -1099,15 +1102,15 @@ export function createView(host: HTMLElement) {
   function resize() {
     const w = host.clientWidth || innerWidth, h = host.clientHeight || innerHeight;
     dpr = devicePixelRatio || 1; const W = w * dpr, H = h * dpr; // pick S in physical pixels so each buffer pixel covers whole screen pixels at any OS display scaling
-    hs = Math.max(2, Math.round(h / 360)); // HUD grid: 640x360 at 720p, 1080p and 1440p alike (CSS pixels, so browser zoom still enlarges it)
     S = upscale(quality, H);
+    hs = Math.max(2, Math.min(S, Math.floor(W / 640))) / dpr; // one HUD pixel = one world pixel (S), but never under 2 screen px (legible) or wider than the 640-wide layout allows; whole physical px at any OS scaling
     const sm = quality >= 2 ? 4096 : 2048;
     if (sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); sun.shadow.map?.dispose(); (sun.shadow as any).map = null; } // finer shadows at High and Native
     bw = Math.ceil(W / S); bh = Math.ceil(H / S);
     hudW = (bw * S) / dpr / hs; hudH = (bh * S) / dpr / hs;
     renderer.setSize(bw, bh, false); rt.setSize(bw, bh); post.uniforms.res.value.set(bw, bh);
     canvas.style.width = (bw * S) / dpr + 'px'; canvas.style.height = (bh * S) / dpr + 'px';
-    const rs = document.documentElement.style; rs.setProperty('--S', String(hs)); rs.setProperty('--bw', String(Math.ceil(hudW))); rs.setProperty('--bh', String(Math.ceil(hudH))); // HUD and plates are laid out in HUD pixels, scaled by hs
+    const rs = document.documentElement.style; rs.setProperty('--S', String(hs)); rs.setProperty('--u', hs + 'px'); const wide = hudW >= 760; rs.setProperty('--lbl', wide ? 'inline' : 'none'); rs.setProperty('--tp', wide ? '120px' : '6px'); rs.setProperty('--bw', String(Math.ceil(hudW))); rs.setProperty('--bh', String(Math.ceil(hudH))); // HUD and plates are laid out in HUD pixels, scaled by hs
   }
   resize();
   addEventListener('resize', resize);
