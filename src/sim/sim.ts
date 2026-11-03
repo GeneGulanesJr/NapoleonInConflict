@@ -83,7 +83,7 @@ export function spawn(sim: Sim, side: number, d: any) {
     rid: d.rid ?? null, dead: false, via: null as { x: number; z: number } | null,
     spReady: 0, spUntil: 0, spKind: '', acc: 0, accT: 0,
     xp: d.xp ?? 0, vet: rankOf(sim.tu, d.xp ?? 0), stance: 'hold', auto: false, sq: false, cavSeen: -99, queue: [] as number[][],
-    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false, march: false,
+    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false, march: false, draftFor: null as number | null,
   };
   sim.s.units.push(u);
   return u;
@@ -142,9 +142,18 @@ export function command(sim: Sim, side: number, c: Cmd) {
   } else if (c.c === 'auto') {
     const us = mine(c.ids).filter(isInf), on = !us.every((u: any) => u.auto);
     for (const u of us) u.auto = on;
-  } else if (c.c === 'replenish') { // toggle; the men only march in while the regiment stands on ground its side holds (see step)
-    const us = mine(c.ids).filter((u: any) => u.type !== 'commander' && u.men < u.maxMen), on = !us.every((u: any) => u.refill);
-    for (const u of us) u.refill = on;
+  } else if (c.c === 'replenish') { // on an objective we hold (a depot) men trickle in, a toggle (see step); anywhere else a draft marches from our map edge at refillOffCost x the price
+    const us = mine(c.ids).filter((u: any) => u.type !== 'commander' && u.men < u.maxMen && u.draftFor == null), dep = us.filter((u: any) => held(s, u)), on = !dep.every((u: any) => u.refill);
+    for (const u of dep) u.refill = on;
+    for (const u of us) {
+      if (held(s, u) || s.units.some((d: any) => d.draftFor === u.id && !d.dead)) continue; // one draft at a time
+      const per = (sim.tu.types[u.type].cost / u.maxMen) * sim.tu.refillOffCost, men = Math.min(u.maxMen - u.men, Math.floor(s.side[side].rp / per));
+      if (men < u.maxMen * 0.05) continue; // can't afford a useful draft
+      s.side[side].rp -= men * per;
+      const p = homeEdge(sim, side, u.x, u.z), d = spawn(sim, side, { type: u.type, name: `Draft for ${u.name}`, men, maxMen: men, x: p.x, z: p.z, nat: u.nat, form: isInf(u) ? 'column' : undefined });
+      d.draftFor = u.id; d.tx = u.x; d.tz = u.z;
+      log(sim, `A draft of ${men} men marches to ${u.name}.`);
+    }
   } else if (c.c === 'garrison') {
     const v = (sim.scn.map.villages ?? [])[c.vid];
     if (!v || !garrisonable(v)) return;
@@ -170,6 +179,13 @@ export function command(sim: Sim, side: number, c: Cmd) {
   else if (c.c === 'deploy') deploy(sim, side, c.type);
 }
 
+/** standing on an objective its side holds: a depot, where replacements trickle in */
+const held = (s: any, u: any) => s.zones.some((z: any) => z.owner === u.side && Math.hypot(u.x - z.x, u.z - z.z) < z.r);
+/** the point on a side's home map edge (the one its entry point lies by) nearest to (x, z): drafts set out from there */
+function homeEdge(sim: Sim, side: number, x: number, z: number) {
+  const e = sim.scn.entry[side], h = sim.scn.map.size / 2 - 4;
+  return Math.abs(e.z) >= Math.abs(e.x) ? { x: Math.max(-h, Math.min(h, x)), z: Math.sign(e.z || 1) * h } : { x: Math.sign(e.x) * h, z: Math.max(-h, Math.min(h, z)) };
+}
 function entryPoint(sim: Sim, side: number) {
   const e = sim.scn.entry[side];
   return { x: e.x + (rand(sim.s) - 0.5) * 30, z: e.z };
@@ -592,7 +608,7 @@ export function step(sim: Sim, dt: number) {
   for (const u of live) {
     if (!u.refill || u.dead) continue;
     if (u.routed || u.men >= u.maxMen) { if (!u.routed) log(sim, `${u.name} is back to full strength.`); u.refill = false; continue; }
-    if (u.eng != null || u.hurt < 3 || !s.zones.some((z: any) => z.owner === u.side && Math.hypot(u.x - z.x, u.z - z.z) < z.r)) continue; // paused: fighting, under fire, or off our ground
+    if (u.eng != null || u.hurt < 3 || !held(s, u)) continue; // paused: fighting, under fire, or off our depots (elsewhere a draft marches in, see command)
     const sd = s.side[u.side], per = tu.types[u.type].cost / u.maxMen; // RP per man: a whole regiment costs its deploy price
     const add = Math.min((u.maxMen / tu.refillTime) * dt, u.maxMen - u.men, sd.rp / per);
     u.men += add; sd.rp -= add * per;
@@ -601,6 +617,15 @@ export function step(sim: Sim, dt: number) {
   // smoke ageing
   for (const p of s.smoke) p.age += dt;
   s.smoke = s.smoke.filter((p: any) => p.age < tu.smoke.life);
+
+  // drafts: march on their regiment and join it on arrival; if it is gone or broken, they become a small regiment of their own
+  for (const d of live) {
+    if (d.draftFor == null || d.dead) continue;
+    const r = byId.get(d.draftFor);
+    if (!r || r.dead || r.routed) { d.draftFor = null; d.name = `Draft (${Math.round(d.men)} men)`; continue; }
+    if (gapBetween(d, r, tu) < 1.5) { r.men = Math.min(r.maxMen, r.men + d.men); d.dead = true; d.fate = 'merged'; log(sim, `${r.name} is joined by ${Math.round(d.men)} fresh men.`); continue; }
+    if (!d.routed) { d.tx = r.x; d.tz = r.z; d.chase = null; }
+  }
 
   // removals
   for (const u of s.units) {

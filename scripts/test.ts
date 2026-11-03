@@ -99,19 +99,32 @@ test('artillery misses more the further it shoots', () => {
   assert.ok(far > 0.35 && far > near + 0.15, `long range misses more (near ${near.toFixed(2)}, far ${far.toFixed(2)})`);
 });
 
-test('replenishing refills a regiment on held objective ground at the deploy rate, and only there', () => {
-  let home: any, away: any;
-  const sim = arena((fr, co) => { [home, away] = fr.filter((u) => u.type === 'line'); return [home, away, Object.assign(co[0], { x: 170, z: 170 })]; });
+test('replenishing on an objective we hold (a depot) trickles men in at the deploy rate', () => {
+  let home: any;
+  const sim = arena((fr, co) => [home = fr.find((u) => u.type === 'line'), Object.assign(co[0], { x: 170, z: 170 })]);
   sim.scn = { ...sim.scn, rpRate: [0, 0] }; sim.s.side[0].rp = 100;
   const z = Object.assign(sim.s.zones[0], { owner: 0, p: 1 });
-  Object.assign(home, { x: z.x, z: z.z, men: 270 }); Object.assign(away, { x: -170, z: -170, men: 270 });
-  command(sim, 0, { c: 'replenish', ids: [home.id, away.id] });
+  Object.assign(home, { x: z.x, z: z.z, men: 270 });
+  command(sim, 0, { c: 'replenish', ids: [home.id] });
+  assert.ok(!sim.s.units.some((u: any) => u.draftFor != null), 'no draft needed at a depot');
   run(sim, 20);
   assert.equal(Math.round(home.men), home.maxMen, 'the regiment on our objective is back to full strength');
-  assert.equal(away.men, 270, 'the one off our ground waited');
   const cost = (30 * (home.maxMen - 270)) / home.maxMen; // line infantry deploys for 30 pts
   assert.ok(Math.abs(sim.s.side[0].rp - (100 - cost)) < 0.5, `paid ${cost} pts (rp left ${sim.s.side[0].rp.toFixed(1)})`);
   assert.equal(home.refill, false, 'the order clears itself once full');
+});
+
+test('off our objectives a draft marches in from our map edge at double cost and joins the regiment', () => {
+  let reg: any;
+  const sim = arena((fr, co) => [reg = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: 100, men: 270 }), Object.assign(co[0], { x: 170, z: -170 })]);
+  sim.scn = { ...sim.scn, rpRate: [0, 0] }; sim.s.side[0].rp = 100; sim.s.zones = []; // no depots anywhere
+  command(sim, 0, { c: 'replenish', ids: [reg.id] });
+  const d = sim.s.units.find((u: any) => u.draftFor === reg.id), cost = (2 * 30 * (reg.maxMen - 270)) / reg.maxMen;
+  assert.ok(d && Math.max(Math.abs(d.x), Math.abs(d.z)) > 195 && d.men === reg.maxMen - 270, `a ${d?.men}-man draft sets out from the map edge (${d?.x.toFixed(0)}, ${d?.z.toFixed(0)})`);
+  assert.ok(Math.abs(sim.s.side[0].rp - (100 - cost)) < 0.5, `paid ${cost} pts up front (rp left ${sim.s.side[0].rp.toFixed(1)})`);
+  assert.equal(reg.men, 270, 'nobody appears out of thin air');
+  run(sim, 120, () => d.dead);
+  assert.ok(d.dead && Math.round(reg.men) === reg.maxMen, `the draft marched in and joined (${Math.round(reg.men)}/${reg.maxMen})`);
 });
 
 test('a dragged line order spreads the group over the drag and wheels it to face the ordered way', () => {

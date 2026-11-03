@@ -78,7 +78,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   hud.querySelectorAll<HTMLElement>('.ab').forEach((b) => b.querySelector('.ico')!.replaceChildren(pxCanvas(ICONS[b.dataset.ab!], 2)));
 
   // ---------------------------------------------------------------- state helpers
-  const mine = (u: any) => u.side === me && !u.dead;
+  const mine = (u: any) => u.side === me && !u.dead && u.draftFor == null; // drafts on the march aren't yours to command
+  const drafting = (u: any) => src.state.units.some((d: any) => d.draftFor === u.id && !d.dead); // a draft is marching to it
   let selection: number[] = [];
   let targeting: string | null = null;
   let lastLogT = state0.t;
@@ -194,13 +195,14 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     stB.style.display = auB.style.display = sel0.length ? '' : 'none';
     if (sel0.length) { stB.innerHTML = `${({ hold: 'Hold', aggressive: 'Attack', skirmish: 'Skirmish' } as any)[sel0[0].stance] ?? 'Hold'} <kbd>G</kbd>`; auB.classList.toggle('on', sel0.filter((u: any) => u.type === 'line' || u.type === 'guard').every((u: any) => u.auto) && sel0.some((u: any) => u.type === 'line' || u.type === 'guard')); }
     const rfB = $<HTMLElement>(hud, '[data-refill]'), hurt = sel0.filter((u: any) => u.type !== 'commander' && u.men < u.maxMen);
-    if (hurt.length) { // cost at the deploy rate: a whole regiment costs its reserve price
+    if (hurt.length) { // a whole regiment costs its reserve price on an objective we hold, refillOffCost times that anywhere else
       const onOurs = (u: any) => st.zones.some((z: any) => z.owner === me && Math.hypot(u.x - z.x, u.z - z.z) < z.r);
-      const cost = Math.ceil(hurt.reduce((a: number, u: any) => a + ((u.maxMen - u.men) * TUNING.types[u.type].cost) / u.maxMen, 0));
-      rfB.style.display = ''; rfB.classList.toggle('on', hurt.every((u: any) => u.refill)); rfB.classList.toggle('off', !hurt.some(onOurs));
-      rfB.innerHTML = `Replenish <kbd>N</kbd> ${cost} pts`;
+      const cost = Math.ceil(hurt.reduce((a: number, u: any) => a + ((u.maxMen - u.men) * TUNING.types[u.type].cost * (onOurs(u) ? 1 : TUNING.refillOffCost)) / u.maxMen, 0));
+      rfB.style.display = ''; rfB.classList.toggle('on', hurt.every((u: any) => u.refill)); rfB.classList.remove('off');
+      rfB.innerHTML = `Replenish <kbd>N</kbd> ${cost} pts${hurt.every(onOurs) ? '' : ' · draft marches in'}`;
+      rfB.title = `On an objective you hold, fresh men trickle in (deploy price). Elsewhere a draft sets out from your map edge at ${TUNING.refillOffCost}× the price and joins on arrival; it can be caught on the way.`;
     } else rfB.style.display = 'none';
-    view.setRefillHint(hurt.length > 0); // pulse the objectives we hold: that's where they can refill
+    view.setRefillHint(hurt.length > 0); // pulse the objectives we hold: replenishing is cheapest there
     const spBtn = $<HTMLElement>(hud, '[data-special]');
     const su = selection.map((id) => st.units.find((q: any) => q.id === id)).find((u: any) => u && TUNING.specials[u.type]);
     if (su) { const sp = TUNING.specials[su.type], cd = Math.ceil(su.spReady - st.t); spBtn.style.display = ''; spBtn.classList.toggle('off', cd > 0); spBtn.innerHTML = `${sp.label} <kbd>V</kbd>${cd > 0 ? ` ${cd}s` : ''}`; } else spBtn.style.display = 'none';
@@ -209,7 +211,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     (rows as any)._sig = sig;
     rows.innerHTML = selection.slice(0, 6).map((id) => {
       const u = st.units.find((q: any) => q.id === id);
-      return `<div class="srow${u.routed ? ' routed' : ''}"><span>${u.refill ? '+ ' : ''}${esc(u.name)}</span><i class="b m"><s style="width:${(u.men / u.maxMen) * 100}%"></s></i><i class="b o"><s style="width:${Math.max(0, (u.morale / u.maxMorale) * 100)}%"></s></i><em>${Math.round(u.men)}</em></div>`;
+      return `<div class="srow${u.routed ? ' routed' : ''}"><span>${u.refill || drafting(u) ? '+ ' : ''}${esc(u.name)}</span><i class="b m"><s style="width:${(u.men / u.maxMen) * 100}%"></s></i><i class="b o"><s style="width:${Math.max(0, (u.morale / u.maxMorale) * 100)}%"></s></i><em>${Math.round(u.men)}</em></div>`;
     }).join('') + (selection.length > 6 ? `<div class="srow more">+${selection.length - 6} more</div>` : '');
   }
 
@@ -231,7 +233,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
         cards.set(u.id, c);
       }
       const mp = Math.round((u.men / u.maxMen) * 100), op = Math.max(0, Math.round((u.morale / u.maxMorale) * 100));
-      const mk = u.routed ? 'R' : `${u.refill ? '+' : ''}${u.garrison != null ? 'G' : ''}${isIdle(u) ? '?' : ''}`; // '?' = awaiting orders (a pixel-font z reads as 2)
+      const mk = u.routed ? 'R' : `${u.refill || drafting(u) ? '+' : ''}${u.garrison != null ? 'G' : ''}${isIdle(u) ? '?' : ''}`; // '?' = awaiting orders (a pixel-font z reads as 2)
       const cls = `ac${selection.includes(u.id) ? ' sel' : ''}${u.routed ? ' routed' : op < 30 ? ' waver' : ''}`;
       const sig = `${mp}|${op}|${mk}|${cls}`;
       if (sig === c.sig) continue;

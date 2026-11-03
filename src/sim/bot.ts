@@ -68,7 +68,7 @@ function think(sim: Sim, side: number, mem: any) {
   for (const id in mem.assign) { const a = mem.assign[id]; load[a.zid] = (load[a.zid] ?? 0) + 1; }
 
   for (const u of my) {
-    if (u.busy > 0) continue;
+    if (u.busy > 0 || u.draftFor != null) continue; // drafts march to their regiment on their own
     if (u.march) { if (u.tx != null || u.chase != null) continue; u.march = false; } // a scripted reinforcement keeps to its route (e.g. Bülow on Plancenoit) until it gets there
     const T = tu.types[u.type];
     if (u.type === 'commander') { // stay with the army, rally broken men
