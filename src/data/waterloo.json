@@ -2,8 +2,8 @@
   "id": "waterloo",
   "title": "Waterloo",
   "date": "18 June 1815",
-  "blurb": "The decisive battle. Wellington's army waits behind the ridge of Mont-Saint-Jean, with strongpoints at Hougoumont and La Haye Sainte. Napoleon must break it before Blücher's Prussians arrive on his right flank. The ground is soaked; the Emperor waits for it to dry. Every regiment still in your roster fights here.",
-  "hint": "Take Hougoumont and La Haye Sainte, then crack the ridge. The Prussians come from the east around mid-afternoon; hold Plancenoit. Keep the Guard for the last throw. If you beat Blücher at Ligny, he comes later.",
+  "blurb": "The decisive battle. Wellington's army lies behind the crest of Mont-Saint-Jean, out of sight of the French guns, with the walled farms of Hougoumont, La Haye Sainte and Papelotte flung forward like breakwaters. Napoleon must break it before Blücher's Prussians come through the Bois de Paris onto his right flank. The ground is soaked; the Emperor waits for it to dry. Every regiment still in your roster fights here.",
+  "hint": "The ridge hides Wellington's reserves until you crest it. Hougoumont sits behind its wood out on the left; La Haye Sainte guards the Brussels road. The Prussians come out of the woods to the east around mid-afternoon and drive on Plancenoit: hold it or lose your line of retreat. Keep the Guard for the last throw.",
   "duration": 1800,
   "clock": {
     "start": "11:00",
@@ -11,176 +11,1076 @@
   },
   "weather": "rain",
   "map": {
-    "size": 450,
+    "size": 600,
+    "rough": {
+      "amp": 0.7,
+      "scale": 60,
+      "seed": 1815
+    },
     "hills": [
       {
-        "x": 0.0,
-        "z": -60.0,
-        "rx": 225.0,
-        "rz": 21.0,
-        "h": 8
+        "x": -75,
+        "z": 175,
+        "rx": 260,
+        "rz": 260,
+        "h": 11.3
       },
       {
-        "x": 0.0,
-        "z": 82.5,
-        "rx": 225.0,
-        "rz": 24.0,
-        "h": 6
+        "x": 25,
+        "z": -250,
+        "rx": 260,
+        "rz": 160,
+        "h": 3.9
       },
       {
-        "x": 142.5,
-        "z": 82.5,
-        "rx": 37.5,
-        "rz": 30.0,
-        "h": 3
+        "x": -250,
+        "z": 275,
+        "rx": 160,
+        "rz": 65,
+        "h": 5.6,
+        "p": 2
       },
       {
-        "x": -105.0,
-        "z": -15.0,
-        "rx": 30.0,
-        "rz": 24.0,
-        "h": 2
+        "x": 250,
+        "z": 275,
+        "rx": 100,
+        "rz": 100,
+        "h": 5.7,
+        "p": 2
+      },
+      {
+        "x": -25,
+        "z": 150,
+        "rx": 260,
+        "rz": 100,
+        "h": -2.3,
+        "rot": 30,
+        "p": 2
+      },
+      {
+        "x": 300,
+        "z": -50,
+        "rx": 160,
+        "rz": 65,
+        "h": 4.3,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": 275,
+        "z": -250,
+        "rx": 160,
+        "rz": 40,
+        "h": 3,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": 100,
+        "z": -275,
+        "rx": 160,
+        "rz": 40,
+        "h": -3.4,
+        "rot": 120,
+        "p": 2
+      },
+      {
+        "x": 300,
+        "z": 75,
+        "rx": 65,
+        "rz": 40,
+        "h": -4.5,
+        "rot": 60,
+        "p": 2
+      },
+      {
+        "x": 275,
+        "z": -150,
+        "rx": 260,
+        "rz": 25,
+        "h": -3.5,
+        "rot": 150
+      },
+      {
+        "x": -300,
+        "z": -125,
+        "rx": 160,
+        "rz": 40,
+        "h": 2.8,
+        "rot": 60,
+        "p": 2
+      },
+      {
+        "x": 125,
+        "z": 150,
+        "rx": 65,
+        "rz": 25,
+        "h": -3.4,
+        "p": 2
+      },
+      {
+        "x": -225,
+        "z": -225,
+        "rx": 65,
+        "rz": 25,
+        "h": -2.7,
+        "p": 2
+      },
+      {
+        "x": -100,
+        "z": -100,
+        "rx": 65,
+        "rz": 65,
+        "h": 1.8,
+        "p": 2
+      },
+      {
+        "x": 150,
+        "z": 225,
+        "rx": 160,
+        "rz": 40,
+        "h": 1.4,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": -275,
+        "z": -275,
+        "rx": 260,
+        "rz": 40,
+        "h": 1.4
+      },
+      {
+        "x": -50,
+        "z": 275,
+        "rx": 65,
+        "rz": 25,
+        "h": -3.1,
+        "p": 2
+      },
+      {
+        "x": -275,
+        "z": 225,
+        "rx": 65,
+        "rz": 25,
+        "h": 2.8,
+        "rot": 60,
+        "p": 2
+      },
+      {
+        "x": -225,
+        "z": 300,
+        "rx": 65,
+        "rz": 25,
+        "h": -3.5,
+        "rot": 120,
+        "p": 2
+      },
+      {
+        "x": 100,
+        "z": 25,
+        "rx": 65,
+        "rz": 25,
+        "h": -2.9,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": 300,
+        "z": 275,
+        "rx": 40,
+        "rz": 25,
+        "h": 3.6,
+        "rot": 60,
+        "p": 2
+      },
+      {
+        "x": 50,
+        "z": 125,
+        "rx": 260,
+        "rz": 65,
+        "h": 0.6,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": -150,
+        "z": 0,
+        "rx": 260,
+        "rz": 40,
+        "h": -1,
+        "rot": 60,
+        "p": 2
+      },
+      {
+        "x": 125,
+        "z": -125,
+        "rx": 160,
+        "rz": 25,
+        "h": 1.4,
+        "p": 2
+      },
+      {
+        "x": -275,
+        "z": 100,
+        "rx": 40,
+        "rz": 25,
+        "h": 2.3,
+        "rot": 60,
+        "p": 2
+      },
+      {
+        "x": 225,
+        "z": 150,
+        "rx": 40,
+        "rz": 25,
+        "h": 3.8,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": 175,
+        "z": 150,
+        "rx": 100,
+        "rz": 25,
+        "h": -2.5,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": 50,
+        "z": -75,
+        "rx": 100,
+        "rz": 25,
+        "h": -2,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": 225,
+        "z": 225,
+        "rx": 40,
+        "rz": 25,
+        "h": -2.3,
+        "rot": 90,
+        "p": 2
+      },
+      {
+        "x": -175,
+        "z": 125,
+        "rx": 65,
+        "rz": 25,
+        "h": -1.8,
+        "rot": 30,
+        "p": 2
+      },
+      {
+        "x": -275,
+        "z": 0,
+        "rx": 40,
+        "rz": 25,
+        "h": -2.2,
+        "rot": 30,
+        "p": 2
+      },
+      {
+        "x": 25,
+        "z": -100,
+        "rx": 65,
+        "rz": 25,
+        "h": 1.6,
+        "p": 2
+      },
+      {
+        "x": -150,
+        "z": 250,
+        "rx": 40,
+        "rz": 25,
+        "h": 2.2,
+        "rot": 60,
+        "p": 2
+      },
+      {
+        "x": -50,
+        "z": -225,
+        "rx": 65,
+        "rz": 25,
+        "h": 1.5,
+        "p": 2
+      },
+      {
+        "x": 0,
+        "z": -175,
+        "rx": 65,
+        "rz": 25,
+        "h": -1.7,
+        "rot": 120,
+        "p": 2
+      },
+      {
+        "x": 275,
+        "z": 150,
+        "rx": 40,
+        "rz": 25,
+        "h": -2.2,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": 0,
+        "z": 75,
+        "rx": 65,
+        "rz": 25,
+        "h": 1.8,
+        "rot": 30,
+        "p": 2
+      },
+      {
+        "x": 25,
+        "z": 125,
+        "rx": 40,
+        "rz": 25,
+        "h": -2.3,
+        "rot": 30
+      },
+      {
+        "x": -200,
+        "z": 225,
+        "rx": 100,
+        "rz": 25,
+        "h": -1.3,
+        "rot": 60,
+        "p": 2
+      },
+      {
+        "x": 75,
+        "z": 300,
+        "rx": 65,
+        "rz": 25,
+        "h": 1.8,
+        "p": 2
+      },
+      {
+        "x": 175,
+        "z": 100,
+        "rx": 100,
+        "rz": 25,
+        "h": 2.1,
+        "rot": 120,
+        "p": 2
+      },
+      {
+        "x": -175,
+        "z": -225,
+        "rx": 100,
+        "rz": 40,
+        "h": -1.1,
+        "rot": 30,
+        "p": 2
+      },
+      {
+        "x": 175,
+        "z": -300,
+        "rx": 40,
+        "rz": 25,
+        "h": -2.2,
+        "rot": 90,
+        "p": 2
+      },
+      {
+        "x": -225,
+        "z": -300,
+        "rx": 100,
+        "rz": 25,
+        "h": 1.8,
+        "rot": 150,
+        "p": 2
+      },
+      {
+        "x": 200,
+        "z": 75,
+        "rx": 65,
+        "rz": 25,
+        "h": -1.8,
+        "p": 2
+      },
+      {
+        "x": -25,
+        "z": 200,
+        "rx": 40,
+        "rz": 25,
+        "h": 1.5,
+        "p": 2
       }
     ],
-    "woods": [
+    "rivers": [
       {
-        "x": -117.0,
-        "z": -18.0,
-        "r": 18.0
+        "pts": [
+          [
+            150,
+            -76
+          ],
+          [
+            170,
+            -84
+          ],
+          [
+            190,
+            -97
+          ],
+          [
+            220,
+            -118
+          ],
+          [
+            235,
+            -134
+          ],
+          [
+            269,
+            -158
+          ],
+          [
+            300,
+            -176
+          ]
+        ],
+        "width": 4,
+        "ford": 0.5,
+        "bridges": [
+          [
+            176,
+            -89
+          ],
+          [
+            269,
+            -158
+          ]
+        ]
       },
       {
-        "x": 168.0,
-        "z": 42.0,
-        "r": 24.0
+        "pts": [
+          [
+            60,
+            155
+          ],
+          [
+            91,
+            150
+          ],
+          [
+            121,
+            151
+          ],
+          [
+            133,
+            163
+          ],
+          [
+            164,
+            152
+          ],
+          [
+            197,
+            125
+          ],
+          [
+            234,
+            106
+          ],
+          [
+            263,
+            89
+          ],
+          [
+            300,
+            78
+          ]
+        ],
+        "width": 5,
+        "ford": 0.5,
+        "bridges": [
+          [
+            110,
+            151
+          ],
+          [
+            234,
+            106
+          ]
+        ]
       },
       {
-        "x": -30.0,
-        "z": -135.0,
-        "r": 21.0
-      },
-      {
-        "x": 90.0,
-        "z": 142.5,
-        "r": 15.0
+        "pts": [
+          [
+            40,
+            -190
+          ],
+          [
+            61,
+            -220
+          ],
+          [
+            81,
+            -238
+          ],
+          [
+            96,
+            -272
+          ],
+          [
+            111,
+            -283
+          ],
+          [
+            119,
+            -300
+          ]
+        ],
+        "width": 3,
+        "ford": 0.6,
+        "bridges": []
       }
     ],
-    "villages": [
-      {
-        "name": "Hougoumont",
-        "x": -108.0,
-        "z": -12.0,
-        "r": 9.6,
-        "garrison": true
-      },
-      {
-        "name": "La Haye Sainte",
-        "x": 0.0,
-        "z": -21.0,
-        "r": 7.2,
-        "garrison": true
-      },
-      {
-        "name": "Papelotte",
-        "x": 132.0,
-        "z": -30.0,
-        "r": 9.6,
-        "garrison": true
-      },
-      {
-        "name": "Plancenoit",
-        "x": 150.0,
-        "z": 93.0,
-        "r": 12.0
-      },
-      {
-        "name": "Mont-Saint-Jean",
-        "x": 0.0,
-        "z": -108.0,
-        "r": 10.8
-      },
-      {
-        "name": "La Belle Alliance",
-        "x": 0.0,
-        "z": 75.0,
-        "r": 7.2
-      }
-    ],
-    "hedges": [
+    "roads": [
       {
         "pts": [
           [
-            -75.0,
-            -72.8
+            -108,
+            -300
           ],
           [
-            165.0,
-            -72.8
-          ]
-        ]
-      },
-      {
-        "pts": [
-          [
-            -75.0,
-            -59.2
+            -100,
+            -252
           ],
           [
-            165.0,
-            -59.2
-          ]
-        ]
-      },
-      {
-        "pts": [
-          [
-            -45.0,
-            33.0
+            -91,
+            -225
           ],
           [
-            -45.0,
-            78.0
-          ]
-        ]
-      },
-      {
-        "pts": [
-          [
-            60.0,
-            33.0
+            -76,
+            -194
           ],
           [
-            60.0,
-            78.0
+            -60,
+            -157
+          ],
+          [
+            -47,
+            -111
+          ],
+          [
+            -39,
+            -85
+          ],
+          [
+            -36,
+            -60
+          ],
+          [
+            -34,
+            -27
+          ],
+          [
+            -32,
+            0
+          ],
+          [
+            -30,
+            45
+          ],
+          [
+            -28,
+            74
+          ],
+          [
+            -28,
+            109
+          ],
+          [
+            -31,
+            137
+          ],
+          [
+            -34,
+            182
+          ],
+          [
+            -28,
+            209
+          ],
+          [
+            -13,
+            236
+          ],
+          [
+            1,
+            263
+          ],
+          [
+            15,
+            287
+          ],
+          [
+            22,
+            300
           ]
-        ]
+        ],
+        "w": 5
       },
       {
         "pts": [
           [
-            -45.0,
-            33.0
+            -74,
+            -187
           ],
           [
-            60.0,
-            33.0
+            -88,
+            -168
+          ],
+          [
+            -104,
+            -139
+          ],
+          [
+            -123,
+            -106
+          ],
+          [
+            -132,
+            -90
+          ],
+          [
+            -153,
+            -55
+          ],
+          [
+            -168,
+            -27
+          ],
+          [
+            -186,
+            3
+          ],
+          [
+            -204,
+            35
+          ],
+          [
+            -225,
+            62
+          ],
+          [
+            -235,
+            93
+          ],
+          [
+            -247,
+            116
+          ],
+          [
+            -259,
+            131
+          ],
+          [
+            -277,
+            162
+          ],
+          [
+            -303,
+            208
+          ],
+          [
+            -318,
+            234
           ]
-        ]
+        ],
+        "w": 4
+      },
+      {
+        "pts": [
+          [
+            -30,
+            40
+          ],
+          [
+            -12,
+            54
+          ],
+          [
+            0,
+            68
+          ],
+          [
+            10,
+            76
+          ],
+          [
+            15,
+            92
+          ],
+          [
+            22,
+            122
+          ],
+          [
+            31,
+            130
+          ],
+          [
+            49,
+            139
+          ],
+          [
+            76,
+            144
+          ],
+          [
+            97,
+            143
+          ],
+          [
+            118,
+            145
+          ],
+          [
+            142,
+            148
+          ],
+          [
+            164,
+            130
+          ],
+          [
+            193,
+            108
+          ],
+          [
+            220,
+            92
+          ],
+          [
+            252,
+            76
+          ],
+          [
+            283,
+            50
+          ],
+          [
+            300,
+            45
+          ]
+        ],
+        "w": 3
       }
     ],
     "lanes": [
       {
         "pts": [
           [
-            -75.0,
-            -66.0
+            -88,
+            -93
           ],
           [
-            165.0,
-            -66.0
+            -39,
+            -85
+          ],
+          [
+            40,
+            -88
           ]
         ],
         "w": 3.6,
         "depth": 1.4
+      },
+      {
+        "pts": [
+          [
+            -132,
+            -97
+          ],
+          [
+            -88,
+            -93
+          ]
+        ],
+        "w": 3,
+        "depth": 0.5
+      },
+      {
+        "pts": [
+          [
+            40,
+            -88
+          ],
+          [
+            100,
+            -93
+          ],
+          [
+            150,
+            -95
+          ],
+          [
+            176,
+            -89
+          ]
+        ],
+        "w": 3,
+        "depth": 0.4
+      },
+      {
+        "pts": [
+          [
+            -172,
+            12
+          ],
+          [
+            -130,
+            9
+          ],
+          [
+            -106,
+            7
+          ],
+          [
+            -94,
+            -9
+          ],
+          [
+            -85,
+            -42
+          ]
+        ],
+        "w": 3,
+        "depth": 1
+      }
+    ],
+    "woods": [
+      {
+        "x": -162,
+        "z": 46,
+        "r": 12,
+        "dense": true
+      },
+      {
+        "x": -142,
+        "z": 46,
+        "r": 12,
+        "dense": true
+      },
+      {
+        "x": -152,
+        "z": 57,
+        "r": 11,
+        "dense": true
+      },
+      {
+        "x": -132,
+        "z": 53,
+        "r": 8,
+        "dense": true
+      },
+      {
+        "x": -120,
+        "z": 23,
+        "r": 9
+      },
+      {
+        "x": 240,
+        "z": -5,
+        "r": 22,
+        "dense": true
+      },
+      {
+        "x": 268,
+        "z": 15,
+        "r": 20,
+        "dense": true
+      },
+      {
+        "x": 286,
+        "z": -28,
+        "r": 18
+      },
+      {
+        "x": 250,
+        "z": 32,
+        "r": 15
+      },
+      {
+        "x": 216,
+        "z": -45,
+        "r": 12
+      }
+    ],
+    "villages": [
+      {
+        "name": "Hougoumont",
+        "x": -160,
+        "z": 23,
+        "r": 8,
+        "garrison": true
+      },
+      {
+        "name": "La Haye Sainte",
+        "x": -41,
+        "z": -60,
+        "r": 6,
+        "garrison": true
+      },
+      {
+        "name": "Papelotte",
+        "x": 116,
+        "z": -85,
+        "r": 7,
+        "garrison": true
+      },
+      {
+        "name": "La Haie",
+        "x": 134,
+        "z": -86,
+        "r": 5,
+        "garrison": true
+      },
+      {
+        "name": "Smohain",
+        "x": 182,
+        "z": -78,
+        "r": 8
+      },
+      {
+        "name": "Frischermont",
+        "x": 193,
+        "z": -55,
+        "r": 7,
+        "garrison": true
+      },
+      {
+        "name": "Plancenoit",
+        "x": 85,
+        "z": 134,
+        "r": 12,
+        "garrison": true
+      },
+      {
+        "name": "Mont-Saint-Jean",
+        "x": -52,
+        "z": -147,
+        "r": 7
+      },
+      {
+        "name": "Mont-Saint-Jean village",
+        "x": -74,
+        "z": -195,
+        "r": 10
+      },
+      {
+        "name": "La Belle Alliance",
+        "x": -25,
+        "z": 48,
+        "r": 5
+      },
+      {
+        "name": "Rossomme",
+        "x": -27,
+        "z": 177,
+        "r": 5
+      }
+    ],
+    "hedges": [
+      {
+        "pts": [
+          [
+            -36,
+            -81
+          ],
+          [
+            60,
+            -84
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            -153,
+            16
+          ],
+          [
+            -133,
+            16
+          ],
+          [
+            -133,
+            32
+          ],
+          [
+            -153,
+            32
+          ],
+          [
+            -153,
+            16
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            -132,
+            10
+          ],
+          [
+            -108,
+            10
+          ],
+          [
+            -108,
+            36
+          ],
+          [
+            -132,
+            36
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            -169,
+            7
+          ],
+          [
+            -169,
+            35
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            100,
+            -72
+          ],
+          [
+            160,
+            -68
+          ]
+        ]
+      },
+      {
+        "pts": [
+          [
+            150,
+            -112
+          ],
+          [
+            205,
+            -118
+          ]
+        ]
       }
     ]
   },
@@ -188,57 +1088,57 @@
     {
       "id": "hg",
       "name": "Hougoumont",
-      "x": -108.0,
-      "z": -12.0,
-      "r": 16.8,
+      "x": -158,
+      "z": 23,
+      "r": 16,
       "value": 2,
       "owner": 1
     },
     {
       "id": "lh",
       "name": "La Haye Sainte",
-      "x": 0.0,
-      "z": -21.0,
-      "r": 14.4,
+      "x": -40,
+      "z": -60,
+      "r": 14,
       "value": 3,
       "owner": 1
     },
     {
       "id": "rd",
-      "name": "Wellington's Ridge",
-      "x": 45.0,
-      "z": -54.0,
-      "r": 21.6,
+      "name": "Mont-Saint-Jean Ridge",
+      "x": -18,
+      "z": -98,
+      "r": 22,
       "value": 3,
       "owner": 1
     },
     {
       "id": "pa",
       "name": "Papelotte",
-      "x": 132.0,
-      "z": -30.0,
-      "r": 15.6,
+      "x": 124,
+      "z": -84,
+      "r": 15,
       "value": 1.5,
       "owner": 1
     },
     {
       "id": "pl",
       "name": "Plancenoit",
-      "x": 150.0,
-      "z": 93.0,
-      "r": 15.6,
+      "x": 85,
+      "z": 134,
+      "r": 16,
       "value": 2.5,
       "owner": 0
     }
   ],
   "entry": [
     {
-      "x": 0.0,
-      "z": 220.5
+      "x": 12,
+      "z": 285
     },
     {
-      "x": 0.0,
-      "z": -220.5
+      "x": -104,
+      "z": -285
     }
   ],
   "rpStart": [
@@ -287,51 +1187,200 @@
     [
       {
         "type": "line",
-        "n": 10,
-        "x": -150.0,
-        "z": 120.0,
-        "dx": 33.0
+        "n": 1,
+        "x": -170,
+        "z": 100,
+        "names": [
+          "Reille: Jérôme"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -125,
+        "z": 92,
+        "names": [
+          "Reille: Foy"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -78,
+        "z": 82,
+        "names": [
+          "Reille: Bachelu"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -5,
+        "z": 50,
+        "names": [
+          "d'Erlon: Quiot"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 25,
+        "z": 48,
+        "names": [
+          "d'Erlon: Donzelot"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 55,
+        "z": 48,
+        "names": [
+          "d'Erlon: Marcognet"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 88,
+        "z": 40,
+        "names": [
+          "d'Erlon: Durutte (Pégot)"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 118,
+        "z": 30,
+        "names": [
+          "d'Erlon: Durutte (Brue)"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 40,
+        "z": 165,
+        "names": [
+          "Young Guard: Chartrand"
+        ]
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 70,
+        "z": 165,
+        "names": [
+          "Young Guard: Guye"
+        ]
       },
       {
         "type": "guard",
         "n": 3,
-        "x": -30.0,
-        "z": 183.0,
-        "dx": 30.0
+        "x": -65,
+        "z": 145,
+        "dx": 25
       },
       {
         "type": "skirmisher",
-        "n": 3,
-        "x": -135.0,
-        "z": 93.0,
-        "dx": 135.0
+        "n": 1,
+        "x": -150,
+        "z": 82
+      },
+      {
+        "type": "skirmisher",
+        "n": 1,
+        "x": -55,
+        "z": 25
+      },
+      {
+        "type": "skirmisher",
+        "n": 1,
+        "x": 105,
+        "z": 0
       },
       {
         "type": "lancer",
-        "n": 3,
-        "x": -180.0,
-        "z": 144.0,
-        "dx": 180.0
+        "n": 1,
+        "x": -255,
+        "z": 85,
+        "names": [
+          "Piré: 5e & 6e Lanciers"
+        ]
+      },
+      {
+        "type": "lancer",
+        "n": 1,
+        "x": 150,
+        "z": 30,
+        "names": [
+          "Jacquinot: 3e & 4e Lanciers"
+        ]
+      },
+      {
+        "type": "lancer",
+        "n": 1,
+        "x": -100,
+        "z": 135,
+        "names": [
+          "Red Lancers (Guard)"
+        ]
       },
       {
         "type": "cuirassier",
-        "n": 3,
-        "x": -60.0,
-        "z": 150.0,
-        "dx": 60.0
+        "n": 1,
+        "x": 10,
+        "z": 105,
+        "names": [
+          "Milhaud: Wathier"
+        ]
+      },
+      {
+        "type": "cuirassier",
+        "n": 1,
+        "x": 40,
+        "z": 105,
+        "names": [
+          "Milhaud: Delort"
+        ]
+      },
+      {
+        "type": "cuirassier",
+        "n": 1,
+        "x": -82,
+        "z": 112,
+        "names": [
+          "Kellermann: Lhéritier"
+        ]
       },
       {
         "type": "artillery",
-        "n": 5,
-        "x": -90.0,
-        "z": 93.0,
-        "dx": 45.0
+        "n": 4,
+        "x": 0,
+        "z": 8,
+        "dx": 25,
+        "names": [
+          "Grand Battery (I Corps)",
+          "Grand Battery (I Corps reserve)",
+          "Grand Battery (Guard 12-pdrs)",
+          "Grand Battery (VI Corps)"
+        ]
+      },
+      {
+        "type": "artillery",
+        "n": 1,
+        "x": -105,
+        "z": 72,
+        "names": [
+          "Reille: II Corps guns"
+        ]
       },
       {
         "type": "commander",
         "n": 1,
-        "x": 0.0,
-        "z": 204.0,
+        "x": -15,
+        "z": 118,
         "names": [
           "Napoleon"
         ],
@@ -341,80 +1390,200 @@
     [
       {
         "type": "line",
-        "n": 5,
-        "x": -135.0,
-        "z": -42.0,
-        "dx": 33.0,
+        "n": 1,
+        "x": -160,
+        "z": 8,
         "names": [
-          "Byng's Guards (Hougoumont)",
-          "Maitland's Guards",
-          "Halkett's Brigade",
-          "Kielmansegge's Hanoverians",
+          "Byng's Guards (Hougoumont)"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -110,
+        "z": -95,
+        "names": [
+          "Maitland's Guards"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -85,
+        "z": -108,
+        "names": [
+          "Halkett's Brigade"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -62,
+        "z": -115,
+        "names": [
+          "Kielmansegge's Hanoverians"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -150,
+        "z": -60,
+        "names": [
           "Du Plat's KGL"
         ],
         "nat": "gb"
       },
       {
         "type": "line",
-        "n": 4,
-        "x": 15.0,
-        "z": -45.0,
-        "dx": 37.5,
+        "n": 1,
+        "x": 0,
+        "z": -88,
         "names": [
-          "Pack's Highlanders",
-          "Kempt's Brigade",
-          "Lambert's Brigade",
           "Bylandt's Dutch-Belgians"
         ],
         "nat": "gb"
       },
       {
-        "type": "skirmisher",
-        "n": 3,
-        "x": -105.0,
-        "z": -9.0,
-        "dx": 105.0,
+        "type": "line",
+        "n": 1,
+        "x": -15,
+        "z": -122,
         "names": [
-          "Hougoumont Light Companies",
-          "95th Rifles at La Haye Sainte",
-          "Nassau Sharpshooters"
+          "Kempt's Brigade"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": 20,
+        "z": -122,
+        "names": [
+          "Pack's Highlanders"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "line",
+        "n": 1,
+        "x": -30,
+        "z": -150,
+        "names": [
+          "Lambert's Brigade"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "skirmisher",
+        "n": 1,
+        "x": -140,
+        "z": 22,
+        "names": [
+          "Saltoun's Light Companies (Hougoumont)"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "skirmisher",
+        "n": 1,
+        "x": -41,
+        "z": -62,
+        "names": [
+          "Baring's KGL (La Haye Sainte)"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "skirmisher",
+        "n": 1,
+        "x": 118,
+        "z": -84,
+        "names": [
+          "Nassau Sharpshooters (Papelotte)"
         ],
         "nat": "gb"
       },
       {
         "type": "cuirassier",
-        "n": 2,
-        "x": 0.0,
-        "z": -93.0,
-        "dx": 60.0,
+        "n": 1,
+        "x": -45,
+        "z": -135,
         "names": [
-          "Household Brigade",
+          "Household Brigade"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "cuirassier",
+        "n": 1,
+        "x": 40,
+        "z": -145,
+        "names": [
           "Union Brigade"
         ],
         "nat": "gb"
       },
       {
         "type": "lancer",
-        "n": 2,
-        "x": 82.5,
-        "z": -82.5,
-        "dx": 60.0,
+        "n": 1,
+        "x": 100,
+        "z": -120,
         "names": [
-          "Vivian's Hussars",
           "Vandeleur's Light Dragoons"
         ],
         "nat": "gb"
       },
       {
-        "type": "artillery",
-        "n": 4,
-        "x": -30.0,
-        "z": -66.0,
-        "dx": 37.5,
+        "type": "lancer",
+        "n": 1,
+        "x": 140,
+        "z": -125,
         "names": [
-          "Mercer's Horse Artillery",
-          "Bull's Howitzers",
-          "Ramsay's Troop",
+          "Vivian's Hussars"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "artillery",
+        "n": 1,
+        "x": -135,
+        "z": -45,
+        "names": [
+          "Bull's Howitzers"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "artillery",
+        "n": 1,
+        "x": -105,
+        "z": -55,
+        "names": [
+          "Mercer's Horse Artillery"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "artillery",
+        "n": 1,
+        "x": -70,
+        "z": -80,
+        "names": [
+          "Ramsay's Troop"
+        ],
+        "nat": "gb"
+      },
+      {
+        "type": "artillery",
+        "n": 1,
+        "x": 45,
+        "z": -95,
+        "names": [
           "Lloyd's Foot Battery"
         ],
         "nat": "gb"
@@ -422,8 +1591,8 @@
       {
         "type": "commander",
         "n": 1,
-        "x": 0.0,
-        "z": -114.0,
+        "x": -42,
+        "z": -92,
         "names": [
           "Wellington"
         ]
@@ -468,8 +1637,8 @@
         {
           "type": "line",
           "n": 3,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "names": [
             "Bülow: Hiller's Brigade",
             "Bülow: Hacke's Brigade",
@@ -480,31 +1649,31 @@
         {
           "type": "cuirassier",
           "n": 1,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "name": "Prussian Hussars",
           "nat": "pr"
         },
         {
           "type": "artillery",
           "n": 1,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "name": "Bülow's Battery",
           "nat": "pr"
         }
       ],
       "entry": {
-        "x": 220.5,
-        "z": 82.5
+        "x": 298,
+        "z": 40
       },
       "go": {
-        "x": 165.0,
-        "z": 105.0
+        "x": 170,
+        "z": 100
       },
       "spreadX": 0,
       "spreadZ": 1.6,
-      "msg": "It is Blücher! Bülow's IV Corps attacks Plancenoit."
+      "msg": "It is Blücher! Bülow's IV Corps comes out of the Bois de Paris and drives on Plancenoit."
     },
     {
       "t": 1020,
@@ -517,8 +1686,8 @@
         {
           "type": "line",
           "n": 3,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "names": [
             "Zieten: Steinmetz",
             "Zieten: Pirch II",
@@ -528,16 +1697,16 @@
         }
       ],
       "entry": {
-        "x": 220.5,
-        "z": -37.5
+        "x": 298,
+        "z": -215
       },
       "go": {
-        "x": 135.0,
-        "z": -37.5
+        "x": 140,
+        "z": -118
       },
       "spreadX": 0,
       "spreadZ": 1.6,
-      "msg": "Zieten's I Corps reaches Papelotte and the Allied left flank is saved."
+      "msg": "Zieten's I Corps comes down the Ohain road past Smohain. The Allied left is saved."
     },
     {
       "t": 1100,
@@ -547,8 +1716,8 @@
         {
           "type": "line",
           "n": 2,
-          "x": 0.0,
-          "z": 0.0,
+          "x": 0,
+          "z": 0,
           "names": [
             "Lobau's VI Corps: Simmer",
             "Lobau's VI Corps: Jeannin"
@@ -556,12 +1725,12 @@
         }
       ],
       "entry": {
-        "x": 150.0,
-        "z": 210.0
+        "x": 12,
+        "z": 285
       },
       "go": {
-        "x": 150.0,
-        "z": 135.0
+        "x": 105,
+        "z": 115
       },
       "spreadX": 1.6,
       "msg": "Lobau's VI Corps holds Plancenoit against the Prussians."
