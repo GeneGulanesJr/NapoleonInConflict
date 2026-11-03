@@ -9,7 +9,7 @@ import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
 import { createSim, step, command, manPrice, distToFoot, posted, steady } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
-import { heightAt, groundAt } from '../src/sim/world.ts';
+import { heightAt, groundAt, los } from '../src/sim/world.ts';
 
 // ---------------------------------------------------------------- unit-vs-unit rules
 const data = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.json`, import.meta.url), 'utf8'));
@@ -685,4 +685,93 @@ test('broken men running through a formed regiment shake it', () => {
   const sim = arena((fr, co) => { const [l1, l2] = co.filter((u) => u.type === 'line'); return [line = Object.assign(l1, { x: 0, z: 0, facing: 0 }), router = Object.assign(l2, { x: 0, z: 0, routed: true, morale: 0 }), Object.assign(fr[0], { x: 170, z: 170 })]; });
   step(sim, 0.05);
   assert.ok(line.shaken > 2.5, `shaken for ${line.shaken.toFixed(1)} s by ${Math.round(router.men)} fugitives`);
+});
+
+// ---------------------------------------------------------------- WS3 combat & AI
+/** men a steady Coalition line loses to the first volley of a French line `gap` off (front rank to front rank) within 20 s, or 0 */
+function firstVolley(gap: number, stance = 'hold', setup = (_sim: any) => {}) {
+  let a: any, e: any;
+  const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: -gap / 2 - 0.91, facing: 0, form: 'line', reload: 0 }), e = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: gap / 2 + 0.91, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999, reload: 1e9 })]);
+  setup(sim);
+  command(sim, 0, { c: 'stance', ids: [a.id], s: stance });
+  let lost = 0;
+  run(sim, 20, () => lost > 0, () => { lost = e.maxMen - e.men; });
+  return lost;
+}
+
+test('hold fire: no volley until the foe is close, then a heavier first volley', () => {
+  assert.equal(firstVolley(10, 'holdfire'), 0, 'holding fire, a line 10 off draws no volley');
+  assert.ok(firstVolley(10) > 0, 'without the order it fires at 10');
+  const r = firstVolley(4, 'holdfire') / firstVolley(4);
+  assert.ok(Math.abs(r - data('tuning').holdFire.first) < 0.01, `the first volley after holding fire does ${r.toFixed(2)}x`);
+});
+
+test('night falls by the scenario clock: sight closes in and fire weakens', () => {
+  const night = (sim: any) => (sim.scn = { ...sim.scn, clock: { start: '23:00', hours: 1 } });
+  const spotted = (dark: boolean) => {
+    const sim = arena((fr, co) => [Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: 0 }), Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 60 })]);
+    sim.s.fog = true; if (dark) night(sim);
+    step(sim, 0.05);
+    return sim.s.seen[0].length;
+  };
+  assert.equal(spotted(false), 1, 'by day a line 60 off is seen');
+  assert.equal(spotted(true), 0, 'at night it is not');
+  const r = firstVolley(10, 'hold', night) / firstVolley(10);
+  assert.ok(Math.abs(r - (1 - data('tuning').night.fire)) < 0.01, `a volley in the dark does ${r.toFixed(2)}x`);
+});
+
+test('a defending bot line holds its fire as a column comes on', () => {
+  let line: any;
+  const sim = arena((fr, co) => { const col = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: -45, facing: 0, form: 'column' }); line = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 0, facing: Math.PI, form: 'line' }); return [col, line]; });
+  const col = sim.s.units[0]; col.tx = 0; col.tz = -2; // (arena clears orders as it places units)
+  const bot = makeBot(sim, 1);
+  let held = false;
+  run(sim, 15, () => held, () => { bot(0.05); held = line.stance === 'holdfire'; });
+  assert.ok(held, 'the line was ordered to hold its fire');
+});
+
+test('bot cavalry rides at a shaken line (it cannot form square) before a nearer steady one', () => {
+  let cav: any, shaken: any;
+  const sim = arena((fr, co) => { const [l1, l2] = co.filter((u) => u.type === 'line'); return [cav = Object.assign(fr.find((u) => u.type === 'lancer'), { x: 0, z: 0 }), Object.assign(l1, { x: -30, z: 30, morale: 60 }), shaken = Object.assign(l2, { x: 40, z: 45, morale: 60, shaken: 30 })]; });
+  const bot = makeBot(sim, 0);
+  run(sim, 5, () => cav.chase != null, () => bot(0.05));
+  assert.equal(cav.chase, shaken.id);
+});
+
+test('bot cavalry sounds the Charge ~25-35 out from its target', () => {
+  let cav: any, gun: any, d = -1;
+  const sim = arena((fr, co) => [cav = Object.assign(fr.find((u) => u.type === 'lancer'), { x: 0, z: 90 }), gun = Object.assign(co.find((u) => u.type === 'artillery'), { x: 0, z: 0, reload: 1e9 })]);
+  sim.s.t = 30; // the bot keeps its specials for after the opening 20 s
+  const bot = makeBot(sim, 0);
+  run(sim, 30, () => d >= 0, () => { bot(0.05); if (cav.spKind === 'charge' && cav.spUntil > sim.s.t) d = Math.hypot(cav.x - gun.x, cav.z - gun.z); });
+  assert.ok(d > 20 && d < 36, `charged from ${d.toFixed(1)}`);
+});
+
+test('attacking, the bot keeps one regiment of horse back to counter-charge enemy horse in among its foot', () => {
+  let a: any, b: any, line: any, foe: any, gun: any;
+  const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'lancer'), { x: 0, z: 40 }), b = Object.assign(fr.find((u) => u.type === 'cuirassier'), { x: 15, z: 40 }), line = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: 0, facing: Math.PI, morale: 9999, maxMorale: 9999 }), foe = Object.assign(co.find((u) => u.type === 'skirmisher'), { type: 'lancer', x: 0, z: -40 }), gun = Object.assign(co.find((u) => u.type === 'artillery'), { x: 40, z: -30, reload: 1e9 })]); // (the Coalition has no horse here: its skirmishers stand in)
+  command(sim, 1, { c: 'attack', ids: [foe.id], target: line.id });
+  run(sim, 20, () => foe.eng === line.id);
+  assert.equal(foe.eng, line.id, 'the enemy horse is in among our foot');
+  const bot = makeBot(sim, 0);
+  run(sim, 3, () => a.chase != null && b.chase != null, () => bot(0.05));
+  assert.ok(a.chase === foe.id && b.chase === gun.id, `the reserve counter-charges (${a.chase}), the other rides at the guns (${b.chase})`);
+});
+
+test('bot guns lay on a column rather than a nearer line', () => {
+  let line: any, col: any;
+  const sim = arena((fr, co) => { const [l1, l2] = fr.filter((u) => u.type === 'line'); return [line = Object.assign(l1, { x: -20, z: -50, form: 'line', morale: 9999, maxMorale: 9999 }), col = Object.assign(l2, { x: 25, z: -65, form: 'column', morale: 9999, maxMorale: 9999 }), Object.assign(co.find((u) => u.type === 'artillery'), { x: 0, z: 0, facing: Math.PI, morale: 9999, maxMorale: 9999, reload: 2 })]; }); // loaded after the bot's first look
+  const bot = makeBot(sim, 1), at = { line: 0, col: 0 };
+  run(sim, 40, () => col.dead, () => { bot(0.05); for (const e of sim.s.events) if (e.k === 'shot' && e.side === 1) at[e.tx === col.x ? 'col' : 'line']++; sim.s.events.length = 0; }); // until round shot destroys the column
+  assert.ok(at.col >= 2 && at.line === 0, `rounds at the column ${at.col}, at ${line.name} ${at.line}`);
+});
+
+test('a defending bot line steps back off the forward slope to a spot in its zone the enemy guns cannot see', () => {
+  let line: any, gun: any;
+  const sim = arena((fr, co) => [gun = Object.assign(fr.find((u) => u.type === 'artillery'), { x: 0, z: -70, reload: 1e9 }), line = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 0, facing: Math.PI, form: 'line' })], { size: 400, rough: FLAT, hills: [{ x: 0, z: 5, rx: 400, rz: 5, h: 5, p: 2 }] }); // a ridge across the zone, crest at z 5
+  sim.s.zones = [{ id: 'z', name: 'Z', x: 0, z: 0, r: 30, value: 1, owner: 1, p: -1 }];
+  assert.ok(los(sim.scn, gun.x, gun.z, 2, line.x, line.z, 2), 'the guns see the line at first');
+  const bot = makeBot(sim, 1);
+  run(sim, 40, undefined, () => bot(0.05));
+  assert.ok(!los(sim.scn, gun.x, gun.z, 2, line.x, line.z, 2) && Math.hypot(line.x, line.z) < 30, `behind the crest, in the zone (${line.x.toFixed(1)}, ${line.z.toFixed(1)})`);
 });
