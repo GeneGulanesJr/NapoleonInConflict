@@ -336,7 +336,7 @@ function meleeMult(a: any, d: any): number {
   return 1;
 }
 /** Posted: formed foot or guns that have stood still a while (tuning.hold.after) have dressed their ranks, found the folds of the ground and lie down between volleys */
-export const posted = (u: any, tu: any) => (u.still ?? 0) >= tu.hold.after && !u.routed && !u.limbered && !tu.types[u.type].cav;
+export const posted = (u: any, tu: any) => (u.still ?? 0) >= tu.hold.after && !u.routed && !(u.limT > 0) && !tu.types[u.type].cav;
 /** Morale ceiling: a regiment that has lost men can't get back to its full spirit (tuning.morale.cap). */
 const mcap = (u: any, tu: any) => u.maxMorale * (1 - tu.morale.cap * (1 - Math.min(1, u.men / u.maxMen)));
 /** Wheel u toward angle a at its rate (tuning.turn); returns the angle still left to turn. */
