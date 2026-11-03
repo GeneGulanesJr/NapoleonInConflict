@@ -211,10 +211,11 @@ export function deploy(sim: Sim, side: number, type: string): boolean {
   if (!T || (sd.reserves[type] ?? 0) <= 0 || sd.rp < T.cost || sim.s.over) return false;
   sd.rp -= T.cost;
   sd.reserves[type]--;
-  const p = entryPoint(sim, side);
+  // arrive at the objective we hold nearest our entry (not one under attack); with none, march on from the map edge
+  const g = sim.scn.entry[side], base = sim.s.zones.filter((z: any) => z.owner === side && !z.contested).sort((a: any, b: any) => Math.hypot(a.x - g.x, a.z - g.z) - Math.hypot(b.x - g.x, b.z - g.z))[0];
+  const p = base ? { x: base.x + (rand(sim.s) - 0.5) * base.r, z: base.z } : entryPoint(sim, side);
   const u = spawn(sim, side, { type, name: `Reserve ${T.label}`, x: p.x, z: p.z });
-  const g = sim.scn.entry[side];
-  u.tx = g.x; u.tz = g.z + (side === 0 ? -25 : 25);
+  if (!base) { u.tx = g.x; u.tz = g.z + (side === 0 ? -25 : 25); }
   log(sim, `${side === 0 ? 'French' : 'Coalition'} reserve arrives: ${T.label}.`);
   ev(sim, { k: 'arrive', side, names: [u.name], types: [type] });
   return true;
@@ -354,8 +355,8 @@ export const posted = (u: any, tu: any) => (u.still ?? 0) >= tu.hold.after && !u
 /** Morale ceiling: a regiment that has lost men can't get back to its full spirit (tuning.morale.cap). */
 const mcap = (u: any, tu: any) => u.maxMorale * (1 - tu.morale.cap * (1 - Math.min(1, u.men / u.maxMen)));
 /** Wheel u toward angle a at its rate (tuning.turn); returns the angle still left to turn. */
-function face(u: any, a: number, dt: number, tu: any): number {
-  const r = tu.turn[tu.types[u.type].cav ? 'cavalry' : isInf(u) ? u.form : u.type] ?? 1, d = Math.atan2(Math.sin(a - u.facing), Math.cos(a - u.facing)), k = Math.max(-r * dt, Math.min(r * dt, d));
+function face(u: any, a: number, dt: number, tu: any, rate?: number): number {
+  const r = rate ?? tu.turn[tu.types[u.type].cav ? 'cavalry' : isInf(u) ? u.form : u.type] ?? 1, d = Math.atan2(Math.sin(a - u.facing), Math.cos(a - u.facing)), k = Math.max(-r * dt, Math.min(r * dt, d));
   u.facing += k;
   return Math.abs(d - k);
 }
@@ -557,7 +558,7 @@ export function step(sim: Sim, dt: number) {
       else {
         go = true;
         if (u.type === 'artillery' && (!u.limbered || u.limT > 0)) { if (u.limT <= 0) u.limT = tu.limber.up; } // hook the guns to their teams before they can move
-        else if (face(u, Math.atan2(dx, dz), dt, tu) > tu.turn.slack) u.mv = true; // wheel onto the new heading before stepping off
+        else if (face(u, Math.atan2(dx, dz), dt, tu, T.cav && u.eng != null ? tu.turn.breakaway : undefined) > tu.turn.slack) u.mv = true; // horse locked in melee wheels away fast (breakaway), not at its parade rate with its back to the foe // wheel onto the new heading before stepping off
         else {
           const fs = T.cav || u.type === 'artillery' || u.type === 'skirmisher' ? 1 : tu.formSpeed[u.form];
           const run = dash ? 1.7 : 1;

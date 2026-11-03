@@ -126,6 +126,20 @@ test('replenishing on an objective we hold (a depot) trickles men in at the depl
   assert.equal(home.refill, false, 'the order clears itself once full');
 });
 
+test('a reserve arrives at the objective we hold nearest our entry, skipping one under attack, else at the map edge', () => {
+  const sim = arena((fr, co) => [fr[0], Object.assign(co[0], { x: 170, z: 170 })]);
+  const sd = sim.s.side[0], zone = (id: string) => sim.s.zones.find((z: any) => z.id === id);
+  sim.s.zones.forEach((z: any) => Object.assign(z, { owner: ['pp', 'pi', 'ge'].includes(z.id) ? 0 : null, contested: false })); // pp is nearest the French entry, then pi, then ge
+  sd.reserves = { line: 3 }; sd.rp = 1e6;
+  const deployed = () => { command(sim, 0, { c: 'deploy', type: 'line' }); return sim.s.units[sim.s.units.length - 1]; };
+  const at = (u: any, z: any) => Math.hypot(u.x - z.x, u.z - z.z) < z.r;
+  const a = deployed(); assert.ok(at(a, zone('pp')) && a.tx == null, `at the nearest held objective, standing (${a.x.toFixed(0)}, ${a.z.toFixed(0)})`);
+  zone('pp').contested = true;
+  const b = deployed(); assert.ok(at(b, zone('pi')), `the contested one is skipped (${b.x.toFixed(0)}, ${b.z.toFixed(0)})`);
+  sim.s.zones.forEach((z: any) => (z.owner = null));
+  const c = deployed(); assert.ok(c.z === sim.scn.entry[0].z && c.tx != null, 'holding nothing, it marches on from the entry');
+});
+
 test('the war chest is finite: RP comes only from objectives held and stops at the cap; the replacement pool runs dry', () => {
   let a: any, b: any;
   const sim = arena((fr, co) => { [a, b] = fr.filter((u) => u.type === 'line'); return [a, b, Object.assign(co[0], { x: 170, z: 170 })]; });
@@ -495,4 +509,19 @@ test('a routing regiment turns to flee at the rout rate, not in one tick', () =>
   let worst = 0, last = a.facing;
   run(sim, 4, () => false, () => { worst = Math.max(worst, Math.abs(Math.atan2(Math.sin(a.facing - last), Math.cos(a.facing - last)))); last = a.facing; });
   assert.ok(worst > 0 && worst <= sim.tu.turn.rout * 0.05 + 1e-6, `facing changed ${worst.toFixed(3)} rad in one tick`);
+});
+
+test('cavalry ordered away from a melee breaks contact in a couple of seconds and keeps its nerve', () => {
+  let cav: any, inf: any;
+  const sim = arena((fr, co) => {
+    cav = fr.find((u) => u.type === 'lancer'); inf = co.find((u) => u.type === 'line');
+    return [Object.assign(cav, { x: 0, z: -60, facing: 0, form: 'line' }), Object.assign(inf, { x: 0, z: 0, facing: Math.PI, form: 'line', stance: 'hold' }), Object.assign(co.find((u) => u !== inf), { x: 170, z: 170 })];
+  });
+  command(sim, 0, { c: 'attack', ids: [cav.id], target: inf.id });
+  run(sim, 30, () => cav.eng != null && sim.s.t > 8);
+  assert.ok(cav.eng != null, 'the lancers are locked in melee');
+  command(sim, 0, { c: 'move', ids: [cav.id], x: 0, z: -90 });
+  let t = 0; run(sim, 3, () => cav.eng == null, () => { t += 0.05; });
+  assert.ok(cav.eng == null && !cav.routed, `broke contact within 3 s (took ${t.toFixed(1)} s)`);
+  assert.ok(cav.morale / cav.maxMorale > 0.5, `kept its nerve (morale ${Math.round((cav.morale / cav.maxMorale) * 100)}%)`);
 });
