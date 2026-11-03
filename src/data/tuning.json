@@ -69,7 +69,7 @@
     "artillery": {
       "label": "Field Artillery",
       "men": 180,
-      "speed": 2.75,
+      "speed": 1.6,
       "range": 95,
       "reload": 9,
       "power": 0.5,
@@ -106,7 +106,7 @@
   "formSpeed": {
     "line": 0.8,
     "column": 1.25,
-    "square": 0.5
+    "square": 0.25
   },
   "formChangeTime": 2.8,
   "moraleLoss": 250,

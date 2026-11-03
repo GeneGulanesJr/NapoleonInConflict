@@ -4,6 +4,97 @@ import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { WebSocket } from 'ws';
 import { applyResult, type CampaignState } from '../src/sim/roster.ts';
+import { readFileSync } from 'node:fs';
+import { createSim, step, command } from '../src/sim/sim.ts';
+import { makeBot } from '../src/sim/bot.ts';
+
+// ---------------------------------------------------------------- unit-vs-unit rules
+const data = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.json`, import.meta.url), 'utf8'));
+/** a bare quatrebras sim with just these units (French a, Coalition b) plus a far-off foe so the battle doesn't end */
+function arena(setup: (fr: any[], co: any[]) => any[]) {
+  const sim = createSim(data('quatrebras'), data('tuning'), { seed: 1 });
+  const fr = sim.s.units.filter((u: any) => u.side === 0), co = sim.s.units.filter((u: any) => u.side === 1);
+  sim.s.units = setup(fr, co).map((u) => Object.assign(u, { tx: null, tz: null, vet: 0, busy: 0 })); sim.tl = [];
+  sim.s.side.forEach((sd: any) => (sd.reserves = {})); sim.scn = { ...sim.scn, abilities: [[], []] }; // bots must not deploy or call in aid mid-test
+  return sim;
+}
+const run = (sim: any, secs: number, until = () => false, each = () => {}) => { for (let t = 0; t < secs && !until(); t += 0.05) { step(sim, 0.05); each(); } };
+
+test('friendly regiments march through each other without shoving', () => {
+  let a: any, b: any;
+  const sim = arena((fr, co) => { [a, b] = fr.filter((u) => u.type === 'line'); return [Object.assign(a, { x: 0, z: -40, facing: 0, form: 'column' }), Object.assign(b, { x: 0, z: 0, facing: 0, form: 'line' }), Object.assign(co[0], { x: 170, z: 170 })]; });
+  command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: 40 });
+  run(sim, 20);
+  assert.ok(Math.hypot(a.x, a.z - 40) < 2, `marcher arrived (at ${a.x.toFixed(1)}, ${a.z.toFixed(1)})`);
+  assert.ok(Math.hypot(b.x, b.z) < 0.5, 'the standing regiment kept its post');
+});
+
+test('a square holds against equal cavalry but breaks when badly outnumbered', () => {
+  const duel = (sqMen: number, cavMen: number) => {
+    let cav: any, sq: any;
+    const sim = arena((fr, co) => {
+      cav = fr.find((u) => u.type === 'lancer'); sq = co.find((u) => u.type === 'line');
+      return [Object.assign(cav, { men: cavMen, maxMen: cavMen, x: 0, z: -22, facing: 0 }), Object.assign(sq, { men: sqMen, maxMen: 540, form: 'square', x: 0, z: 0, facing: Math.PI })];
+    });
+    command(sim, 0, { c: 'attack', ids: [cav.id], target: sq.id });
+    run(sim, 180, () => cav.routed || sq.routed || cav.dead || sq.dead);
+    return sq.routed || sq.dead ? 'square' : 'cavalry';
+  };
+  assert.equal(duel(540, 540), 'cavalry', 'a full square sees off as many horsemen');
+  assert.equal(duel(200, 360), 'square', 'a 200-man square swamped by 360 lancers breaks');
+});
+
+test('a regiment cannot fire through its own front line', () => {
+  let front: any, rear: any;
+  const sim = arena((fr, co) => { [front, rear] = fr.filter((u) => u.type === 'line'); return [Object.assign(front, { x: 0, z: -10, facing: 0, form: 'line' }), Object.assign(rear, { x: 0, z: -28, facing: 0, form: 'line' }), Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 4, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999 })]; });
+  const shots = [0, 0];
+  run(sim, 30, undefined, () => { for (const e of sim.s.events) if (e.k === 'shot' && e.side === 0) shots[Math.abs(e.z - front.z) < 3 ? 0 : 1]++; sim.s.events.length = 0; });
+  assert.ok(shots[0] > 0, 'the front line fires');
+  assert.equal(shots[1], 0, 'the rear line holds its fire');
+});
+
+test('a group move lands regiments side by side without overlapping', () => {
+  const sim = arena((fr, co) => [...fr.filter((u) => u.type === 'line').slice(0, 4).map((u, i) => Object.assign(u, { x: (i - 1.5) * 26, z: -60, facing: 0, form: 'line' })), Object.assign(co[0], { x: 170, z: 170 })]);
+  const ls = sim.s.units.filter((u: any) => u.side === 0);
+  command(sim, 0, { c: 'move', ids: ls.map((u: any) => u.id), x: 0, z: 40 });
+  const ordered = ls.map((u: any) => [u.tx, u.tz]);
+  run(sim, 60);
+  ls.forEach((u: any, i: number) => assert.ok(Math.hypot(u.x - ordered[i][0], u.z - ordered[i][1]) < 1, `${u.name} stayed where it was sent`));
+  const xs = ls.map((u: any) => u.x).sort((a: number, b: number) => a - b);
+  for (let i = 1; i < xs.length; i++) assert.ok(xs[i] - xs[i - 1] > 25.5, `lines ${i - 1}/${i} do not overlap (${(xs[i] - xs[i - 1]).toFixed(1)} apart)`);
+});
+
+test('bot infantry does not flip-flop formation when cavalry hovers nearby', () => {
+  let cav: any, inf: any;
+  const sim = arena((fr, co) => [cav = Object.assign(fr.find((u) => u.type === 'lancer'), { x: 0, z: -31, facing: 0 }), inf = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 0, facing: Math.PI, form: 'line' })]);
+  const bot = makeBot(sim, 1);
+  let changes = 0, last = inf.form;
+  run(sim, 60, undefined, () => { cav.x = 0; cav.z = -31; bot(0.05); if (inf.form !== last) { changes++; last = inf.form; } });
+  assert.ok(changes <= 1, `formed square and stayed (${changes} changes)`);
+});
+
+test('bot cavalry pulls up when its target forms a full square', () => {
+  let cav: any, inf: any;
+  const sim = arena((fr, co) => [cav = Object.assign(fr.find((u) => u.type === 'lancer'), { x: 0, z: -80, facing: 0, men: 270 }), inf = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 0, facing: Math.PI, form: 'line', auto: true, morale: 60 })]);
+  sim.scn = { ...sim.scn, bot: ['attack', 'defend'] };
+  const bot = makeBot(sim, 0);
+  let hit = false, formed = false;
+  run(sim, 60, () => cav.routed, () => { bot(0.05); if (inf.form === 'square') formed = true; if (cav.eng === inf.id && inf.form === 'square') hit = true; });
+  assert.ok(formed, 'the target did form square');
+  assert.ok(!hit && !cav.routed, 'the cavalry never rode into the square');
+});
+
+test('artillery misses more the further it shoots', () => {
+  const missRate = (z: number) => {
+    let gun: any;
+    const sim = arena((fr, co) => [gun = Object.assign(fr.find((u) => u.type === 'artillery'), { x: 0, z: 0, facing: 0 }), Object.assign(co.find((u) => u.type === 'line'), { x: 0, z, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999, men: 9999 })]);
+    let shots = 0, misses = 0;
+    run(sim, 600, () => shots >= 60, () => { for (const e of sim.s.events) { if (e.k === 'shot' && e.side === 0) shots++; if (e.k === 'boom') misses++; } sim.s.events.length = 0; });
+    return misses / shots;
+  };
+  const near = missRate(40), far = missRate(90);
+  assert.ok(far > 0.35 && far > near + 0.15, `long range misses more (near ${near.toFixed(2)}, far ${far.toFixed(2)})`);
+});
 
 // ---------------------------------------------------------------- campaign roster
 test('applyResult drops destroyed regiments, heals survivors, advances the campaign', () => {

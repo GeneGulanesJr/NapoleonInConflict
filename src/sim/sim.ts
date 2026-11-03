@@ -115,8 +115,11 @@ export function command(sim: Sim, side: number, c: Cmd) {
     const d = Math.hypot(dx, dz) || 1;
     dx /= d; dz /= d;
     us.sort((a: any, b: any) => (a.x * -dz + a.z * dx) - (b.x * -dz + b.z * dx));
+    // side by side by real frontage (and never closer than the idle spacing rule), so a group arrives without piling up
+    const hw = us.map((u: any) => { const f = foot(u, sim.tu); return Math.max((f[1] - f[0]) / 2 + 2, 0.7 * rad(u) + 0.5); });
+    let acc = -hw.reduce((a: number, b: number) => a + b, 0);
     us.forEach((u: any, i: number) => {
-      const off = (i - (us.length - 1) / 2) * 10;
+      const off = acc + hw[i]; acc += 2 * hw[i];
       const tx = Math.max(-half, Math.min(half, c.x - dz * off)), tz = Math.max(-half, Math.min(half, c.z + dx * off));
       if (c.q && u.tx != null && u.chase == null) { if (u.queue.length < 6) u.queue.push([tx, tz]); } // shift-click: add a waypoint
       else { u.tx = tx; u.tz = tz; u.queue = []; u.chase = null; u.via = null; u.garrison = u.gTarget = null; }
@@ -265,6 +268,14 @@ function chron(sim: Sim, side: number, text: string) {
   const c = sim.s.chron; c.push({ t: Math.round(sim.s.t), side, text }); if (c.length > 60) c.shift();
 }
 
+/** A friendly regiment stands across the line of fire from u to e (muskets can't shoot through their own men; guns fire over them). */
+function masked(u: any, e: any, live: any[], tu: any) {
+  if (u.type === 'artillery') return false;
+  return live.some((f: any) => f !== u && f.side === u.side && !f.dead && !f.routed && Math.hypot(f.x - (u.x + e.x) / 2, f.z - (u.z + e.z) / 2) < Math.hypot(e.x - u.x, e.z - u.z) / 2 + 30
+    && [0.25, 0.5, 0.75].some((k) => distToFoot(f, tu, u.x + (e.x - u.x) * k, u.z + (e.z - u.z) * k) < 0.5));
+}
+/** How solid a square is against cavalry: 1 when it has at least as many men as the horsemen, fading fast (ratio squared) as it is outnumbered. */
+export const solid = (sq: any, cav: any) => Math.min(1, sq.men / Math.max(1, cav.men)) ** 2;
 function meleeMult(a: any, d: any): number {
   if (d.routed) return 1.5;
   const ac = a.type === 'lancer' || a.type === 'cuirassier';
@@ -273,9 +284,9 @@ function meleeMult(a: any, d: any): number {
     if (d.type === 'artillery') return 2.5;
     if (d.type === 'skirmisher') return 2.2;
     if (dc) return 1;
-    return d.form === 'square' ? 0.25 : d.form === 'column' ? 2 : 1.2;
+    return d.form === 'square' ? 1.2 - 0.95 * solid(d, a) : d.form === 'column' ? 2 : 1.2; // full square 0.25, a swamped one is just a line (1.2)
   }
-  if (dc) return a.form === 'square' ? 1.6 : a.form === 'column' ? 0.5 : a.type === 'skirmisher' ? 0.3 : 1;
+  if (dc) return a.form === 'square' ? 1 + 0.6 * solid(a, d) : a.form === 'column' ? 0.5 : a.type === 'skirmisher' ? 0.3 : 1;
   if (d.type === 'artillery') return 2;
   return 1;
 }
@@ -440,8 +451,11 @@ export function step(sim: Sim, dt: number) {
     // ranged fire (only when standing still, not changing formation)
     if (T.range <= 0 || u.mv || u.busy > 0 || u.reload > 0) continue;
     let tg: any = null, td = T.range;
-    for (const e of live) { if (e.dead || e.side === u.side || !seen[u.side].has(e.id)) continue; const d = Math.max(0, gapBetween(u, e, tu)); if (d < td && !smokeBlocked(sim, u.x, u.z, e.x, e.z)) { td = d; tg = e; } } // range is measured to the nearest part of the target formation
+    for (const e of live) { if (e.dead || e.side === u.side || !seen[u.side].has(e.id)) continue; const d = Math.max(0, gapBetween(u, e, tu)); if (d < td && !smokeBlocked(sim, u.x, u.z, e.x, e.z) && !masked(u, e, live, tu)) { td = d; tg = e; } } // range is measured to the nearest part of the target formation
     if (!tg) continue;
+    // round shot falls short or wide more often the further it flies; canister at close range always tells
+    const canister = u.spUntil > s.t && u.spKind === 'canister', volley = u.spUntil > s.t && u.spKind === 'volley', close = td < tu.canisterRange * (canister ? 2.2 : 1);
+    const miss = u.type === 'artillery' && !close && rand(s) > 1 - 0.65 * (td / T.range);
     const fm = u.type === 'skirmisher' || u.type === 'artillery' ? 1 : tu.formFire[u.form];
     const dmgForm = tu.types[tg.type].cav ? 0.8 : tg.type === 'skirmisher' ? 0.6 : tu.formDmg[tg.form];
     const rf = Math.max(tu.rangeFloor, 1 - 0.75 * (td / T.range));
@@ -450,17 +464,18 @@ export function step(sim: Sim, dt: number) {
     if (asp && s.t - tg.flankT > 6) { tg.flankT = s.t; ev(sim, { k: 'flank', x: tg.x, z: tg.z, side: tg.side, kind: asp }); chron(sim, 1 - tg.side, `${asp === 2 ? 'Rear' : 'Flank'} fire on ${tg.name}`); }
     let cas = u.men * T.power * rf * fm * dmgForm * (tg.garrison != null ? tu.garrison.cover : featureAt(scn, tg.x, tg.z).cover) * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.fire) * smokeFactor(sim, tg.x, tg.z) * W.fire * elev
       * (0.5 + 0.5 * Math.max(0, u.morale) / u.maxMorale) * (0.8 + 0.4 * rand(s));
-    const canister = u.spUntil > s.t && u.spKind === 'canister', volley = u.spUntil > s.t && u.spKind === 'volley';
-    if (u.type === 'artillery' && td < tu.canisterRange * (canister ? 2.2 : 1)) cas *= tu.canisterMult * (canister ? 1.4 : 1);
+    if (u.type === 'artillery' && close) cas *= tu.canisterMult * (canister ? 1.4 : 1);
     if (volley) { cas *= 2.2; u.spUntil = 0; }
-    damage(sim, tg, cas, tu.flank.morale[asp], u);
+    if (miss) ev(sim, { k: 'boom', x: tg.x + (rand(s) - 0.5) * 16, z: tg.z + (rand(s) - 0.5) * 16 }); // the ball ploughs up the ground nearby
+    else damage(sim, tg, cas, tu.flank.morale[asp], u);
     u.reload = T.reload * (0.9 + 0.2 * rand(s)) * (volley ? 1.6 : canister ? 0.6 : 1);
     u.fired = 0;
     u.facing = Math.atan2(tg.x - u.x, tg.z - u.z);
     const fx = Math.sin(u.facing), fz = Math.cos(u.facing);
     s.smoke.push({ x: u.x + fx * 3, z: u.z + fz * 3, age: 0 });
     if (s.smoke.length > tu.smoke.maxPuffs) s.smoke.shift();
-    ev(sim, { k: 'shot', side: u.side, x: u.x, z: u.z, a: u.type === 'artillery' ? 1 : 0, tx: tg.x, tz: tg.z });
+    const fw = foot(u, tu); // frontage, so the renderer can ripple the volley along the whole firing line
+    ev(sim, { k: 'shot', side: u.side, x: u.x, z: u.z, a: u.type === 'artillery' ? 1 : 0, tx: tg.x, tz: tg.z, w: Math.round(fw[1] - fw[0]) });
   }
 
   // abilities in flight
@@ -489,6 +504,7 @@ export function step(sim: Sim, dt: number) {
     for (let j = i + 1; j < live.length; j++) {
       const b = live[j];
       if (b.dead || a.eng === b.id || b.eng === a.id || a.garrison != null || b.garrison != null) continue;
+      if (a.side === b.side && (a.mv || b.mv)) continue; // friends pass through each other while marching (no bulldozing your own line); they spread out once both halt
       const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
       if (d < 0.001) continue;
       const min = a.side === b.side ? 0.7 * (rad(a) + rad(b)) + 1 : d - gapBetween(a, b, tu) + 0.2; // enemies are kept edge-to-edge apart, never overlapped

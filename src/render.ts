@@ -543,7 +543,7 @@ export function createView(host: HTMLElement) {
   fxMesh.count = 0; fxMesh.frustumCulled = false; scene.add(fxMesh);
   type Fx = { row: number; x: number; y: number; z: number; age: number; life: number; size: number; vx: number; vy: number; vz: number };
   const fxs: Fx[] = [];
-  const spawn = (row: number, x: number, y: number, z: number, life: number, size: number, vx = 0, vy = 0, vz = 0) => { if (fxs.length < FX_MAX - 300) fxs.push({ row, x, y, z, age: 0, life, size, vx, vy, vz }); };
+  const spawn = (row: number, x: number, y: number, z: number, life: number, size: number, vx = 0, vy = 0, vz = 0, delay = 0) => { if (fxs.length < FX_MAX - 300) fxs.push({ row, x, y, z, age: -delay, life, size, vx, vy, vz }); }; // delay: starts hidden, so a volley can ripple
 
   type Vis = { x: number; z: number; f: number; off: Float32Array; form: string; n?: number };
   const vis = new Map<number, Vis>();
@@ -660,8 +660,16 @@ export function createView(host: HTMLElement) {
     for (const e of events) {
       if (e.k === 'shot') {
         const dx = e.tx - e.x, dz = e.tz - e.z, d = Math.hypot(dx, dz) || 1, y = heightAt(scn, e.x, e.z) + 1.6;
-        spawn(1, e.x + (dx / d) * 2, y, e.z + (dz / d) * 2, 0.15, e.a ? 5 : 3);
-        flash(e.x + (dx / d) * 2, y, e.z + (dz / d) * 2, e.a ? 13 : 7, e.a ? 1 : 0, e.a ? 0.25 : 0.12, e.a ? 0.7 : 0.4);
+        if (e.a || !e.w) spawn(1, e.x + (dx / d) * 2, y, e.z + (dz / d) * 2, 0.15, e.a ? 5 : 3);
+        else { // musket volley: flashes ripple down the whole firing line, then a bank of powder smoke rolls out
+          const n = Math.max(2, Math.min(9, Math.round(e.w / 3))), px = -dz / d, pz = dx / d;
+          for (let i = 0; i < n; i++) {
+            const o = (i / (n - 1) - 0.5) * e.w, fx = e.x + px * o + (dx / d) * 1.5, fz = e.z + pz * o + (dz / d) * 1.5;
+            spawn(1, fx, y, fz, 0.15, 2.4, 0, 0, 0, i * 0.035 + Math.random() * 0.03);
+            if (i % 2 === 0) spawn(0, fx + (dx / d) * 1.5, y + 0.3, fz + (dz / d) * 1.5, 3.5, 3, (dx / d) * 0.6, 0.35, (dz / d) * 0.6, 0.1 + i * 0.035);
+          }
+        }
+        flash(e.x + (dx / d) * 2, y, e.z + (dz / d) * 2, e.a ? 13 : Math.max(7, (e.w ?? 0) / 2 + 4), e.a ? 1 : 0, e.a ? 0.25 : 0.2, e.a ? 0.7 : 0.4);
         if (e.a) { spawn(0, e.x + (dx / d) * 3, y + 0.4, e.z + (dz / d) * 3, 4, 3.6, 0.5, 0.5, 0); kick(Math.max(0, 0.25 - dist2(e.x, e.z) / 400)); }
       } else if (e.k === 'boom') {
         const y = heightAt(scn, e.x, e.z);
@@ -838,6 +846,7 @@ export function createView(host: HTMLElement) {
     for (let i = fxs.length - 1; i >= 0; i--) {
       const f = fxs[i]; f.age += dt;
       if (f.age >= f.life) { fxs.splice(i, 1); continue; }
+      if (f.age < 0) continue; // still waiting for its turn in the ripple
       f.x += f.vx * dt; f.y += f.vy * dt; f.z += f.vz * dt;
       place(f.row, Math.min(FRAMES[f.row] - 1, Math.floor((f.age / f.life) * FRAMES[f.row])), f.x, f.y, f.z, f.size);
     }
