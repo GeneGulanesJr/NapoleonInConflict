@@ -4,11 +4,11 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { animate } from 'animejs';
-import { heightAt, lineDist, featureAt } from './sim/world.ts';
+import { heightAt, lineDist, featureAt, riverAt } from './sim/world.ts';
 
 // palette (sRGB hex, from the style guide)
 const P = { fr: 0x3f6fdc, gb: 0xd8453a, pr: 0x3b4a85, nl: 0xd8872a, br: 0x2a2a2e, trim: 0xe9e4d6, ink: 0x14110d, skin: 0xd8b090, wood: 0x5a4128, brass: 0xd3a64e, steel: 0xb8bcc4,
-  grassA: 0x7f9150, grassB: 0x8a9c58, wheat: 0xc9ab5a, wheatB: 0xb99b4c, ridge: 0x8f9456, lane: 0x8a6d4a, woodFloor: 0x405836, water: 0x4a6f8f, plaster: 0xd6c9a8, tile: 0xa4503a, pine: 0x2f4a2b,
+  grassA: 0x7f9150, grassB: 0x8a9c58, wheat: 0xc9ab5a, wheatB: 0xb99b4c, ridge: 0x8f9456, lane: 0x8a6d4a, road: 0xb3a07a, woodFloor: 0x405836, denseFloor: 0x324a2b, water: 0x4a6f8f, ford: 0x7099b0, plaster: 0xd6c9a8, tile: 0xa4503a, pine: 0x2f4a2b,
   hedge: 0x3c5a2e, hedgeTop: 0x4a6b36, stone: 0x8d8777, cliff: 0x6b573d, plow: 0x6e5036, smoke: 0xf4f1ea, soil: 0x3a2c1f, horse: 0x6b4a34, pants: 0xe0dbcb };
 const PLUME: Record<string, number> = { fr: 0xd8453a, gb: 0xe9e4d6, pr: 0xe9e4d6, nl: 0xd8872a, br: 0x1b1b1f };
 const NAT: Record<string, number> = { fr: P.fr, gb: P.gb, pr: P.pr, nl: P.nl, br: P.br };
@@ -264,14 +264,14 @@ export function createView(host: HTMLElement) {
   function setScenario(s: any, t: any) {
     clearScene();
     scn = s; tu = t; mapSize = s.map.size; FS = t.figScale ?? 1;
-    const segs = Math.min(240, Math.round(mapSize / 1.6));
+    const segs = Math.min(320, Math.round(mapSize / 1.6)); // ~2 units per cell on the big maps, so roads and fords stay continuous
     const geo = new THREE.PlaneGeometry(mapSize, mapSize, segs, segs);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position, colA = new Float32Array(pos.count * 3), kindA = new Float32Array(pos.count * 4);
     const A = new THREE.Color(P.grassA), B = new THREE.Color(P.grassB), W = new THREE.Color(P.wheat), W2 = new THREE.Color(P.wheatB), R = new THREE.Color(P.ridge), CL = new THREE.Color(P.cliff);
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), z = pos.getZ(i);
-      let h = heightAt(s, x, z), wet = false, kd = 0; // kd: detail channel 0 grass, 1 wheat, 2 plough, 3 lane/village, -1 none
+      let h = heightAt(s, x, z), kd = 0; // kd: detail channel 0 grass, 1 wheat, 2 plough, 3 lane/village/road cobbles, -1 none
       const n = hash(Math.round(x * 0.5) * 31 + Math.round(z * 0.5) * 17);
       const field = Math.sin(x * 0.06 + z * 0.02) * Math.sin(z * 0.05 - x * 0.015) > 0.25;
       const plough = !field && Math.sin(x * 0.04 + 1) * Math.sin(z * 0.045 - 2) > 0.6;
@@ -279,21 +279,16 @@ export function createView(host: HTMLElement) {
       else if (plough) col.setHex(Math.floor(z / 1.6) & 1 ? P.plow : 0x5a4129);
       else col.copy((Math.floor(x / 2) + Math.floor(z / 2)) & 1 ? A : B);
       col.multiplyScalar(0.94 + n * 0.12);
-      col.lerp(R, Math.min(0.55, Math.max(0, Math.floor((h + 0.35 * Math.sin(x * 0.9 + z * 0.5)) / 2) * 2) / 16)); // ridge bands with a zigzag edge
+      col.lerp(R, Math.min(0.6, Math.max(0, Math.floor((h + 0.35 * Math.sin(x * 0.9 + z * 0.5)) / 2) * 2) / 20)); // ridge bands with a zigzag edge, still stepping up to h~12
       const slope = (Math.abs(heightAt(s, x + 1.6, z) - heightAt(s, x, z)) + Math.abs(heightAt(s, x, z + 1.6) - heightAt(s, x, z))) / 1.6;
       if (slope > 0.3) col.lerp(CL, Math.min(0.6, (slope - 0.3) * 2)); // cliff faces
       kd = field ? 1 : plough ? 2 : 0;
-      for (const w of s.map.woods ?? []) if (Math.hypot(x - w.x, z - w.z) < w.r) { col.setHex(P.woodFloor); kd = -1; }
+      for (const w of s.map.woods ?? []) if (Math.hypot(x - w.x, z - w.z) < w.r) { col.setHex(w.dense ? P.denseFloor : P.woodFloor); kd = -1; }
       for (const v of s.map.villages ?? []) if (Math.hypot(x - v.x, z - v.z) < v.r) { col.setHex(P.lane); kd = 3; }
       for (const l of s.map.lanes ?? []) if (lineDist(l.pts, x, z) < l.w * 0.7) { col.setHex(P.lane); kd = 3; }
-      for (const r of s.map.rivers ?? []) {
-        for (let k = 0; k + 1 < r.pts.length; k++) {
-          const [ax, az] = r.pts[k], [bx, bz] = r.pts[k + 1];
-          const dx = bx - ax, dz = bz - az, tt = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
-          if (Math.hypot(x - ax - tt * dx, z - az - tt * dz) < r.width / 2 && !r.bridges.some(([qx, qz]: number[]) => Math.hypot(x - qx, z - qz) < 7)) wet = true;
-        }
-      }
-      if (wet) { col.setHex(P.water); h -= 0.6; kd = -1; }
+      for (const r of s.map.roads ?? []) if (lineDist(r.pts, x, z) < r.w * 0.7) { col.setHex(P.road).multiplyScalar(0.94 + n * 0.12); kd = 3; }
+      const wet = riverAt(s, x, z);
+      if (wet) { col.setHex(wet.ford ? P.ford : P.water); h -= wet.ford ? 0.3 : 0.6; kd = -1; } // fords: paler, shallower water
       if (kd >= 0) kindA[i * 4 + kd] = 1;
       pos.setY(i, Math.round(h / STEP) * STEP + (hash(Math.round(x * 3) * 17 + Math.round(z * 3) * 29) - 0.5) * 0.18); // faceted, low-poly ground
       colA.set([col.r, col.g, col.b], i * 3);
@@ -320,7 +315,7 @@ export function createView(host: HTMLElement) {
     // trees: two-tier pines
     const treeSpots: [number, number][] = [];
     for (const w of s.map.woods ?? []) {
-      const n = Math.round(w.r * w.r * 0.13);
+      const n = Math.round(w.r * w.r * (w.dense ? 0.2 : 0.13));
       for (let i = 0; i < n; i++) { const a = hash(i + w.x) * 6.28, r = Math.sqrt(hash(i * 3 + w.z)) * w.r; treeSpots.push([w.x + Math.cos(a) * r, w.z + Math.sin(a) * r]); }
     }
     for (let i = 0; i < 70; i++) { const x = (hash(i * 5 + 1) - 0.5) * (mapSize - 20), z = (hash(i * 11 + 2) - 0.5) * (mapSize - 20); if (featureAt(s, x, z).kind === 'open') treeSpots.push([x, z]); } // lone trees
