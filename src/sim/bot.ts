@@ -116,11 +116,11 @@ function think(sim: Sim, side: number, mem: any) {
       if (u.form === 'square') { hold(); continue; } // auto-square (switched on above) forms and breaks squares; a second rule here made regiments flip-flop
       if (u.chase != null) continue;
       // bayonet charge when clearly stronger locally
-      if (stance === 'attack' && near && nd < 22 && u.morale > 60) {
+      if (stance === 'attack' && near && nd < 22 && u.morale > 60 && u.fat < 0.5 && near.morale < 0.6 * near.maxMorale) { // go in with the bayonet once the foe wavers
         let mine = 0, theirs = 0;
         for (const f of my) if (dist(f, near) < 40) mine += f.men;
         for (const e of foes) if (dist(e, near) < 40) theirs += e.men;
-        if (mine > 2.2 * theirs) { command(sim, side, { c: 'attack', ids: [u.id], target: near.id }); continue; }
+        if (mine > 2.2 * theirs) { command(sim, side, { c: 'bayonet', ids: [u.id], target: near.id }); continue; }
       }
       if (near && nd <= T.range * 1.05) { hold(); if (u.form !== 'line') command(sim, side, { c: 'form', ids: [u.id], f: 'line' }); continue; }
       const far = dist(u, { x: gx, z: gz }) > 50 && nd > 70;

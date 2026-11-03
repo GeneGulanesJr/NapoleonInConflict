@@ -4,8 +4,8 @@
     "line": {
       "label": "Line Infantry",
       "men": 540,
-      "speed": 4.0,
-      "range": 32,
+      "speed": 2.4,
+      "range": 15,
       "reload": 7,
       "power": 0.13,
       "melee": 0.6,
@@ -17,8 +17,8 @@
     "guard": {
       "label": "Imperial Guard",
       "men": 450,
-      "speed": 4.0,
-      "range": 34,
+      "speed": 2.4,
+      "range": 15,
       "reload": 6,
       "power": 0.16,
       "melee": 1,
@@ -30,8 +30,8 @@
     "skirmisher": {
       "label": "Skirmishers",
       "men": 270,
-      "speed": 5.5,
-      "range": 44,
+      "speed": 3.3,
+      "range": 22,
       "reload": 5,
       "power": 0.08,
       "melee": 0.3,
@@ -43,7 +43,7 @@
     "lancer": {
       "label": "Lancers",
       "men": 360,
-      "speed": 11.25,
+      "speed": 6.75,
       "range": 0,
       "reload": 0,
       "power": 0,
@@ -56,7 +56,7 @@
     "cuirassier": {
       "label": "Cuirassiers",
       "men": 315,
-      "speed": 9.38,
+      "speed": 5.63,
       "range": 0,
       "reload": 0,
       "power": 0,
@@ -82,7 +82,7 @@
     "commander": {
       "label": "Commander",
       "men": 30,
-      "speed": 10,
+      "speed": 6,
       "range": 0,
       "reload": 0,
       "power": 0,
@@ -108,6 +108,27 @@
     "column": 1.25,
     "square": 0.25
   },
+  "artDmg": {
+    "line": 1,
+    "column": 1.5,
+    "square": 2
+  },
+  "turn": {
+    "_note": "Wheel rates in radians/s by formation (foot) or arm; slack = the most a unit may be off its heading and still step off (else it wheels in place first); arc = the most a target may be off the facing and still be fired on.",
+    "line": 0.35,
+    "column": 1,
+    "square": 0.8,
+    "skirmisher": 1.5,
+    "cavalry": 1,
+    "artillery": 0.6,
+    "slack": 0.5,
+    "arc": 0.7
+  },
+  "limber": {
+    "_note": "Seconds for a battery to unlimber after it halts (down) and to limber up before it can move (up).",
+    "down": 4,
+    "up": 2
+  },
   "formChangeTime": 2.8,
   "refillTime": 15,
   "refillOffCost": 2,
@@ -125,7 +146,61 @@
     "loss": 10
   },
   "rallyAt": 35,
-  "rallyDistance": 45,
+  "rallyDistance": 60,
+  "morale": {
+    "_note": "cap: share of max morale lost at zero strength (the ceiling falls with casualties); regen: recovery per s once quiet s without losses; rally: routed recovery per s past rallyDistance (x auraRally near the commander).",
+    "cap": 0.5,
+    "regen": 1.2,
+    "quiet": 6,
+    "rally": 2,
+    "auraRally": 2
+  },
+  "fatigue": {
+    "_note": "fat 0..1. march: gain per s on the move by formation/arm; run: gain per s at a charge or sprint; fight: per s in melee; rest: loss per s standing out of melee; blown: spike when a cavalry charge strikes home. Effects at fat 1: slow = speed lost, fire/melee = damage lost, regen = morale recovery lost.",
+    "march": {
+      "line": 0.003,
+      "column": 0.0015,
+      "square": 0.004,
+      "skirmisher": 0.0025,
+      "cavalry": 0.0025,
+      "artillery": 0.0015
+    },
+    "run": 0.03,
+    "fight": 0.015,
+    "rest": 0.006,
+    "blown": 0.3,
+    "slow": 0.4,
+    "fire": 0.3,
+    "melee": 0.4,
+    "regen": 0.6
+  },
+  "bayonet": {
+    "_note": "Infantry bayonet charge: runs (sprint pace) inside runDist of the target, the morale test at testDist; melee x while charging; grind = morale-loss multiplier for foot-vs-foot melee; recoil = distance a thrown-back charger falls back.",
+    "runDist": 25,
+    "testDist": 5,
+    "melee": 1.4,
+    "grind": 2,
+    "recoil": 12
+  },
+  "shock": {
+    "_note": "Morale test when charged: steadiness = morale/max - loss*(share of men lost) - fat*fatigue + square/garrison - flank[aspect] - size*(charger men/own men - 1, 0..1) - fresh*(own fat - charger fat, >=0) + vet*rank + aura - cav (foot not in square vs horse) +- spread/2; holds at >= pass.",
+    "pass": 0.5,
+    "loss": 0.5,
+    "fat": 0.4,
+    "square": 0.35,
+    "garrison": 0.45,
+    "flank": [
+      0,
+      0.25,
+      0.5
+    ],
+    "size": 0.25,
+    "fresh": 0.3,
+    "vet": 0.05,
+    "aura": 0.1,
+    "cav": 0.3,
+    "spread": 0.3
+  },
   "smoke": {
     "life": 14,
     "radius": 8,
@@ -285,8 +360,18 @@
   "figScale": 1.3,
   "terrain": {
     "_note": "Movement multipliers by arm; river = deep water (fords use their own map value); road = bonus for columns, guns, horse not in melee; downhill = max downhill bonus; charge = melee/shock gain per unit of ground fall per unit of run (clamped +-30%); gunReach = artillery range gain per unit of height over the target (max x1.3).",
-    "wood": { "infantry": 0.7, "skirmisher": 0.9, "cavalry": 0.45, "artillery": 0.4 },
-    "village": { "infantry": 0.85, "skirmisher": 0.9, "cavalry": 0.6, "artillery": 0.6 },
+    "wood": {
+      "infantry": 0.7,
+      "skirmisher": 0.9,
+      "cavalry": 0.45,
+      "artillery": 0.4
+    },
+    "village": {
+      "infantry": 0.85,
+      "skirmisher": 0.9,
+      "cavalry": 0.6,
+      "artillery": 0.6
+    },
     "river": 0.2,
     "road": 1.3,
     "downhill": 1.1,
