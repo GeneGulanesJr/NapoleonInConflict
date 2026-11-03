@@ -5,7 +5,7 @@ import { runBattle, CONTROLS, type Outcome } from './battle.ts';
 import { localSource, remoteSource, replaySource } from './game.ts';
 import { unlock } from './audio.ts';
 import { settings } from './settings.ts';
-import type { Replay } from './sim/replay.ts';
+import { parseReplay, type Replay } from './sim/replay.ts';
 import {
   CAMPAIGN, SCENARIOS, TUNING, newCampaign, load, save, clearSave, applyResult, freshRoster, wonMap, EXTRA_BATTLES, makeSkirmish, type CampaignState,
   loadBattle, saveBattle, clearBattle, type BattleSave, reinforce, recruit, fillCost, recruitCost, prefNum, setPrefNum, pref,
@@ -202,7 +202,19 @@ function quickScreen() {
     ${CAMPAIGN.battles.map((b: string) => `<button class="stag" data-b="${b}">${SCENARIOS[b].title} <small>${SCENARIOS[b].date}</small></button>`).join('')}
     ${EXTRA_BATTLES.map((b: string) => `<button class="stag alt" data-b="${b}">${SCENARIOS[b].title} <small>${SCENARIOS[b].date}</small></button>`).join('')}
     <button class="stag alt" id="rnd">Random skirmish <small>new map every time</small></button>
-    <button class="stag alt" id="back">Back</button></div>`, (el) => {
+    <button class="stag alt" id="rfile">Watch a replay file…</button><input type="file" id="rpick" accept=".json,application/json" hidden>
+    <button class="stag alt" id="back">Back</button></div><p class="err stag" id="err"></p>`, (el) => {
+    const pick = el.querySelector<HTMLInputElement>('#rpick')!;
+    el.querySelector<HTMLElement>('#rfile')!.onclick = () => pick.click();
+    pick.onchange = async () => {
+      const f = pick.files?.[0];
+      if (!f) return;
+      try {
+        if (f.size > 64e6) throw new Error('the file is too large');
+        const rec = parseReplay(await f.text(), SCENARIOS, CAMPAIGN.grouchy?.options.map((o: any) => o.id));
+        fadeOutMenu(() => watch(rec, rec.scn, quickScreen));
+      } catch (e) { el.querySelector('#err')!.textContent = `Cannot play this replay: ${(e as Error).message}.`; pick.value = ''; }
+    };
     el.querySelector<HTMLElement>('#side')!.onclick = (e) => { setPrefNum('nic-side', 1 - prefNum('nic-side', 0)); (e.currentTarget as HTMLElement).querySelector('b')!.textContent = SIDES[prefNum('nic-side', 0)]; };
     el.querySelector<HTMLElement>('#rnd')!.onclick = () => { const scn = makeSkirmish(Date.now() & 0x7fffffff); fadeOutMenu(() => quickBattle(scn)); };
     el.querySelectorAll<HTMLElement>('[data-b]').forEach((b) => (b.onclick = () => fadeOutMenu(() => quickBattle(SCENARIOS[b.dataset.b!]))));

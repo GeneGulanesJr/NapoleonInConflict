@@ -107,7 +107,7 @@ setInterval(() => {
         for (const [ws, side] of r.clients) ws.send(JSON.stringify({ t: 'hello', side, scenario: r.id }));
       }
       if (tick % 2 === 0) {
-        const msg = JSON.stringify({ t: 'state', s: { ...r.sim.s, out: undefined, seed: undefined } }, round);
+        const msg = JSON.stringify({ t: 'state', s: { ...r.sim.s, out: undefined, seed: undefined, bots: undefined } }, round);
         r.sim.s.events.length = 0;
         // skip clients that cannot keep up instead of buffering without limit
         for (const ws of r.clients.keys()) if (ws.readyState === 1 && ws.bufferedAmount < 1_000_000) ws.send(msg);

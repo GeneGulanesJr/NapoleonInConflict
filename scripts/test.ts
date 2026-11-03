@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { WebSocket } from 'ws';
 import { applyResult, reinforce, recruit, fillCost, type CampaignState } from '../src/sim/roster.ts';
-import { runner, type Replay } from '../src/sim/replay.ts';
+import { runner, parseReplay, replayFile, type Replay } from '../src/sim/replay.ts';
 import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
 import { createSim, step, command, manPrice, distToFoot, posted, steady } from '../src/sim/sim.ts';
@@ -731,8 +731,8 @@ test('a replay reproduces the deployment exactly', () => {
   const again = runner(tu, rec, true);
   for (let n = 0; n < 1202; n++) again.tick();
   assert.equal(rec.cmds.length, 3);
-  assert.ok(s.t > 59, 'the battle ran after the start');
-  assert.equal(JSON.stringify(again.sim.s), JSON.stringify(s));
+  assert.ok(live.sim.s.t > 59, 'the battle ran after the start'); // live.sim.s, not s: the runner carries on from a fresh copy at each keyframe
+  assert.equal(JSON.stringify(again.sim.s), JSON.stringify(live.sim.s));
 });
 
 // ---------------------------------------------------------------- WS4a campaign & music
@@ -1023,4 +1023,69 @@ test('routing every regiment across the biggest maps stays within a few ms', () 
     const t0 = performance.now(), n = all().filter(Boolean).length, ms = performance.now() - t0;
     assert.ok(ms < 40, `${id}: ${sim.s.units.length} cross-map routes (${n} off the straight line) in ${ms.toFixed(1)} ms`);
   }
+});
+
+// ---------------------------------------------------------------- WS6 replays & worker
+test('a battle continued from a snapshot plays on exactly, bot memory included', () => {
+  const scn = data('quatrebras'), tu = data('tuning');
+  const go = (sim: any, bots: any[], n: number) => { for (let i = 0; i < n; i++) { step(sim, 0.05); bots[0](0.05); bots[1](0.05); } };
+  const a = createSim(scn, tu, { seed: 3 }), ba = [makeBot(a, 0), makeBot(a, 1)];
+  go(a, ba, 1210); // not on a 2 s bot beat
+  const b = createSim(scn, tu);
+  b.s = JSON.parse(JSON.stringify(a.s));
+  go(a, ba, 2400); go(b, [makeBot(b, 0), makeBot(b, 1)], 2400);
+  assert.equal(JSON.stringify(b.s), JSON.stringify(a.s));
+});
+
+/** a recorded quatrebras battle with two orders, `steps` long */
+function recorded(steps: number, seed = 5) {
+  const scn = { ...data('quatrebras'), strength: [1, 0.8] }, tu = data('tuning');
+  const rec: Replay = { scn, ref: { id: 'quatrebras', strength: [1, 0.8] }, side: 0, start: JSON.stringify(createSim(scn, tu, { seed }).s), cmds: [] };
+  const live = runner(tu, rec), ids = live.sim.s.units.filter((u: any) => u.side === 0).map((u: any) => u.id);
+  for (let n = 0; n < steps; n++) { if (n === 100) live.cmd({ c: 'move', ids, x: 0, z: 0 }); if (n === 1500) live.cmd({ c: 'form', ids, f: 'column' }); live.tick(); }
+  live.sim.s.events.length = 0;
+  return { rec, tu, live };
+}
+
+test('a replay seeks from its keyframes to exactly where playing it through gets', () => {
+  const { rec, tu, live } = recorded(3000);
+  assert.deepEqual(rec.keys!.map((k) => k[0]), [1200, 2400], 'a keyframe each minute');
+  const through = (m: number) => { const p = runner(tu, rec, true); while (p.n < m) p.tick(); p.sim.s.events.length = 0; return JSON.stringify(p.sim.s); };
+  const p = runner(tu, rec, true);
+  for (const m of [2000, 1300, 2999, 50]) { p.seek(m); assert.equal(JSON.stringify(p.sim.s), through(m), `seek to step ${m}`); }
+  p.seek(3000);
+  assert.equal(JSON.stringify(p.sim.s), JSON.stringify(live.sim.s), 'the end of the replay is the battle as played');
+});
+
+test('a replay file round-trips; a doctored one is turned away', () => {
+  const { rec, tu, live } = recorded(1300), scenarios = { quatrebras: data('quatrebras') };
+  rec.end = 1300; rec.chron = live.sim.s.chron;
+  const f = JSON.parse(replayFile(rec)), back = parseReplay(JSON.stringify({ ...f, scn: { title: 'not ours' } }), scenarios);
+  assert.equal(replayFile(back), replayFile(rec));
+  assert.deepEqual([back.scn.title, back.scn.strength], [scenarios.quatrebras.title, [1, 0.8]], 'the scenario is ours, at the recorded strength');
+  const p = runner(tu, back, true); p.seek(1300);
+  assert.equal(JSON.stringify(p.sim.s), JSON.stringify(live.sim.s), 'it plays back the battle');
+  assert.equal(parseReplay(JSON.stringify({ ...f, ref: { id: 'skirmish', seed: 42, strength: [1, 1.5] } }), scenarios).scn.date, 'Seed 42', 'a random skirmish is rebuilt from its seed');
+  const bad = (why: RegExp, edit: (g: any) => void) => { const g = structuredClone(f); edit(g); assert.throws(() => parseReplay(JSON.stringify(g), scenarios), why); };
+  assert.throws(() => parseReplay('{"ref":', scenarios), /not a replay/);
+  bad(/unknown battle/, (g) => (g.ref.id = 'waterloo'));
+  bad(/unknown battle/, (g) => (g.ref.id = '__proto__'));
+  bad(/strength/, (g) => (g.ref.strength = [1, 1e9]));
+  bad(/orders/, (g) => (g.cmds[0][1].x = { y: 1 }));
+  bad(/orders/, (g) => (g.cmds[0][0] = -1));
+  bad(/orders/, (g) => (g.cmds[0][1].ids = Array(101).fill(1)));
+  bad(/start state/, (g) => (g.start = JSON.stringify({ ...JSON.parse(g.start), zones: [{ id: 'x', name: '<img src=x onerror=alert(1)>' }] })));
+  bad(/keyframes/, (g) => (g.keys[0][1] = g.keys[0][1].replace('{"t":', '{"t":1e999,"t0":')));
+});
+
+test("a replay file keeps Grouchy's orders (they shape Waterloo's timeline), and refuses any other value", () => {
+  const scn = data('waterloo'), tu = data('tuning'), camp = data('campaign'), ids = camp.grouchy.options.map((o: any) => o.id);
+  const rec: Replay = { scn, ref: { id: 'waterloo', strength: [1, 1] }, grouchy: 'pursue', side: 0, start: JSON.stringify(createSim(scn, tu, { seed: 3, grouchy: 'pursue' }).s), cmds: [] };
+  const live = runner(tu, rec);
+  for (let n = 0; n < 40; n++) live.tick();
+  Object.assign(rec, { end: 40, chron: [] }); // what a finished battle records
+  const f = replayFile(rec), back = parseReplay(f, { waterloo: scn }, ids);
+  assert.equal(back.grouchy, 'pursue');
+  assert.deepEqual(runner(tu, back, true).sim.tl.map((e: any) => e.t), live.sim.tl.map((e: any) => e.t), 'the same timeline as the battle');
+  for (const g of ['constructor', '__proto__', 'nonsense']) assert.throws(() => parseReplay(JSON.stringify({ ...JSON.parse(f), grouchy: g }), { waterloo: scn }, ids), /Grouchy/, g);
 });
