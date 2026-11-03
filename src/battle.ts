@@ -14,7 +14,7 @@ export const CONTROLS: [string, [string, string][]][] = [
   ['Camera', [['WASD / arrows', 'pan'], ['Mouse at screen edge', 'pan'], ['Q/E, middle-drag', 'rotate'], ['Wheel', 'zoom'], ['F', 'focus selection'], ['Backspace', 'jump to last alert'], ['Minimap left-click', 'look there']]],
   ['Selection', [['Left-click / drag', 'select'], ['Shift+click', 'add to selection'], ['Double-click', 'all of that kind on screen'], ['Ctrl+A', 'all regiments'], ['Shift+1-9', 'save group'], ['1-9', 'recall group (tap twice: fly there)'], ['I', 'next idle regiment'], ['Army bar', 'click select, Shift add, double-click fly'], ['Hover', 'regiment details, range, flank'], ['Esc', 'cancel / clear selection']]],
   ['Orders', [['Right-click', 'move or attack'], ['Right-drag', 'form a line facing away from you'], ['Shift+right-click', 'waypoint'], ['Right-click a farm', 'garrison'], ['A (tap), left-click', 'attack-move'], ['H', 'halt'], ['G', 'stance'], ['Minimap right-click', 'move there']]],
-  ['Formations & specials', [['Z/X/C', 'line / column / square'], ['B', 'auto-square'], ['V', 'unit special']]],
+  ['Formations & specials', [['Z/X/C', 'line / column / square'], ['B', 'auto-square'], ['V', 'unit special'], ['K + click foe', 'bayonet charge']]],
   ['Aids & reserves', [['F1/F2/F3', 'tactical aid'], ['N', 'replenish (on a held objective)'], ['Reserves panel', 'call in a regiment']]],
   ['View', [['Space', 'pause'], ['M', 'mute'], ['R', 'radio'], ['L', 'edge scrolling on/off'], ['T', 'dusk'], ['Y/U', 'silhouette / top-down check'], ['P', 'render quality'], ['? / F10', 'this help']]],
 ];
@@ -57,7 +57,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     <div id="popups"></div>
     <div id="banner"><b></b><span></span></div>
     <div class="bl panel" id="sel"><div class="hd">No selection</div><div class="rows"></div>
-      <div class="forms">${FORMS.map(([f, k, l]) => `<button data-form="${f}">${l} <kbd>${k}</kbd></button>`).join('')}<button data-stop>Halt <kbd>H</kbd></button><button data-stance>Hold <kbd>G</kbd></button><button data-auto>Auto-sq <kbd>B</kbd></button><button data-refill style="display:none" title="Fresh men march in while the regiment stands on an objective you hold and is out of the fight. Paid in reserve points as they arrive."></button><button data-special class="spbtn" style="display:none"></button></div></div>
+      <div class="forms">${FORMS.map(([f, k, l]) => `<button data-form="${f}">${l} <kbd>${k}</kbd></button>`).join('')}<button data-stop>Halt <kbd>H</kbd></button><button data-stance>Hold <kbd>G</kbd></button><button data-auto>Auto-sq <kbd>B</kbd></button><button data-bay style="display:none" title="Bayonet charge: then click an enemy regiment. Shaken defenders break before contact; steady ones fire a last volley.">Bayonet <kbd>K</kbd></button><button data-refill style="display:none" title="Fresh men march in while the regiment stands on an objective you hold and is out of the fight. Paid in reserve points as they arrive."></button><button data-special class="spbtn" style="display:none"></button></div></div>
     <div class="bc" id="abil">${abilities.map((a) => {
       const ab = TUNING.abilities[a];
       return `<button class="ab" data-ab="${a}" title="${ab.label}"><span class="ico"></span><span class="nm">${ab.label}</span><kbd>${ab.key}</kbd><span class="cd"></span><i class="sweep"></i></button>`;
@@ -193,6 +193,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const stB = $<HTMLElement>(hud, '[data-stance]'), auB = $<HTMLElement>(hud, '[data-auto]');
     const sel0 = selection.map((id) => st.units.find((q: any) => q.id === id)).filter(Boolean);
     stB.style.display = auB.style.display = sel0.length ? '' : 'none';
+    $<HTMLElement>(hud, '[data-bay]').style.display = sel0.some((u: any) => (u.type === 'line' || u.type === 'guard') && !u.routed && u.form !== 'square') ? '' : 'none'; // only formed infantry can charge
     if (sel0.length) { stB.innerHTML = `${({ hold: 'Hold', aggressive: 'Attack', skirmish: 'Skirmish' } as any)[sel0[0].stance] ?? 'Hold'} <kbd>G</kbd>`; auB.classList.toggle('on', sel0.filter((u: any) => u.type === 'line' || u.type === 'guard').every((u: any) => u.auto) && sel0.some((u: any) => u.type === 'line' || u.type === 'guard')); }
     const rfB = $<HTMLElement>(hud, '[data-refill]'), hurt = sel0.filter((u: any) => u.type !== 'commander' && u.men < u.maxMen);
     if (hurt.length) { // a whole regiment costs its reserve price on an objective we hold, refillOffCost times that anywhere else
@@ -256,6 +257,9 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const T = TUNING.types[u.type], inf = u.type === 'line' || u.type === 'guard';
     const ls = [`<b style="color:${u.side === me ? '#4f86ff' : '#e8463a'}">${esc(u.name)}</b>`, `${T.label}${inf ? ` · ${u.form}` : ''}`, `Men ${Math.round(u.men)}/${u.maxMen} · Morale ${Math.max(0, Math.round((u.morale / u.maxMorale) * 100))}%`];
     if (u.vet) ls.push(`${'*'.repeat(u.vet)} ${VET[u.vet] ?? ''}`);
+    if ((u.fat ?? 0) >= 0.05 || (u.mcap ?? u.maxMorale) < u.maxMorale) ls.push(`Fatigue ${Math.round((u.fat ?? 0) * 100)}%${u.mcap < u.maxMorale ? ` · morale can only reach ${Math.round((u.mcap / u.maxMorale) * 100)}%` : ''}`); // tired and badly hurt units are shakier
+    if (u.type === 'artillery') ls.push(u.limT > 0 ? (u.limbered ? 'Unlimbering…' : 'Limbering up…') : u.limbered ? 'Limbered (cannot fire)' : 'Unlimbered (cannot move)');
+    if (u.bay != null) ls.push('Charging with the bayonet!');
     if (u.garrison != null) ls.push(`Garrison: ${esc(scn.map.villages?.[u.garrison]?.name ?? 'farm')}`);
     if (u.routed) ls.push('<i class="no">Routed</i>');
     const sel = st.units.filter((q: any) => selection.includes(q.id) && !q.routed);
@@ -308,7 +312,11 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     if (e.button === 0) {
       if (targeting) {
         const g = groundOf(e);
-        if (g && targeting === 'amove') src.cmd({ c: 'move', ids: selection, x: g.x, z: g.z, q: e.shiftKey, am: true });
+        if (targeting === 'bayonet') { // charge the enemy regiment under the cursor
+          const st = src.state, foeOk = (u: any) => u.side !== me && !u.dead && !u.routed && (!st.fog || st.seen?.[me]?.includes(u.id));
+          const foe = (g && unitAt(g, foeOk)) ?? view.pickUnit(st, e.clientX, e.clientY, foeOk, 34);
+          if (foe) src.cmd({ c: 'bayonet', ids: selection, target: foe.id });
+        } else if (g && targeting === 'amove') src.cmd({ c: 'move', ids: selection, x: g.x, z: g.z, q: e.shiftKey, am: true });
         else if (g) {
           src.cmd({ c: 'ability', name: targeting, x: g.x, z: g.z });
           const btn = $<HTMLElement>(hud, `[data-ab="${targeting}"]`);
@@ -364,8 +372,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     }
     if (targeting) {
       const g = view.ground(e.clientX, e.clientY);
-      const r = targeting === 'amove' ? 4 : abCfg(targeting).r ?? 8;
-      if (g) view.setReticle(g.x, g.z, r, targeting === 'cavalry' ? 0x66ccff : targeting === 'amove' ? 0xffe34a : 0xff7755);
+      const r = targeting === 'amove' ? 4 : targeting === 'bayonet' ? 6 : abCfg(targeting)?.r ?? 8;
+      if (g) view.setReticle(g.x, g.z, r, targeting === 'cavalry' ? 0x66ccff : targeting === 'amove' ? 0xffe34a : targeting === 'bayonet' ? 0xff3b2f : 0xff7755);
     }
   }
   let lastPick = { id: -1, t: 0 };
@@ -418,6 +426,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     else if (e.code === 'KeyG') cycleStance();
     else if (e.code === 'KeyB') src.cmd({ c: 'auto', ids: selection });
     else if (e.code === 'KeyN') src.cmd({ c: 'replenish', ids: selection });
+    else if (e.code === 'KeyK' && selection.length) startTargeting('bayonet');
     else if (e.code === 'KeyR') toast(toggleRadio() ? 'Radio on' : 'Radio off');
     else if (e.code === 'KeyT') { duskOn = !duskOn; view.setDusk(duskOn); toast(duskOn ? 'Dusk' : 'Daylight'); }
     else if (e.code === 'KeyY') { silOn = !silOn; view.setSilhouette(silOn); toast(silOn ? 'Silhouette check' : 'Silhouette off'); }
@@ -470,6 +479,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   $<HTMLElement>(hud, '[data-stance]').onclick = cycleStance;
   $<HTMLElement>(hud, '[data-auto]').onclick = () => src.cmd({ c: 'auto', ids: selection });
   $<HTMLElement>(hud, '[data-refill]').onclick = () => src.cmd({ c: 'replenish', ids: selection });
+  $<HTMLElement>(hud, '[data-bay]').onclick = () => startTargeting('bayonet');
   hud.querySelectorAll<HTMLElement>('[data-ab]').forEach((b) => (b.onclick = () => startTargeting(b.dataset.ab!)));
   hud.querySelectorAll<HTMLElement>('[data-res]').forEach((b) => (b.onclick = () => { src.cmd({ c: 'deploy', type: b.dataset.res! }); animate(b, { scale: [0.9, 1], duration: 300, ease: 'outBack' }); }));
   const setSpeed = (s: number) => {
