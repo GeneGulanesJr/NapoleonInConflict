@@ -284,3 +284,7 @@ button.alt { background: #1b1510; }
 .hud #dep p, .hud #tut p { margin: 0 0 3px; line-height: 9px; }
 .hud #dep .hd, .hud #tut .hd { color: var(--gold); }
 .hud.deploying [data-sp] { opacity: .35; pointer-events: none; } /* the clock waits for the start */
+
+/* ---------- WS4a: Grouchy's orders after Ligny: wide buttons, the consequences on their own line ---------- */
+#menu .orders button { width: calc(var(--u) * 340); text-align: left; }
+#menu .orders small { display: block; margin: calc(var(--u) * 2) 0 0; }

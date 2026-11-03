@@ -82,7 +82,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     <div class="fade" id="fade"></div>
     <div class="result" id="result"></div>`;
   root.appendChild(hud);
-  music(true);
+  music(true, scn.nat?.[me]);
   hud.querySelectorAll<HTMLElement>('.ab').forEach((b) => b.querySelector('.ico')!.replaceChildren(pxCanvas(ICONS[b.dataset.ab!], 2)));
 
   // ---------------------------------------------------------------- state helpers
