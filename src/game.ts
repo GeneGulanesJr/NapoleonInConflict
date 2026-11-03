@@ -14,6 +14,10 @@ export interface Source {
   /** this source plays a recording back: orders are ignored */
   replay?: boolean;
   cmd(c: Cmd): void;
+  /** replays: jump to this step (from the nearest keyframe, fast-forwarding over the next frames) */
+  seek?(step: number): void;
+  /** the last update fast-forwarded a seek: what happened in it is not news */
+  seeking?: boolean;
   update(dt: number): void;
   drainEvents(): any[];
   close(): void;
@@ -22,12 +26,16 @@ export interface Source {
 /** Fixed-step driver shared by live battles and replays. */
 function drive(tu: any, r: Replay, play: boolean): Source {
   const run = runner(tu, r, play);
-  let acc = 0;
+  let acc = 0, goal = -1, ff = false;
   const src: Source = {
     mode: 'local', side: r.side, speed: 1, paused: false, rec: r, replay: play,
     get state() { return run.sim.s; },
+    get seeking() { return ff; },
     cmd: (c) => run.cmd(c),
+    seek: (m) => { goal = m; acc = 0; },
     update(dt) {
+      // a seek fast-forwards ~10 ms a frame (a minute of Waterloo takes ~1.5 s to run), so the page never freezes
+      if ((ff = goal >= 0)) { if (run.seek(goal, performance.now() + 10)) goal = -1; return; }
       if (src.paused || run.sim.s.over) return;
       acc = Math.min(acc + dt * src.speed, 1);
       while (acc >= DT && !run.sim.s.over) { run.tick(); acc -= DT; }
@@ -47,7 +55,7 @@ export function localSource(scn: any, opts: { roster?: any[]; won?: Record<strin
   strength[1 - side] *= TUNING.difficulty.enemyStrength[difficulty()];
   const s2 = { ...scn, strength };
   const s0 = opts.resume ?? createSim(s2, TUNING, { roster: opts.roster, won: opts.won, fog: fogOn(), seed: opts.seed ?? (Date.now() & 0x7fffffff) }).s;
-  return drive(TUNING, { scn: s2, won: opts.won, side, start: JSON.stringify(s0), cmds: [] }, false);
+  return drive(TUNING, { scn: s2, ref: { id: scn.id, seed: scn.seed, strength }, won: opts.won, side, start: JSON.stringify(s0), cmds: [] }, false);
 }
 
 /** Watch a recorded battle again, from its start state. */

@@ -14,18 +14,19 @@ function flankOf(e: any, u: any, gap: number, tu: any) {
 }
 
 export function makeBot(sim: Sim, side: number) {
-  let acc = 1.5;
-  const mem: { assign: Record<number, { zid: string; ox: number; oz: number }>; mend: Record<number, boolean> } = { assign: {}, mend: {} };
   return (dt: number) => {
-    acc += dt;
+    // the bot's memory lives in the sim state (sim.s may be swapped for a save or keyframe), so a resumed battle or a seek carries on exactly
+    const b = ((sim.s.bots ??= [])[side] ??= { acc: 1.5, mem: { assign: {}, mend: {} } });
+    const mem: { assign: Record<number, { zid: string; ox: number; oz: number }>; mend: Record<number, boolean> } = b.mem;
+    b.acc += dt;
     // every tick, not every 2s: a galloping regiment must pull up the moment its target forms a firm square
     // ...and ride back out of musket range instead of idling where the square can shoot it down
     for (const u of sim.s.units) if (u.side === side && u.chase != null && (u.type === 'lancer' || u.type === 'cuirassier')) {
       const t = sim.s.units.find((q: any) => q.id === u.chase);
       if (t && firm(t, u)) { const d = dist(u, t) || 1; command(sim, side, { c: 'move', ids: [u.id], x: t.x + ((u.x - t.x) / d) * 50, z: t.z + ((u.z - t.z) / d) * 50 }); }
     }
-    if (acc < 2) return;
-    acc = 0;
+    if (b.acc < 2) return;
+    b.acc = 0;
     think(sim, side, mem);
   };
 }

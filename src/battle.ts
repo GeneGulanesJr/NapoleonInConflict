@@ -6,6 +6,7 @@ import { los } from './sim/world.ts';
 import type { View } from './render.ts';
 import { SIDE_COLOR } from './render.ts';
 import type { Source } from './game.ts';
+import { DT, replayFile } from './sim/replay.ts';
 import { TUNING, pref, setPref } from './campaign.ts';
 import { playEvents, cue, toggleMute, unlock, music, say, toggleRadio, muted } from './audio.ts';
 import { settings } from './settings.ts';
@@ -501,7 +502,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     hud.querySelectorAll<HTMLElement>('[data-sp]').forEach((b) => b.classList.toggle('on', Number(b.dataset.sp) === (src.paused ? 0 : src.speed)));
   };
   hud.querySelectorAll<HTMLElement>('[data-sp]').forEach((b) => (b.onclick = () => setSpeed(Number(b.dataset.sp))));
-  const SPEEDS = [1, 2, 4, 8];
+  const SPEEDS = src.replay ? [1, 2, 4, 8, 16] : [1, 2, 4, 8];
   const stepSpeed = (d: number) => { if (src.mode !== 'local') return; setSpeed(SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, Math.max(0, SPEEDS.indexOf(src.speed)) + d))]); toast(`Speed ${src.speed}×`); };
   // menu (Esc / ☰): pauses a local battle; restart, quit, and the settings
   const pm = $<HTMLElement>(hud, '#pm');
@@ -608,7 +609,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const r = st.result, won = r.winner === me, draw = r.winner < 0;
     const el = $<HTMLElement>(hud, '#result');
     const title = draw ? 'DRAW' : won ? (r.decisive ? 'DECISIVE VICTORY' : 'VICTORY') : r.decisive ? 'CRUSHING DEFEAT' : 'DEFEAT';
-    const rep = '<button id="rrep" class="alt">Watch replay</button>';
+    const rep = '<button id="rrep" class="alt">Watch replay</button><button id="rsave" class="alt">Save replay</button>';
     const next = src.replay ? '<button id="rretry">Watch again</button><button id="rmenu" class="alt">Back</button>'
       : opts.campaign ? `<button id="rcont">Continue the campaign</button>${won ? '' : '<button id="rretry" class="alt">Retry battle</button>'}${rep}`
       : src.mode === 'local' ? `<button id="rretry">Play again</button>${rep}<button id="rmenu" class="alt">Back to menu</button>` : '<button id="rmenu">Back to menu</button>';
@@ -633,7 +634,51 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     el.querySelector<HTMLElement>('#rretry')?.addEventListener('click', go('retry'));
     el.querySelector<HTMLElement>('#rmenu')?.addEventListener('click', go('menu'));
     el.querySelector<HTMLElement>('#rrep')?.addEventListener('click', go('replay'));
+    el.querySelector<HTMLElement>('#rsave')?.addEventListener('click', () => { // download the recording; the file names its scenario, it does not carry it
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([replayFile(src.rec!)], { type: 'application/json' }));
+      a.download = `${scn.id}-replay.json`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
     cue(won ? 'capture' : 'alert');
+  }
+
+  // ---------------------------------------------------------------- replay bar: play/pause, speed up to 16×, a scrubber that seeks (nearest keyframe, then fast-forward), turning points as markers
+  if (src.replay && src.rec?.end && src.seek) {
+    const t0 = state0.t, span = src.rec.end * DT, seek = src.seek;
+    const bar = document.createElement('div');
+    bar.className = 'panel rbar';
+    bar.innerHTML = `<button id="rpp" title="Play / pause (Space)">⏸</button>${[1, 2, 4, 8, 16].map((s) => `<button data-sp="${s}">${s}×</button>`).join('')}<span></span><div class="track" title="Click or drag to jump"><i></i></div>`;
+    hud.appendChild(bar); hud.classList.add('replay');
+    bar.style.top = `${topbar.offsetHeight + 4}px`;
+    const track = $<HTMLElement>(bar, '.track'), fill = $<HTMLElement>(track, 'i'), clk = $<HTMLElement>(bar, 'span'), pp = $<HTMLElement>(bar, '#rpp');
+    const to = (t: number) => seek(Math.round((Math.max(t0, Math.min(t0 + span, t)) - t0) / DT));
+    for (const c of src.rec.chron ?? []) {
+      if (c.t < t0 || c.t > t0 + span) continue; // a resumed battle's chronicle starts before its recording
+      const m = document.createElement('b');
+      m.style.left = `${((c.t - t0) / span) * 100}%`; m.style.background = SIDE_COLOR[c.side]; m.title = `${mmss(c.t)} ${c.text}`;
+      m.onpointerdown = (e) => { e.stopPropagation(); to(c.t - 5); }; // a little before, to see it happen
+      track.appendChild(m);
+    }
+    let scrub = -1; // where the drag is (0..1), while dragging: the seek happens on release
+    const frac = (e: PointerEvent) => { const b = track.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - b.left) / b.width)); };
+    track.onpointerdown = (e) => { track.setPointerCapture(e.pointerId); scrub = frac(e); };
+    track.onpointermove = (e) => { if (scrub >= 0) scrub = frac(e); };
+    track.onpointerup = (e) => { if (scrub < 0) return; scrub = -1; to(t0 + frac(e) * span); };
+    bar.querySelectorAll<HTMLElement>('[data-sp]').forEach((b) => (b.onclick = () => setSpeed(Number(b.dataset.sp))));
+    hud.querySelectorAll<HTMLElement>('.ctl [data-sp]').forEach((b) => (b.style.display = 'none')); // the bar has them
+    let was = 1;
+    pp.onclick = () => { if (src.paused) setSpeed(was); else { was = src.speed; setSpeed(0); } };
+    const paint = () => {
+      if (!bar.isConnected) return; // the battle is over and gone
+      requestAnimationFrame(paint);
+      const t = scrub >= 0 ? t0 + scrub * span : src.state.t;
+      fill.style.width = `${Math.min(100, ((t - t0) / span) * 100)}%`;
+      const c = `${mmss(Math.floor(t))} / ${mmss(Math.floor(t0 + span))}`, g = src.paused ? '▶' : '⏸';
+      if (clk.textContent !== c) clk.textContent = c;
+      if (pp.textContent !== g) pp.textContent = g;
+    };
+    paint();
   }
 
   // ---------------------------------------------------------------- per-frame
@@ -644,7 +689,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     const st = src.state;
-    if (st.t < prevT - 1) { lastLogT = st.t; ended = false; warned.clear(); $<HTMLElement>(hud, '#result').style.display = 'none'; } // remote room restarted
+    if (src.seeking || st.t < prevT - 1 || st.t > prevT + 5) { lastLogT = st.t; ended = false; warned.clear(); $<HTMLElement>(hud, '#result').style.display = 'none'; for (const z of st.zones) { prevOwner[z.id] = z.owner; paintPip(z, false); } } // remote room restarted, or a replay seek: no flood of stale news
     prevT = st.t;
 
     // camera pan
