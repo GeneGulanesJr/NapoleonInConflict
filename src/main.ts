@@ -8,7 +8,7 @@ import { settings } from './settings.ts';
 import type { Replay } from './sim/replay.ts';
 import {
   CAMPAIGN, SCENARIOS, TUNING, newCampaign, load, save, clearSave, applyResult, freshRoster, wonMap, EXTRA_BATTLES, makeSkirmish, type CampaignState,
-  loadBattle, saveBattle, clearBattle, type BattleSave, reinforce, recruit, fillCost, recruitCost, prefNum, setPrefNum,
+  loadBattle, saveBattle, clearBattle, type BattleSave, reinforce, recruit, fillCost, recruitCost, prefNum, setPrefNum, pref,
 } from './campaign.ts';
 
 const app = document.getElementById('app')!;
@@ -141,7 +141,7 @@ function startCampaignBattle(c: CampaignState, resume?: BattleSave) {
   const id = CAMPAIGN.battles[c.idx], scn = SCENARIOS[id];
   if (!resume) clearBattle();
   const run = () => {
-    const src = localSource(scn, { roster: c.roster, won: wonMap(c), resume: resume?.s });
+    const src = localSource(scn, { roster: c.roster, won: wonMap(c), resume: resume?.s, deploy: pref('nic-deploy', true) });
     const keep = () => { if (!src.state.over) saveBattle({ id, idx: c.idx, s: src.state }); }; // the battle so far, to resume after quitting or closing the tab
     const timer = setInterval(keep, 15000);
     addEventListener('pagehide', keep);
@@ -192,7 +192,7 @@ function quickScreen() {
 }
 /** A quick battle on the chosen side (the campaign roster names only exist for the French); "play again" keeps the map, a random skirmish included. */
 function quickBattle(scn: any) {
-  const side = prefNum('nic-side', 0) ? 1 : 0, src = localSource(scn, { roster: side ? undefined : freshRoster(), side });
+  const side = prefNum('nic-side', 0) ? 1 : 0, src = localSource(scn, { roster: side ? undefined : freshRoster(), side, deploy: pref('nic-deploy', true) });
   enterBattle(src, scn, false, (o) => (o === 'retry' ? quickBattle(scn) : o === 'replay' ? watch(src.rec!, scn, quickScreen) : quickScreen()));
 }
 

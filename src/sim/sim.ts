@@ -27,8 +27,9 @@ export function expandForces(groups: any[]): any[] {
 /**
  * opts.roster: campaign roster [{rid,type,name,men,maxMen}] used to fill side 0 slots (best-strength first).
  * opts.won: campaign results {battleId: boolean} used by `delayIfWon` timeline events.
+ * opts.deploy: start in the deployment phase (place regiments, then 'start').
  */
-export function createSim(scn: any, tu: any, opts: { seed?: number; roster?: any[]; won?: Record<string, boolean>; fog?: boolean } = {}): Sim {
+export function createSim(scn: any, tu: any, opts: { seed?: number; roster?: any[]; won?: Record<string, boolean>; fog?: boolean; deploy?: boolean } = {}): Sim {
   const mkSide = (i: number) => ({ rp: scn.rpStart?.[i] ?? 0, score: 0, lost: 0, cd: {} as Record<string, number>, reserves: { ...(scn.reserves?.[i] ?? {}) } });
   const s: any = {
     t: 0, seed: opts.seed ?? 1, nextId: 1, units: [], smoke: [], fx: [], out: [], log: [], events: [],
@@ -56,6 +57,7 @@ export function createSim(scn: any, tu: any, opts: { seed?: number; roster?: any
     spawn(sim, 0, { ...d, ...(r ? { name: r.name, men: r.men, maxMen: r.maxMen, rid: r.rid, xp: r.xp ?? 0 } : {}) });
   }
   for (const d of expandForces(scn.forces[1])) spawn(sim, 1, d);
+  if (opts.deploy) { s.phase = 'deploy'; s.deploy = [0, 1].map((i) => s.units.filter((u: any) => u.side === i).map((u: any) => ({ x: u.x, z: u.z, r: tu.deploy.r }))); } // each side may place its army within reach of where it starts; scripted reinforcements come later and don't count
   // war chest: a finite pool of replacement men, and a cap on RP earned from objectives (enough for the listed reserves plus the pool), so refills can't be farmed
   for (let i = 0; i < 2; i++) {
     const sd = s.side[i], men = s.units.filter((u: any) => u.side === i && u.type !== 'commander').reduce((a: number, u: any) => a + u.maxMen, 0);
@@ -110,7 +112,9 @@ export type Cmd =
   | { c: 'stop'; ids: number[] }
   | { c: 'special'; ids: number[] }
   | { c: 'ability'; name: string; x: number; z: number }
-  | { c: 'deploy'; type: string };
+  | { c: 'deploy'; type: string }
+  | { c: 'place'; ids: number[]; x: number; z: number; f?: number; w?: number } // deployment phase: stand the group there at once, laid out like a move (f, w: a dragged line), facing the enemy
+  | { c: 'start' }; // deployment phase: the clock starts
 
 export function command(sim: Sim, side: number, c: Cmd) {
   const s = sim.s;
@@ -190,6 +194,18 @@ export function command(sim: Sim, side: number, c: Cmd) {
     }
   } else if (c.c === 'ability') useAbility(sim, side, c.name, c.x, c.z);
   else if (c.c === 'deploy') deploy(sim, side, c.type);
+  else if (s.phase !== 'deploy') return; // placing and starting belong to the deployment phase
+  else if (c.c === 'start') s.phase = 'battle';
+  else if (c.c === 'place') {
+    const fo = s.units.filter((u: any) => u.side !== side), n = fo.length || 1;
+    const fe = Math.atan2(fo.reduce((a: number, u: any) => a + u.x, 0) / n - c.x, fo.reduce((a: number, u: any) => a + u.z, 0) / n - c.z);
+    const f = c.f == null ? fe : Math.cos(c.f - fe) < 0 ? c.f + Math.PI : c.f; // a dragged line keeps its line, but fronts the enemy
+    command(sim, side, { c: 'move', ids: c.ids, x: c.x, z: c.z, f, w: c.w }); // the move order's layout gives each regiment its spot
+    for (const u of mine(c.ids)) {
+      if (s.deploy[side].some((d: any) => Math.hypot(u.tx - d.x, u.tz - d.z) < d.r)) { u.x = u.tx; u.z = u.tz; u.facing = f; } // a spot outside the zone: that regiment stays put
+      u.tx = u.tz = u.tf = null;
+    }
+  }
 }
 
 /** RP for one replacement man: a whole regiment at its deploy price, rising as the regiment has already been topped up (refillRise 1 = +50% after half its strength) */
@@ -461,7 +477,7 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
 // ---------------------------------------------------------------- step
 export function step(sim: Sim, dt: number) {
   const { s, scn, tu } = sim;
-  if (s.over) return;
+  if (s.over || s.phase === 'deploy') return; // deploying: the clock waits for 'start'
   s.t += dt;
   const W = tu.weather[s.weather] ?? tu.weather.clear;
   const half = scn.map.size / 2;

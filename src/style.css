@@ -278,3 +278,9 @@ button.alt { background: #1b1510; }
 #menu .rrow.buy { grid-template-columns: calc(var(--u) * 100) 1fr calc(var(--u) * 46) calc(var(--u) * 50); }
 #menu .rrow.buy button { padding: calc(var(--u) * 1) calc(var(--u) * 2); font-size: calc(var(--u) * 8); }
 #menu .glory { color: var(--gold); font-weight: 400; }
+/* deployment phase and first-battle tutorial */
+.hud #dep, .hud #tut { position: absolute; left: 0; right: 0; margin: 0 auto; width: 210px; text-align: center; }
+.hud #dep { top: 50px; } .hud #tut { bottom: 58px; }
+.hud #dep p, .hud #tut p { margin: 0 0 3px; line-height: 9px; }
+.hud #dep .hd, .hud #tut .hd { color: var(--gold); }
+.hud.deploying [data-sp] { opacity: .35; pointer-events: none; } /* the clock waits for the start */

@@ -9,6 +9,7 @@ import type { Source } from './game.ts';
 import { TUNING, pref, setPref } from './campaign.ts';
 import { playEvents, cue, toggleMute, unlock, music, say, toggleRadio, muted } from './audio.ts';
 import { settings } from './settings.ts';
+import { tutorial } from './tutorial.ts';
 
 export type Outcome = 'continue' | 'retry' | 'menu' | 'replay';
 /** every control, grouped: the in-battle help overlay (? / F10) and the title screen's help line both read this one list */
@@ -72,6 +73,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     </div>
     <div class="panel" id="army"></div>
     <div class="panel" id="tip" style="display:none"></div>
+    <div class="panel" id="dep" style="display:none"><div class="hd">Deployment</div><p>Right-click or drag to place the selected regiments in the blue area.</p><button id="depgo">Start battle <kbd>Enter</kbd></button></div>
     <div class="panel" id="help" style="display:none"><div class="hd">Controls <small>? / F10 / Esc to close</small></div><div class="hcols">${CONTROLS.map(([g, ks]) => `<div><b>${g}</b>${ks.map(([k, d]) => `<p><kbd>${k}</kbd> ${d}</p>`).join('')}</div>`).join('')}</div></div>
     <div class="panel" id="pm" style="display:none"><div class="hd">${src.mode === 'local' ? 'Paused' : 'Menu'}</div>
       <div class="pmb"><button data-pm="resume">Resume</button>${src.mode === 'local' ? `<button data-pm="retry">Restart ${src.replay ? 'replay' : 'battle'}</button>` : ''}<button data-pm="menu">${opts.campaign ? 'Save and quit' : 'Quit to menu'}</button></div>
@@ -85,6 +87,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
 
   // ---------------------------------------------------------------- state helpers
   const mine = (u: any) => u.side === me && !u.dead && u.draftFor == null; // drafts on the march aren't yours to command
+  const deploying = () => src.state.phase === 'deploy' && !src.replay; // a replay applies the recorded placements on its first tick
+  const tut = tutorial(hud, scn, opts.campaign);
   const drafting = (u: any) => src.state.units.some((d: any) => d.draftFor === u.id && !d.dead); // a draft is marching to it
   let selection: number[] = [];
   let targeting: string | null = null;
@@ -390,6 +394,12 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   let lastPick = { id: -1, t: 0 };
   function onUp(e: PointerEvent) {
     if (e.button === 1) rot = null;
+    if (e.button === 2 && rdrag && deploying()) { // deployment: a click or a drag stands the selection there at once
+      const o = Math.hypot(e.clientX - rdrag.x, e.clientY - rdrag.y) > 10 ? dragOrder(e) : null, g = o ? { x: o.mx, z: o.mz } : groundOf(e);
+      if (g) src.cmd({ c: 'place', ids: selection, x: g.x, z: g.z, f: o?.f, w: o?.w });
+      rdrag = null; view.setDragLine(null);
+      return;
+    }
     if (e.button === 2 && rdrag) {
       const o = Math.hypot(e.clientX - rdrag.x, e.clientY - rdrag.y) > 10 ? dragOrder(e) : null;
       if (o) src.cmd({ c: 'move', ids: selection, x: o.mx, z: o.mz, f: o.f, w: o.w, q: e.shiftKey });
@@ -427,6 +437,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     if (/^F[1-3]$/.test(e.code)) e.preventDefault(); // F1 help and F3 find would steal the ability keys
     if (grp) group(Number(grp[1]), e.shiftKey);
     else if (e.code === 'KeyI') nextIdle();
+    else if (e.key === 'Enter' && deploying()) { e.preventDefault(); startBattle(); }
     else if (e.code === 'Space') { e.preventDefault(); setSpeed(src.paused ? 1 : 0); }
     else if (e.code === 'KeyM') $<HTMLElement>(hud, '#mute').textContent = toggleMute() ? '🔇' : '🔊';
     else if (e.code === 'Escape') { if (help.style.display !== 'none') toggleHelp(); else if (pm.style.display !== 'none') toggleMenu(); else if (targeting) cancelTargeting(); else if (selection.length) setSel([]); else toggleMenu(); }
@@ -496,11 +507,13 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   hud.querySelectorAll<HTMLElement>('[data-ab]').forEach((b) => (b.onclick = () => startTargeting(b.dataset.ab!)));
   hud.querySelectorAll<HTMLElement>('[data-res]').forEach((b) => (b.onclick = () => { src.cmd({ c: 'deploy', type: b.dataset.res! }); animate(b, { scale: [0.9, 1], duration: 300, ease: 'outBack' }); }));
   const setSpeed = (s: number) => {
-    if (src.mode === 'remote') return;
+    if (src.mode === 'remote' || deploying()) return; // the clock stays stopped until the battle starts
     if (s === 0) src.paused = true; else { src.paused = false; src.speed = s; }
     hud.querySelectorAll<HTMLElement>('[data-sp]').forEach((b) => b.classList.toggle('on', Number(b.dataset.sp) === (src.paused ? 0 : src.speed)));
   };
   hud.querySelectorAll<HTMLElement>('[data-sp]').forEach((b) => (b.onclick = () => setSpeed(Number(b.dataset.sp))));
+  const startBattle = () => { if (deploying() && pm.style.display === 'none') { src.cmd({ c: 'start' }); setSpeed(1); } }; // not from behind the menu
+  $<HTMLElement>(hud, '#depgo').onclick = startBattle;
   const SPEEDS = [1, 2, 4, 8];
   const stepSpeed = (d: number) => { if (src.mode !== 'local') return; setSpeed(SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, Math.max(0, SPEEDS.indexOf(src.speed)) + d))]); toast(`Speed ${src.speed}×`); };
   // menu (Esc / ☰): pauses a local battle; restart, quit, and the settings
@@ -541,6 +554,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     c.lineWidth = 1;
     for (const w of scn.map.woods ?? []) { c.fillStyle = '#254a27'; c.beginPath(); c.arc((w.x + S / 2) * k, (w.z + S / 2) * k, w.r * k, 0, 6.3); c.fill(); }
     for (const z of st.zones) { c.strokeStyle = z.owner === 0 ? SIDE_COLOR[0] : z.owner === 1 ? SIDE_COLOR[1] : '#bbb'; c.beginPath(); c.arc((z.x + S / 2) * k, (z.z + S / 2) * k, z.r * k, 0, 6.3); c.stroke(); }
+    if (deploying()) { c.fillStyle = 'rgba(79,134,255,.35)'; c.beginPath(); for (const d of st.deploy[me]) { c.moveTo((d.x + d.r + S / 2) * k, (d.z + S / 2) * k); c.arc((d.x + S / 2) * k, (d.z + S / 2) * k, d.r * k, 0, 6.3); } c.fill(); } // the deployment zone, filled once as one shape so overlaps don't darken
     const dot = (x: number, z: number) => c.fillRect(Math.round((x + S / 2) * k) - 1, Math.round((z + S / 2) * k) - 1, 2, 2);
     for (const u of st.units) {
       if (st.fog && u.side !== me) {
@@ -741,6 +755,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       drawMini(st);
       drawArmy(st);
       hoverTip(st);
+      $<HTMLElement>(hud, '#dep').style.display = deploying() && !intro ? '' : 'none'; hud.classList.toggle('deploying', deploying());
+      if (!intro) tut?.(st, me, selection);
     }
     if (st.over && !ended) showResult(st);
   }
