@@ -99,7 +99,7 @@ i.m s { background: #6fc46f; } i.o s { background: #e8c46a; }
 .plate.far .pn { display: none; }
 .plate .bar { height: 4px; background: rgba(0,0,0,.65); margin-top: 1px; } .plate .bar i { display: block; height: 100%; width: 100%; }
 .plate .men i { background: #6fc46f; } .plate .mor i { background: #e8c46a; }
-.plate.sel .pn { color: var(--gold); font-weight: 700; } .plate.routed .pn { color: #ff8a7a; } .plate.routed .pn::after { content: ' ROUTED'; }
+.plate.sel .pn { color: var(--gold); font-weight: 700; } .plate.routed .pn { color: #ff8a7a; }
 
 /* ---------- pixel-diorama skin (flat, square, pixel font) ---------- */
 :root { --panel: rgba(20, 17, 13, 0.9); --edge: #5a4128; --gold: #d3a64e; --fr: #6f9bff; --co: #ff6a5c; --pf: 'Silkscreen', 'Courier New', monospace; }
@@ -265,10 +265,10 @@ button.alt { background: #1b1510; }
 /* army bar: room for the control group number before the marks */
 .hud .ac { grid-template-columns: 7px 1fr 15px; }
 /* fog of war: an enemy plate lingers where it was last seen */
-.plates .plate.ghost { border-top-style: dashed; } .plates .plate.ghost .bar { display: none; } .plates .plate.ghost::after { content: '?'; color: #e8463a; }
-/* stunned by a cavalry charge */
-.plate.stun .pn { color: #ffd36a; } .plate.stun .pn::after { content: ' STUNNED'; }
-.plate.shaken .pn { color: #e9c99a; } .plate.shaken .pn::after { content: ' SHAKEN'; }
+.plates .plate.ghost { border-top-style: dashed; } .plates .plate.ghost .bar { display: none; } .plates .plate.ghost::after { content: '?'; color: var(--foe); }
+/* stunned by a cavalry charge, shaken by fire (the status icons beside the plate say which) */
+.plate.stun .pn { color: #ffd36a; }
+.plate.shaken .pn { color: #e9c99a; }
 /* in-battle menu (Esc) */
 .hud #pm { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 200px; z-index: 4; text-align: center; }
 .hud #pm .hd small { display: block; color: #8e8a7a; margin-top: 1px; }
@@ -278,3 +278,35 @@ button.alt { background: #1b1510; }
 #menu .rrow.buy { grid-template-columns: calc(var(--u) * 100) 1fr calc(var(--u) * 46) calc(var(--u) * 50); }
 #menu .rrow.buy button { padding: calc(var(--u) * 1) calc(var(--u) * 2); font-size: calc(var(--u) * 8); }
 #menu .glory { color: var(--gold); font-weight: 400; }
+/* deployment phase and first-battle tutorial */
+.hud #dep, .hud #tut { position: absolute; left: 0; right: 0; margin: 0 auto; width: 210px; text-align: center; }
+.hud #dep { top: 50px; } .hud #tut { bottom: 58px; }
+.hud #dep p, .hud #tut p { margin: 0 0 3px; line-height: 9px; }
+.hud #dep .hd, .hud #tut .hd { color: var(--gold); }
+.hud.deploying [data-sp] { opacity: .35; pointer-events: none; } /* the clock waits for the start */
+
+/* ---------- WS4a: Grouchy's orders after Ligny: wide buttons, the consequences on their own line ---------- */
+#menu .orders button { width: calc(var(--u) * 340); text-align: left; }
+#menu .orders small { display: block; margin: calc(var(--u) * 2) 0 0; }
+
+/* ---------- UI/UX: plate status icons, single-regiment card, message log (J), big minimap (Tab) ---------- */
+.plates .plate .st { position: absolute; left: 100%; top: -2px; display: flex; gap: 1px; margin-left: 1px; }
+.plates .plate.pip .st { display: none; }
+.plates .plate .st img, .hud #sel .one img { display: block; width: 7px; height: 7px; image-rendering: pixelated; }
+.hud #sel .one { margin-top: 2px; line-height: 9px; color: #d4ccb4; } .hud #sel .one p { margin: 0; }
+.hud #sel .one .st { display: flex; flex-wrap: wrap; gap: 0 4px; color: var(--ink); } .hud #sel .one .st span { display: flex; gap: 1px; align-items: center; }
+.hud #log { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 260px; max-width: calc(100% - 12px); max-height: calc(100% - 90px); overflow-y: auto; z-index: 4; }
+.hud #log .hd small { color: #8e8a7a; margin-left: 4px; } .hud #log p { margin: 0; line-height: 9px; }
+.hud #log p.go { cursor: pointer; color: var(--gold); } .hud #log p.go:hover { background: #3d2e20; }
+.hud #mini.big { position: absolute; right: 0; bottom: 0; z-index: 2; width: min(288px, calc(var(--bh, 360) * 1px - 64px)); height: min(288px, calc(var(--bh, 360) * 1px - 64px)); }
+
+/* replay bar: play/pause, speeds, scrubber with turning-point markers */
+.hud .rbar { position: absolute; left: 50%; width: 220px; margin-left: -110px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; z-index: 4; }
+.hud .rbar span { margin-left: auto; color: #b8b2a0; }
+.hud .rbar .on { border-color: var(--gold); color: var(--gold); }
+.hud .rbar .track { position: relative; flex: 1 0 100%; height: 6px; margin-top: 2px; background: #000; border: 1px solid var(--edge); cursor: pointer; touch-action: none; }
+.hud .rbar .track i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gold); opacity: .6; pointer-events: none; }
+.hud .rbar .track b { position: absolute; top: -2px; width: 2px; height: 8px; margin-left: -1px; }
+.hud .rbar .track b:hover { outline: 1px solid #fff; }
+.hud.replay .result { align-items: flex-end; padding-bottom: 6px; } /* the result card sits clear of the bar, which stays usable over it */
+.hud.replay #banner { top: 92px; }

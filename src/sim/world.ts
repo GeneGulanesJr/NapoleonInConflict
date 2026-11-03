@@ -68,10 +68,9 @@ function segDist(px: number, pz: number, ax: number, az: number, bx: number, bz:
   return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
 }
 
-/** The river whose water is here (off its bridges), or null; deep = ignore fordable rivers. */
-export function riverAt(scn: any, x: number, z: number, deep = false): any {
+/** The river whose water is here (off its bridges), or null. */
+export function riverAt(scn: any, x: number, z: number): any {
   for (const r of scn.map.rivers ?? []) {
-    if (deep && r.ford) continue;
     if (r.bridges.some(([bx, bz]: number[]) => Math.hypot(x - bx, z - bz) < 7)) continue;
     for (let i = 0; i + 1 < r.pts.length; i++) if (segDist(x, z, r.pts[i][0], r.pts[i][1], r.pts[i + 1][0], r.pts[i + 1][1]) < r.width / 2) return r;
   }
@@ -89,22 +88,4 @@ export function featureAt(scn: any, x: number, z: number) {
   for (const l of scn.map.lanes ?? []) if (lineDist(l.pts, x, z) < l.w * 0.7) { cover = Math.min(cover, 0.7); kind = 'lane'; }
   for (const hd of scn.map.hedges ?? []) if (lineDist(hd.pts, x, z) < 2.2) cover = Math.min(cover, 0.85);
   return { cover, kind, wood, village, road, river };
-}
-
-/** Units never wade a deep river when a bridge is reachable: returns the bridge to head for first, or null if the straight line is dry (fords are waded). */
-export function detour(scn: any, ax: number, az: number, bx: number, bz: number): { x: number; z: number } | null {
-  const rivers = (scn.map.rivers ?? []).filter((r: any) => !r.ford);
-  if (!rivers.length) return null;
-  const wades = (x0: number, z0: number, x1: number, z1: number) => {
-    const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 3);
-    for (let i = 1; i <= n; i++) if (riverAt(scn, x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n, true)) return true;
-    return false;
-  };
-  if (!wades(ax, az, bx, bz)) return null;
-  let best: { x: number; z: number } | null = null, bc = 1e9;
-  for (const r of rivers) for (const [qx, qz] of r.bridges) {
-    const c = Math.hypot(qx - ax, qz - az) + Math.hypot(bx - qx, bz - qz);
-    if (c < bc && !wades(ax, az, qx, qz) && !wades(qx, qz, bx, bz)) { bc = c; best = { x: qx, z: qz }; }
-  }
-  return best;
 }

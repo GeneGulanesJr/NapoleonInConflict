@@ -1,6 +1,6 @@
 // Pure campaign roster logic shared by the browser campaign and the multiplayer server (no DOM, no JSON imports).
 export type RosterUnit = { rid: number; type: string; name: string; men: number; maxMen: number; xp?: number };
-export type CampaignState = { idx: number; results: Record<string, 'win' | 'draw' | 'loss'>; roster: RosterUnit[]; ended: string | null; glory?: number };
+export type CampaignState = { idx: number; results: Record<string, 'win' | 'draw' | 'loss'>; roster: RosterUnit[]; ended: string | null; glory?: number; grouchy?: string };
 
 export function freshRoster(camp: any, tu: any): RosterUnit[] {
   const out: RosterUnit[] = [];
@@ -33,6 +33,14 @@ export function recruit(c: CampaignState, camp: any, tu: any, type: string): boo
   c.roster.push({ rid: Math.max(0, ...c.roster.map((u) => u.rid)) + 1, type, name, men: tu.types[type].men, maxMen: tu.types[type].men, xp: 0 });
   return true;
 }
+
+// Marshal Grouchy (camp.grouchy): his orders are asked once after battle `after`; the regiments he takes sit out battle `at`, they are not lost.
+/** the chosen orders (a camp.grouchy.options entry), or undefined */
+export const grouchyOrders = (c: CampaignState, camp: any) => camp.grouchy?.options.find((o: any) => o.id === c.grouchy);
+/** the campaign must ask for Grouchy's orders: his battle is over and they were never given (saves from before the choice too) */
+export const grouchyDue = (c: CampaignState, camp: any) => !!camp.grouchy && !c.grouchy && !c.ended && c.idx > camp.battles.indexOf(camp.grouchy.after);
+/** the regiments that take the field in battle `id` */
+export const fieldRoster = (c: CampaignState, camp: any, id: string) => (id === camp.grouchy?.at ? c.roster.filter((u) => !grouchyOrders(c, camp)?.detach.includes(u.name)) : c.roster);
 
 /** Apply a finished battle: survivors keep their losses, then rest heals a fraction of the missing men. */
 export function applyResult(c: CampaignState, camp: any, id: string, state: any): CampaignState {

@@ -5,10 +5,11 @@ import { runBattle, CONTROLS, type Outcome } from './battle.ts';
 import { localSource, remoteSource, replaySource } from './game.ts';
 import { unlock } from './audio.ts';
 import { settings } from './settings.ts';
-import type { Replay } from './sim/replay.ts';
+import { parseReplay, type Replay } from './sim/replay.ts';
 import {
   CAMPAIGN, SCENARIOS, TUNING, newCampaign, load, save, clearSave, applyResult, freshRoster, wonMap, EXTRA_BATTLES, makeSkirmish, type CampaignState,
-  loadBattle, saveBattle, clearBattle, type BattleSave, reinforce, recruit, fillCost, recruitCost, prefNum, setPrefNum,
+  loadBattle, saveBattle, clearBattle, type BattleSave, reinforce, recruit, fillCost, recruitCost, prefNum, setPrefNum, pref,
+  grouchyOrders, grouchyDue, fieldRoster,
 } from './campaign.ts';
 
 const app = document.getElementById('app')!;
@@ -87,9 +88,26 @@ function routeMap(c: CampaignState) {
   }).join('');
   return `<svg class="cmap stag" viewBox="0 0 100 100" shape-rendering="crispEdges"><polyline points="${pts.map((p: number[]) => p.join(',')).join(' ')}" class="route"/>${dots}</svg>`;
 }
+/** a battle as this campaign fights it: at Grouchy's battle the briefing (and the battle intro) says what he is doing */
+function campaignScn(c: CampaignState, id: string) {
+  const o = grouchyOrders(c), scn = SCENARIOS[id];
+  return o && id === CAMPAIGN.grouchy.at ? { ...scn, hint: `${scn.hint} ${o.brief}` } : scn;
+}
+/** Asked once after Ligny (campaign.json grouchy): Grouchy's orders shape Waterloo. */
+function grouchyScreen(c: CampaignState) {
+  const g = CAMPAIGN.grouchy;
+  screen(`<h2 class="stag">${g.title}</h2><p class="intro-text stag">${g.text}</p>
+    <div class="btns orders">${g.options.map((o: any) => `<button class="stag" data-g="${o.id}">${o.label}<small>${o.text}</small></button>`).join('')}</div>
+    <div class="btns"><button id="back" class="stag alt">Main menu</button></div>`, (el) => {
+    el.querySelectorAll<HTMLElement>('[data-g]').forEach((b) => (b.onclick = () => { c.grouchy = b.dataset.g; save(c); campaignScreen(c); }));
+    el.querySelector<HTMLElement>('#back')!.onclick = title;
+  });
+}
 function campaignScreen(c: CampaignState) {
   if (c.ended) return endingScreen(c);
-  const id = CAMPAIGN.battles[c.idx], scn = SCENARIOS[id];
+  if (grouchyDue(c)) return grouchyScreen(c);
+  const id = CAMPAIGN.battles[c.idx], scn = campaignScn(c, id), orders = grouchyOrders(c);
+  const away: string[] = orders?.detach.filter((n: string) => c.roster.some((u) => u.name === n)) ?? [];
   const byType: Record<string, { n: number; men: number; max: number }> = {};
   for (const u of c.roster) { const b = (byType[u.type] ??= { n: 0, men: 0, max: 0 }); b.n++; b.men += u.men; b.max += u.maxMen; }
   const total = c.roster.reduce((a, u) => a + u.men, 0), totalMax = Object.keys(CAMPAIGN.roster).reduce((a, t) => a + CAMPAIGN.roster[t].length * TUNING.types[t].men, 0);
@@ -114,6 +132,7 @@ function campaignScreen(c: CampaignState) {
         <div class="brief stag"><h3>${scn.title} <small>${scn.date}</small></h3><p>${scn.blurb}</p><p class="hint">${scn.hint}</p><p class="hint">Victory: hold more objectives when time runs out (60% of the verdict, the rest is points banked), or break the enemy army.</p></div>
         <div class="roster stag"><h4>Your army: ${Math.round((total / totalMax) * 100)}% strength <small>(${c.roster.length} regiments) · Glory <b class="glory">${g}</b></small></h4>
           ${Object.keys(CAMPAIGN.roster).map((t) => { const b = byType[t] ?? { n: 0, men: 0, max: 1 }; return `<div class="rrow buy"><span>${TUNING.types[t].label} ×${b.n}</span><i><s data-w="${(b.men / b.max) * 100}"></s></i>${shop(t)}</div>`; }).join('')}
+          ${orders ? `<small>Marshal Grouchy: <b>${orders.label}</b>.${away.length ? ` Away with him at ${SCENARIOS[CAMPAIGN.grouchy.at].title}: ${away.join(', ')}.` : ''}</small>` : ''}
           <small>Losses carry over to the next battle; rest restores ${Math.round(CAMPAIGN.healFraction * 100)}% of the missing men. Each battle earns glory (win ${CAMPAIGN.glory.win}, draw ${CAMPAIGN.glory.draw}, loss ${CAMPAIGN.glory.loss}): spend it on replacements, or to raise a destroyed regiment again.${bs ? ' Finish the battle in progress to spend it.' : ''}</small></div>
         <div class="btns row">${bs ? `<button id="resume" class="stag" title="Carry on from ${Math.floor(bs.s.t / 60)} min in">Resume battle</button><button id="go" class="stag alt">Restart battle</button>` : '<button id="go" class="stag">Begin battle</button>'}<button id="back" class="stag alt">Main menu</button></div>
       </div>
@@ -138,10 +157,10 @@ function enterBattle(src: any, scn: any, campaign: boolean, onExit: (o: Outcome)
 }
 
 function startCampaignBattle(c: CampaignState, resume?: BattleSave) {
-  const id = CAMPAIGN.battles[c.idx], scn = SCENARIOS[id];
+  const id = CAMPAIGN.battles[c.idx], scn = campaignScn(c, id);
   if (!resume) clearBattle();
   const run = () => {
-    const src = localSource(scn, { roster: c.roster, won: wonMap(c), resume: resume?.s });
+    const src = localSource(scn, { roster: fieldRoster(c, id), won: wonMap(c), grouchy: c.grouchy, resume: resume?.s, deploy: pref('nic-deploy', true) });
     const keep = () => { if (!src.state.over) saveBattle({ id, idx: c.idx, s: src.state }); }; // the battle so far, to resume after quitting or closing the tab
     const timer = setInterval(keep, 15000);
     addEventListener('pagehide', keep);
@@ -183,7 +202,19 @@ function quickScreen() {
     ${CAMPAIGN.battles.map((b: string) => `<button class="stag" data-b="${b}">${SCENARIOS[b].title} <small>${SCENARIOS[b].date}</small></button>`).join('')}
     ${EXTRA_BATTLES.map((b: string) => `<button class="stag alt" data-b="${b}">${SCENARIOS[b].title} <small>${SCENARIOS[b].date}</small></button>`).join('')}
     <button class="stag alt" id="rnd">Random skirmish <small>new map every time</small></button>
-    <button class="stag alt" id="back">Back</button></div>`, (el) => {
+    <button class="stag alt" id="rfile">Watch a replay file…</button><input type="file" id="rpick" accept=".json,application/json" hidden>
+    <button class="stag alt" id="back">Back</button></div><p class="err stag" id="err"></p>`, (el) => {
+    const pick = el.querySelector<HTMLInputElement>('#rpick')!;
+    el.querySelector<HTMLElement>('#rfile')!.onclick = () => pick.click();
+    pick.onchange = async () => {
+      const f = pick.files?.[0];
+      if (!f) return;
+      try {
+        if (f.size > 64e6) throw new Error('the file is too large');
+        const rec = parseReplay(await f.text(), SCENARIOS, CAMPAIGN.grouchy?.options.map((o: any) => o.id));
+        fadeOutMenu(() => watch(rec, rec.scn, quickScreen));
+      } catch (e) { el.querySelector('#err')!.textContent = `Cannot play this replay: ${(e as Error).message}.`; pick.value = ''; }
+    };
     el.querySelector<HTMLElement>('#side')!.onclick = (e) => { setPrefNum('nic-side', 1 - prefNum('nic-side', 0)); (e.currentTarget as HTMLElement).querySelector('b')!.textContent = SIDES[prefNum('nic-side', 0)]; };
     el.querySelector<HTMLElement>('#rnd')!.onclick = () => { const scn = makeSkirmish(Date.now() & 0x7fffffff); fadeOutMenu(() => quickBattle(scn)); };
     el.querySelectorAll<HTMLElement>('[data-b]').forEach((b) => (b.onclick = () => fadeOutMenu(() => quickBattle(SCENARIOS[b.dataset.b!]))));
@@ -192,7 +223,7 @@ function quickScreen() {
 }
 /** A quick battle on the chosen side (the campaign roster names only exist for the French); "play again" keeps the map, a random skirmish included. */
 function quickBattle(scn: any) {
-  const side = prefNum('nic-side', 0) ? 1 : 0, src = localSource(scn, { roster: side ? undefined : freshRoster(), side });
+  const side = prefNum('nic-side', 0) ? 1 : 0, src = localSource(scn, { roster: side ? undefined : freshRoster(), side, deploy: pref('nic-deploy', true) });
   enterBattle(src, scn, false, (o) => (o === 'retry' ? quickBattle(scn) : o === 'replay' ? watch(src.rec!, scn, quickScreen) : quickScreen()));
 }
 

@@ -9,6 +9,7 @@ import waterloo from './data/waterloo.json';
 import hougoumont from './data/hougoumont.json';
 import wavre from './data/wavre.json';
 import { freshRoster as buildRoster, applyResult as applyBattle, reinforce as buyMen, recruit as buyRegiment, fillCost as menCost, recruitCost as regimentCost, type RosterUnit, type CampaignState } from './sim/roster.ts';
+import { grouchyOrders as orders, grouchyDue as due, fieldRoster as onField } from './sim/roster.ts';
 
 export const TUNING: any = tuning;
 export const CAMPAIGN: any = camp;
@@ -22,10 +23,15 @@ const KEY = 'nic-campaign-v2';
 export const freshRoster = (): RosterUnit[] => buildRoster(CAMPAIGN, TUNING);
 export const applyResult = (c: CampaignState, id: string, state: any): CampaignState => applyBattle(c, CAMPAIGN, id, state);
 export const newCampaign = (): CampaignState => ({ idx: 0, results: {}, roster: freshRoster(), ended: null, glory: 0 });
-export const reinforce = (c: CampaignState, type: string) => buyMen(c, TUNING, type);
+/** glory buys men only for the regiments that fight next, not those away with Grouchy (same unit objects, so the men land in c) */
+const next = (c: CampaignState): CampaignState => ({ ...c, roster: fieldRoster(c, CAMPAIGN.battles[c.idx]) });
+export const reinforce = (c: CampaignState, type: string) => { const v = next(c), ok = buyMen(v, TUNING, type); c.glory = v.glory; return ok; };
 export const recruit = (c: CampaignState, type: string) => buyRegiment(c, CAMPAIGN, TUNING, type);
-export const fillCost = (c: CampaignState, type: string) => menCost(c, TUNING, type);
+export const fillCost = (c: CampaignState, type: string) => menCost(next(c), TUNING, type);
 export const recruitCost = (type: string) => regimentCost(CAMPAIGN, TUNING, type);
+export const grouchyOrders = (c: CampaignState) => orders(c, CAMPAIGN);
+export const grouchyDue = (c: CampaignState) => due(c, CAMPAIGN) && !loadBattle(c); // not under a battle in progress: its timeline is already fixed
+export const fieldRoster = (c: CampaignState, id: string) => onField(c, CAMPAIGN, id);
 
 /** A campaign battle in progress, saved every few seconds so closing the tab doesn't lose it: the battle, the campaign step it belongs to, and the sim state. */
 const BKEY = 'nic-battle-v1';

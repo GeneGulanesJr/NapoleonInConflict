@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { animate } from 'animejs';
 import { heightAt, lineDist, featureAt, riverAt } from './sim/world.ts';
+import { posted, foot, hour } from './sim/sim.ts';
+import { pxUrl } from './pixel.ts';
 
 // palette (sRGB hex, from the style guide)
 const P = { fr: 0x3f6fdc, gb: 0xd8453a, pr: 0x3b4a85, nl: 0xd8872a, br: 0x2a2a2e, trim: 0xe9e4d6, ink: 0x14110d, skin: 0xd8b090, wood: 0x5a4128, brass: 0xd3a64e, steel: 0xb8bcc4,
@@ -12,7 +14,17 @@ const P = { fr: 0x3f6fdc, gb: 0xd8453a, pr: 0x3b4a85, nl: 0xd8872a, br: 0x2a2a2e
   hedge: 0x3c5a2e, hedgeTop: 0x4a6b36, stone: 0x8d8777, cliff: 0x6b573d, plow: 0x6e5036, smoke: 0xf4f1ea, soil: 0x3a2c1f, horse: 0x6b4a34, pants: 0xe0dbcb };
 const PLUME: Record<string, number> = { fr: 0xd8453a, gb: 0xe9e4d6, pr: 0xe9e4d6, nl: 0xd8872a, br: 0x1b1b1f };
 const NAT: Record<string, number> = { fr: P.fr, gb: P.gb, pr: P.pr, nl: P.nl, br: P.br };
+/** [French, Coalition]; setColourBlind swaps it in place, with the CSS --fr/--co (sides) and --mine/--foe (bases, plates) */
 export const SIDE_COLOR = ['#6f9bff', '#ff6a5c'];
+const hexOf = (c: string) => parseInt(c.slice(1), 16);
+/** a regiment's status marks, most urgent first (plate icons and the selection card) */
+export const unitStatus = (u: any, t: number, tu: any) => (u.routed ? ['routed'] : [u.stun > 0 && 'stun', u.shaken > 0 && 'shaken', u.morale < u.maxMorale * 0.3 && 'waver',
+  (u.bay != null || (u.spUntil > t && u.spKind === 'charge') || (tu.types[u.type].cav && u.chase != null)) && 'charge', u.fat > 0.5 && 'tired', posted(u, tu) && 'posted'].filter(Boolean)) as string[];
+/** HUD scale in physical px: one HUD pixel = one world pixel (S), never under 2 nor wider than the 640-wide layout allows; ui steps it up while 640x360 still fits */
+export function hudScale(S: number, W: number, H: number, ui: number) {
+  const auto = Math.max(2, Math.min(S, Math.floor(W / 640)));
+  return Math.max(auto, Math.min(auto + ui, Math.floor(W / 640), Math.floor(H / 360)));
+}
 const lin = (hex: number) => { const c = new THREE.Color(hex); return { r: c.r, g: c.g, b: c.b }; };
 // sr/sg/sb = haze colour (linear); fn/ff = fog start/end relative to the camera distance
 const WEATHER: Record<string, any> = {
@@ -79,6 +91,10 @@ export function createView(host: HTMLElement) {
   let quality = 2;
   try { const q = localStorage.getItem('nic-quality'); if (q != null && Number(q) >= 0 && Number(q) <= 3) quality = Number(q); } catch { /* private mode */ }
   const guideOn = () => quality === 0;
+  // accessibility: interface size (0 Auto, 1 Larger, 2 Largest) and colour-blind sides
+  const UI = ['Auto', 'Larger', 'Largest'];
+  let ui = 0, cb = false;
+  try { const u = Number(localStorage.getItem('nic-ui')); if (u === 1 || u === 2) ui = u; cb = localStorage.getItem('nic-cb') === '1'; } catch { /* private mode */ }
   const renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.setPixelRatio(1);
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -178,13 +194,15 @@ export function createView(host: HTMLElement) {
     camAnim = animate(cam, { x, z, ...(dist ? { dist } : {}), duration: ms, ease: 'inOutQuad' });
     return camAnim;
   }
-  function zoomBy(factor: number) {
+  /** at = the ground point under the cursor: it stays put (the ortho view scales about the screen centre, so the centre slides toward it by the same ratio) */
+  function zoomBy(factor: number, at?: { x: number; z: number } | null) {
     camAnim?.pause();
     if (guideOn()) {
       let i = STOPS.reduce((b, s, k) => (Math.abs(s - zoomTarget) < Math.abs(STOPS[b] - zoomTarget) ? k : b), 0);
       i = Math.max(0, Math.min(STOPS.length - 1, i + (factor > 1 ? 1 : -1))); zoomTarget = STOPS[i];
     } else zoomTarget = Math.max(18, Math.min(760, (Math.abs(cam.dist - zoomTarget) > zoomTarget * 0.3 ? cam.dist : zoomTarget) * factor)); // re-base when something else (intro, fly-to) moved the camera
-    camAnim = animate(cam, { dist: zoomTarget, duration: 260, ease: 'outQuad' });
+    const k = 1 - zoomTarget / cam.dist, h = mapSize / 2, cl = (v: number) => Math.max(-h, Math.min(h, v));
+    camAnim = animate(cam, { dist: zoomTarget, ...(at ? { x: cl(cam.x + (at.x - cam.x) * k), z: cl(cam.z + (at.z - cam.z) * k) } : {}), duration: 260, ease: 'outQuad' });
   }
   let zoomTarget = cam.dist;
   function rotate90(dir: number) {
@@ -196,6 +214,12 @@ export function createView(host: HTMLElement) {
     try { localStorage.setItem('nic-quality', String(quality)); } catch { /* ignore */ }
     resize();
     return QUALITY[quality];
+  }
+  function cycleUi() {
+    ui = (ui + 1) % 3;
+    try { localStorage.setItem('nic-ui', String(ui)); } catch { /* ignore */ }
+    resize();
+    return UI[ui];
   }
   function setDusk(on: boolean) { duskOn = on; }
   function setSilhouette(on: boolean) { silhouette = on; }
@@ -657,7 +681,7 @@ export function createView(host: HTMLElement) {
   const plates = document.createElement('div');
   plates.className = 'plates';
   host.appendChild(plates);
-  type Plate = { el: HTMLElement; men: HTMLElement; mor: HTMLElement; name: HTMLElement; lm: number; lmo: number; ls: string; mc: string; lab: string };
+  type Plate = { el: HTMLElement; men: HTMLElement; mor: HTMLElement; name: HTMLElement; st: HTMLElement; lm: number; lmo: number; ls: string; mc: string; lab: string; sk: string };
   const plateMap = new Map<number, Plate>();
   const selected = new Set<number>();
   const v3 = new THREE.Vector3();
@@ -680,6 +704,7 @@ export function createView(host: HTMLElement) {
   const rangeGeo = new THREE.RingGeometry(0.985, 1, 72).rotateX(-Math.PI / 2), rangeRings: THREE.Mesh[] = [];
   for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(rangeGeo, new THREE.MeshBasicMaterial({ color: 0xe9e4d6, transparent: true, opacity: 0.35, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 4; scene.add(m); rangeRings.push(m); }
   let refillHint = false, dragLine: { ax: number; az: number; bx: number; bz: number; f: number } | null = null;
+  let ghosts: { u: any; x: number; z: number; f: number | null }[] | null = null; // order preview: where each regiment will stand (sim layout())
   let hoverId = -1, showAll = false; // full name plates only for these (plus selected / in trouble); everyone else gets a pip
 
   // coloured bases: a ribbon round each regiment's footprint on the ground, blue yours, red the enemy's (coats stay historical, and French and Prussian coats are both blue)
@@ -687,7 +712,16 @@ export function createView(host: HTMLElement) {
   baseGeo.setAttribute('position', new THREE.BufferAttribute(basePos, 3).setUsage(THREE.DynamicDrawUsage)); baseGeo.setAttribute('color', new THREE.BufferAttribute(baseCol, 3).setUsage(THREE.DynamicDrawUsage));
   const baseMesh = new THREE.Mesh(baseGeo, new THREE.MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 })); // unlit, so it reads at dusk too
   baseMesh.frustumCulled = false; scene.add(baseMesh);
-  const BASE_COL = { mine: new THREE.Color(0x4f86ff), foe: new THREE.Color(0xe8463a), routed: new THREE.Color(0x8d8a82) };
+  const BASE_COL = { mine: new THREE.Color(0x4f86ff), foe: new THREE.Color(0xe8463a), routed: new THREE.Color(0x8d8a82), ghost: new THREE.Color(0xa9c4ff) };
+  /** every side colour from one switch: blue / red, or Okabe–Ito sky blue / orange for colour-blind players */
+  function setColourBlind(on: boolean) {
+    cb = on;
+    try { localStorage.setItem('nic-cb', on ? '1' : '0'); } catch { /* ignore */ }
+    const [fr, co, mine, foe] = on ? ['#56b4e9', '#e69f00', '#56b4e9', '#e69f00'] : ['#6f9bff', '#ff6a5c', '#4f86ff', '#e8463a'];
+    SIDE_COLOR[0] = fr; SIDE_COLOR[1] = co; BASE_COL.mine.set(mine); BASE_COL.foe.set(foe);
+    const rs = document.documentElement.style; rs.setProperty('--fr', fr); rs.setProperty('--co', co); rs.setProperty('--mine', mine); rs.setProperty('--foe', foe);
+  }
+  setColourBlind(cb);
   let nb = 0;
   function baseSeg(ax: number, az: number, bx: number, bz: number, th: number, c: THREE.Color) {
     if (nb >= BASE_Q) return;
@@ -773,27 +807,54 @@ export function createView(host: HTMLElement) {
     }
   }
 
+  /** the viewer's deployment zone: its circles as one translucent ground-hugging area (2-unit cells inside any circle) with its outer edge, rebuilt only when the zone set changes */
+  let depZs: any = null, depObjs: THREE.Mesh[] = [];
+  function deployZone(zs: any[] | null) {
+    if (zs === depZs) return;
+    depZs = zs;
+    for (const o of depObjs) { scene.remove(o); o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
+    depObjs = [];
+    if (!zs?.length) return;
+    const G = 2, y = (x: number, z: number) => heightAt(scn, x, z) + 0.3, inside = (x: number, z: number, skip?: any) => zs.some((d) => d !== skip && Math.hypot(x - d.x, z - d.z) < d.r);
+    const fill: number[] = [], edge: number[] = [];
+    const x0 = Math.min(...zs.map((d) => d.x - d.r)), x1 = Math.max(...zs.map((d) => d.x + d.r)), z0 = Math.min(...zs.map((d) => d.z - d.r)), z1 = Math.max(...zs.map((d) => d.z + d.r));
+    for (let x = x0; x < x1; x += G) for (let z = z0; z < z1; z += G) if (inside(x + G / 2, z + G / 2)) fill.push(x, y(x, z), z, x, y(x, z + G), z + G, x + G, y(x + G, z + G), z + G, x, y(x, z), z, x + G, y(x + G, z + G), z + G, x + G, y(x + G, z), z);
+    for (const d of zs) for (let k = 0; k < 64; k++) {
+      const a0 = (k / 64) * Math.PI * 2, a1 = ((k + 1) / 64) * Math.PI * 2, am = (a0 + a1) / 2;
+      if (inside(d.x + Math.cos(am) * d.r, d.z + Math.sin(am) * d.r, d)) continue; // an arc inside a neighbour's circle is not the zone's edge
+      const q = (a: number, r: number) => { const x = d.x + Math.cos(a) * r, z = d.z + Math.sin(a) * r; return [x, y(x, z) + 0.1, z]; };
+      const a = q(a0, d.r - 0.7), b = q(a0, d.r), c = q(a1, d.r), e = q(a1, d.r - 0.7);
+      edge.push(...a, ...b, ...c, ...a, ...c, ...e);
+    }
+    for (const [p, op] of [[fill, 0.16], [edge, 0.85]] as [number[], number][]) {
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+      const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: BASE_COL.mine, transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+      m.frustumCulled = false; scene.add(m); depObjs.push(m);
+    }
+  }
+
   function sync(state: any, dt: number, viewer: number, evs: any[]) {
     clock += dt;
+    deployZone(state.phase === 'deploy' ? state.deploy?.[viewer] ?? null : null);
     if (state.weather !== prevWeather) { setWeather(state.weather, prevWeather === ''); prevWeather = state.weather; }
     eat(evs, viewer); lightFlashes(dt);
     updateFog(state, viewer);
 
     // time of day: warm light late in the scenario clock
     if (scn.clock) {
-      const hour = parseInt(scn.clock.start) + (state.t / scn.duration) * scn.clock.hours;
-      const tod = duskOn ? 1 : Math.max(0, Math.min(1, (hour - 16) / 4.5));
+      const hr = hour(scn, state.t); // the sim's clock (minutes included), so the light fades as the sim's night falls
+      const tod = duskOn ? 1 : Math.max(0, Math.min(1, (hr - 16) / 4.5));
       if (Math.abs(tod - atm.tod) > 0.005) { atm.tod += (tod - atm.tod) * Math.min(1, dt * 1.2); applyAtm(); }
     }
 
     // zones
     for (const z of state.zones) {
       const o = zoneObjs[z.id]; if (!o) continue;
-      const c = z.contested ? ((Math.floor(clock * 3) & 1) ? 0x6f9bff : 0xff6a5c) : z.owner === 0 ? 0x6f9bff : z.owner === 1 ? 0xff6a5c : 0xe9e2cf;
+      const c = z.contested ? hexOf(SIDE_COLOR[(Math.floor(clock * 3) & 1) ? 0 : 1]) : z.owner === 0 || z.owner === 1 ? hexOf(SIDE_COLOR[z.owner]) : 0xe9e2cf;
       (o.ring.material as THREE.MeshBasicMaterial).color.setHex(c);
       (o.ring.material as THREE.MeshBasicMaterial).opacity = refillHint && z.owner === viewer ? 0.55 + 0.4 * Math.sin(clock * 6) : 0.95; // pulse: hurt regiments can replenish here
       const p = z.p ?? (z.owner === 0 ? 1 : z.owner === 1 ? -1 : 0); // capture progress -1 (Coalition) .. 1 (French); the backdrop's raw zones have none
-      (o.ring2.material as THREE.MeshBasicMaterial).color.setHex(p > 0 ? 0x6f9bff : 0xff6a5c);
+      (o.ring2.material as THREE.MeshBasicMaterial).color.setHex(hexOf(SIDE_COLOR[p > 0 ? 0 : 1]));
       o.ring2.geometry.setDrawRange(0, Math.round(Math.abs(p) * 28) * 6); // the dashes fill clockwise from north as a side takes hold (28 dashes of 6 vertices)
       (o.flag.material as THREE.MeshToonMaterial).color.setHex(c);
     }
@@ -959,11 +1020,11 @@ export function createView(host: HTMLElement) {
       if (!p) {
         const el = document.createElement('div');
         el.className = 'plate';
-        el.innerHTML = '<div class="pn"></div><div class="bar men"><i></i></div><div class="bar mor"><i></i></div>';
+        el.innerHTML = '<div class="pn"></div><div class="bar men"><i></i></div><div class="bar mor"><i></i></div><span class="st"></span>';
         plates.appendChild(el);
-        p = { el, men: el.querySelector('.men i')!, mor: el.querySelector('.mor i')!, name: el.querySelector('.pn')!, lm: -1, lmo: -1, ls: '', mc: '', lab: '' };
+        p = { el, men: el.querySelector('.men i')!, mor: el.querySelector('.mor i')!, name: el.querySelector('.pn')!, st: el.querySelector('.st')!, lm: -1, lmo: -1, ls: '', mc: '', lab: '', sk: '' };
         p.name.textContent = u.name;
-        el.style.setProperty('--side', u.side === viewer ? '#4f86ff' : '#e8463a'); // yours vs the enemy's, matching the bases
+        el.style.setProperty('--side', u.side === viewer ? 'var(--mine)' : 'var(--foe)'); // yours vs the enemy's, matching the bases
         plateMap.set(u.id, p);
       }
       const lab = `${u.vet ? '*'.repeat(u.vet) + ' ' : ''}${u.garrison != null ? '[G] ' : ''}${u.name}`;
@@ -979,6 +1040,8 @@ export function createView(host: HTMLElement) {
       const full = showAll || selected.has(u.id) || u.id === hoverId || u.routed || u.eng != null || u.stun > 0 || u.morale < u.maxMorale * 0.4; // in trouble: routed, in melee, stunned or shaken
       const cls = `plate${full ? '' : ' pip'}${selected.has(u.id) ? ' sel' : ''}${u.routed ? ' routed' : u.stun > 0 ? ' stun' : u.shaken > 0 ? ' shaken' : u.morale < u.maxMorale * 0.3 ? ' waver' : ''}`;
       if (cls !== p.ls) { p.el.className = cls; p.ls = cls; }
+      const sk = full ? unitStatus(u, state.t, tu).join(' ') : ''; // status icons beside full plates only
+      if (sk !== p.sk) { p.st.innerHTML = sk && sk.split(' ').map((k) => `<img src="${pxUrl(k)}">`).join(''); p.sk = sk; }
     }
     horses.count = legsF.count = legsH.count = hbaseM.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; baseM.count = nbs; packM.count = npk;
     body.count = legL.count = legR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; shakoM.count = nsh; belgM.count = nbg; bearM.count = nbr; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
@@ -987,6 +1050,7 @@ export function createView(host: HTMLElement) {
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
     for (const m of [...figs, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
     for (const m of [...figs, bannerM]) if (m.instanceColor) upl(m.instanceColor, m.count, 3);
+    for (const g of ghosts ?? []) { const f = g.f ?? g.u.facing; baseRing(g.x, g.z, Math.sin(f), Math.cos(f), foot(g.u, tu), bTh, BASE_COL.ghost); } // ghost footprints on the ground, facing the ordered way
     baseGeo.setDrawRange(0, nb * 6); upl(baseGeo.attributes.position as THREE.BufferAttribute, nb * 6, 3); upl(baseGeo.attributes.color as THREE.BufferAttribute, nb * 6, 3);
     for (const [id, p] of plateMap) if (!live.has(id)) { p.el.remove(); plateMap.delete(id); vis.delete(id); }
     for (const l of vlabels) {
@@ -1026,8 +1090,9 @@ export function createView(host: HTMLElement) {
       let tx: number | null = u.tx, tz: number | null = u.tz;
       if (u.chase != null) { const t = state.units.find((q: any) => q.id === u.chase); if (t) { tx = t.x; tz = t.z; } }
       if (tx != null && u.queue?.length) { let px = tx, pz = tz as number; for (const q of u.queue) { if (nl >= 58) break; lp.setXYZ(nl * 2, px, heightAt(scn, px, pz) + 1, pz); lp.setXYZ(nl * 2 + 1, q[0], heightAt(scn, q[0], q[1]) + 1, q[1]); nl++; px = q[0]; pz = q[1]; } }
-      if (tx != null && tz != null && nl < 59) {
-        lp.setXYZ(nl * 2, v.x, heightAt(scn, v.x, v.z) + 1, v.z); lp.setXYZ(nl * 2 + 1, tx, heightAt(scn, tx, tz) + 1, tz); nl++;
+      if (tx != null && tz != null) { // by the waypoints of its route (the last path entry is the goal it was planned for)
+        let px = v.x, pz = v.z;
+        for (const q of [...(u.path?.slice(0, -1) ?? []), [tx, tz]]) { if (nl >= 59) break; lp.setXYZ(nl * 2, px, heightAt(scn, px, pz) + 1, pz); lp.setXYZ(nl * 2 + 1, q[0], heightAt(scn, q[0], q[1]) + 1, q[1]); nl++; px = q[0]; pz = q[1]; }
       }
     }
     for (let i = nr; i < selRings.length; i++) selRings[i].visible = false;
@@ -1124,7 +1189,7 @@ export function createView(host: HTMLElement) {
     const w = host.clientWidth || innerWidth, h = host.clientHeight || innerHeight;
     dpr = devicePixelRatio || 1; const W = w * dpr, H = h * dpr; // pick S in physical pixels so each buffer pixel covers whole screen pixels at any OS display scaling
     S = upscale(quality, H);
-    hs = Math.max(2, Math.min(S, Math.floor(W / 640))) / dpr; // one HUD pixel = one world pixel (S), but never under 2 screen px (legible) or wider than the 640-wide layout allows; whole physical px at any OS scaling
+    hs = hudScale(S, W, H, ui) / dpr; // whole physical px at any OS scaling
     const sm = quality >= 2 ? 4096 : 2048;
     if (sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); sun.shadow.map?.dispose(); (sun.shadow as any).map = null; } // finer shadows at High and Native
     bw = Math.ceil(W / S); bh = Math.ceil(H / S);
@@ -1168,12 +1233,13 @@ export function createView(host: HTMLElement) {
   const setRefillHint = (on: boolean) => { refillHint = on; };
   const setHover = (id: number | null) => { hoverId = id ?? -1; }, setShowAll = (on: boolean) => { showAll = on; };
   const setDragLine = (d: typeof dragLine) => { dragLine = d; };
+  const setGhosts = (g: typeof ghosts) => { ghosts = g; };
   function setReticle(x: number | null, z = 0, r = 10, color = 0xffffff) {
     if (x == null) { reticle.visible = false; return; }
     reticle.visible = true; reticle.position.set(x, heightAt(scn, x, z) + 1, z); reticle.scale.setScalar(r);
     (reticle.material as THREE.MeshBasicMaterial).color.setHex(color);
   }
 
-  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get quality() { return QUALITY[quality].split(':')[0]; }, get guide() { return guideOn(); }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, setHover, setShowAll, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
+  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get quality() { return QUALITY[quality].split(':')[0]; }, get guide() { return guideOn(); }, cycleUi, get uiSize() { return UI[ui]; }, setColourBlind, get colourBlind() { return cb; }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, setGhosts, setHover, setShowAll, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
 }
 export type View = ReturnType<typeof createView>;

@@ -1,5 +1,6 @@
 {
   "_note": "All gameplay numbers live here. Speeds are world units/s, ranges world units, reload seconds. power = casualties per man per volley at point blank.",
+  "deploy": { "_note": "Deployment phase (local battles): a side may place its regiments anywhere within `r` units of where any of its starting regiments stands", "r": 35 },
   "difficulty": { "_note": "Easy / Normal / Hard: the bot's regiments (start, reinforcements, reserves) at this share of their scenario strength", "labels": ["Easy", "Normal", "Hard"], "enemyStrength": [0.8, 1, 1.25] },
   "stun": { "_note": "Foot or guns (not in square or a farm) hit by a cavalry charge are stunned for `time` s x the slope factor x (horse men / foot men, clamped to `size`) x `charge` with the Charge special: they cannot fire, move or change formation, and fight at `melee` x their usual rate", "time": 4, "size": [0.5, 1.5], "charge": 1.5, "melee": 0.6 },
   "shaken": { "_note": "Fire rattles what it hits: `k` s per 100% of the regiment lost in one blow (so ~4 s for a 10% bite), + flank[aspect] s on a flank or rear hit, + up to `routers` s when broken men run through; capped at `max`. Shaken: reload takes `reload` x as long, fire does `fire` x, no formation changes (it can still move)", "k": 40, "max": 8, "flank": [0, 1.5, 3], "routers": 3, "reload": 1.5, "fire": 0.7 },
@@ -8,6 +9,12 @@
   "plough": { "_note": "Round shot that hits carries on up to `reach` units behind its target and strikes the next regiment of that side in its path for `carry` x the casualties", "reach": 30, "carry": 0.4 },
   "breakoff": { "_note": "Horse ordered away from its foe in a melee strikes no blows while it gets clear; the foe hits it at `hit` x the usual rate, with no flank or rear bonus", "hit": 0.5 },
   "hold": { "_note": "posted: foot or guns standing still for `after` seconds take `fire` x casualties and `morale` x morale loss, and get +`shock` on the charge morale test", "after": 15, "fire": 0.85, "morale": 0.8, "shock": 0.1 },
+  "holdFire": { "_note": "Hold fire stance (line, guard, guns): no fire until a foe is within `range` x the regiment's range (an ordered target excepted); the first volley after `loaded` s without firing does `first` x damage (not on top of the Volley special)", "range": 0.4, "loaded": 10, "first": 1.8 },
+  "night": { "_note": "Darkness from the scenario clock: 0 at `dusk`, 1 at `dark` (hours); sight (fog of war, and so what the bot sees) x (1 - dark x `sight`), fire x (1 - dark x `fire`)", "dusk": 20.5, "dark": 22, "sight": 0.6, "fire": 0.5 },
+  "march": { "_note": "'March in column' (a player setting): a line ordered farther than `dist` forms column for the march and forms line again on arrival, or as soon as a foe it can see is within musket range", "dist": 60 },
+  "fallback": { "_note": "Foot or horse ordered to a point behind it (over 120 degrees off its facing) and nearer than `dist` steps back facing the enemy, without wheeling, at `speed` x its pace", "dist": 40, "speed": 0.5 },
+  "doubleTime": { "_note": "Double time (double right-click): marches at `speed` x, tiring at fatigue.run, until it arrives", "speed": 1.4 },
+  "courier": { "_note": "Courier orders (a player setting): an order to a regiment farther than `free` from its nearest general (the entry point once they have all fallen) arrives after (distance - free) / `speed` s; aids, reserves, auto-square and replenishing are not delayed", "free": 40, "speed": 10 },
   "types": {
     "line": {
       "label": "Line Infantry",
