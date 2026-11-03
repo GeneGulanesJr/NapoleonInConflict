@@ -20,6 +20,7 @@ export const CONTROLS: [string, [string, string][]][] = [
 ];
 const GLYPH: Record<string, string> = { line: 'I', guard: 'G', skirmisher: 'S', lancer: 'L', cuirassier: 'C', artillery: 'A', commander: '*' };
 const VET = ['', 'Seasoned', 'Veteran', 'Elite'];
+const START_DIST = 120; // opening zoom: a few regiments and the ground around them in view
 const SIDE_NAME = ['French', 'Coalition'];
 const FORMS: [string, string, string][] = [['line', 'Z', 'Line'], ['column', 'X', 'Column'], ['square', 'C', 'Square']];
 const ABKEY: Record<string, string> = { barrage: 'F1', rockets: 'F2', cavalry: 'F3' }; // number keys belong to control groups
@@ -65,7 +66,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     <div class="br">
       <div class="panel" id="res"><div class="hd">Reserves <b id="rp">0</b> pts <small id="pool"></small></div>
         <div class="rbtns">${reserveTypes.map((t) => `<button data-res="${t}"><span>${TUNING.types[t].label}</span><em>${TUNING.types[t].cost}</em><u></u></button>`).join('')}</div></div>
-      <canvas id="mini" width="64" height="64"></canvas>
+      <canvas id="mini" width="96" height="96"></canvas>
     </div>
     <div class="panel" id="army"></div>
     <div class="panel" id="tip" style="display:none"></div>
@@ -217,7 +218,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   }
 
   // army bar: one card per regiment, DOM touched only when a card's values change (like the plates)
-  const army = $<HTMLElement>(hud, '#army'), selPanel = $<HTMLElement>(hud, '#sel'), topbar = $<HTMLElement>(hud, '.topbar');
+  const army = $<HTMLElement>(hud, '#army'), selPanel = $<HTMLElement>(hud, '#sel'), topbar = $<HTMLElement>(hud, '.topbar'), toasts = $<HTMLElement>(hud, '#toasts');
   const cards = new Map<number, { el: HTMLElement; m: HTMLElement; o: HTMLElement; em: HTMLElement; sig: string }>();
   const isIdle = (u: any) => !u.routed && u.type !== 'commander' && u.tx == null && u.chase == null && !u.queue?.length && u.garrison == null && u.eng == null;
   function drawArmy(st: any) {
@@ -240,7 +241,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       if (sig === c.sig) continue;
       c.sig = sig; c.m.style.width = `${mp}%`; c.o.style.width = `${op}%`; c.em.textContent = mk; c.el.className = cls;
     }
-    army.style.top = `${topbar.offsetHeight + 4}px`; army.style.bottom = `${selPanel.offsetHeight + 10}px`; // between the top bar and the selection panel, whatever their heights
+    army.style.top = `${topbar.offsetHeight + 4}px`; toasts.style.top = army.style.top; army.style.maxHeight = `${hud.offsetHeight - topbar.offsetHeight - selPanel.offsetHeight - 14}px`; // fits its cards, capped between the top bar and the selection panel, whatever their heights
   }
   const cardId = (e: MouseEvent) => Number((e.target as HTMLElement).closest<HTMLElement>('.ac')?.dataset.id);
   army.onclick = (e) => { const id = cardId(e); if (id) setSel(e.shiftKey ? [...new Set([...selection, id])] : [id]); };
@@ -530,7 +531,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const el = $<HTMLElement>(hud, '#intro');
     $(el, 'small').textContent = scn.date; $(el, 'p').textContent = `${scn.hint ?? ''} Victory: hold more objectives when time runs out, or break the enemy army.`;
     $(el, 'h1').innerHTML = [...scn.title].map((c: string) => `<span>${c === ' ' ? '&nbsp;' : c}</span>`).join('');
-    view.cam.x = first.x; view.cam.z = first.z; view.cam.dist = 160; view.cam.yaw = 0.5;
+    view.cam.x = first.x; view.cam.z = first.z; view.cam.dist = 280; view.cam.yaw = 0.5;
     src.paused = true;
     intro = createTimeline({ onComplete: endIntro })
       .add('#fade', { opacity: [1, 0], duration: 1400, ease: 'inOutQuad' }, 0)
@@ -538,7 +539,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       .add($(el, 'small'), { opacity: [0, 1], translateY: [10, 0], duration: 600 }, 400)
       .add(el.querySelectorAll('h1 span'), { opacity: [0, 1], translateY: [24, 0], rotateX: [70, 0], duration: 700, delay: stagger(45), ease: 'outBack' }, 600)
       .add($(el, 'p'), { opacity: [0, 1], duration: 700 }, 1500)
-      .add(view.cam, { x: start.x, z: start.z, dist: 60, yaw: 0, duration: 3600, ease: 'inOutCubic' }, 700)
+      .add(view.cam, { x: start.x, z: start.z, dist: START_DIST, yaw: 0, duration: 3600, ease: 'inOutCubic' }, 700)
       .add(el, { opacity: 0, duration: 700, ease: 'inQuad' }, 3300);
   }
   function endIntro() {
@@ -548,8 +549,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     lastLogT = src.state.t;
     if (src.mode === 'local') setSpeed(1);
   }
-  function skipIntro() { const t = intro; intro = null; t?.complete(); endIntro(); view.cam.x = start.x; view.cam.z = start.z; view.cam.dist = 60; view.cam.yaw = 0; }
-  if (src.mode === 'local') playIntro(); else { $<HTMLElement>(hud, '#fade').style.display = 'none'; $<HTMLElement>(hud, '#intro').style.display = 'none'; view.cam.x = start.x; view.cam.z = start.z; view.cam.dist = 60; }
+  function skipIntro() { const t = intro; intro = null; t?.complete(); endIntro(); view.cam.x = start.x; view.cam.z = start.z; view.cam.dist = START_DIST; view.cam.yaw = 0; }
+  if (src.mode === 'local') playIntro(); else { $<HTMLElement>(hud, '#fade').style.display = 'none'; $<HTMLElement>(hud, '#intro').style.display = 'none'; view.cam.x = start.x; view.cam.z = start.z; view.cam.dist = START_DIST; }
 
   // ---------------------------------------------------------------- result overlay
   const mmss = (t: number) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
