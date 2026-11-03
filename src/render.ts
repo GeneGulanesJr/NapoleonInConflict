@@ -214,11 +214,12 @@ export function createView(host: HTMLElement) {
 
   // --- outlined instanced meshes ---------------------------------------------
   // Each mesh gets an inverted-hull twin sharing its matrices; hull grows 1 buffer pixel from a centre point (no corner gaps on boxes).
-  const hullU = { uW: { value: 0.1 } };
+  const far = () => { const t = Math.max(0, Math.min(1, (cam.dist - 90) / 190)); return t * t * (3 - 2 * t); }; // 0 close .. 1 fully zoomed out: figures are 1-2px, so soften them
+  const hullU = { uW: { value: 0.1 }, uInk: { value: new THREE.Color(P.ink) } }, INK_FAR = new THREE.Color(0x5c5846); // one ink colour for every hull, softened as you zoom out
   const outlined: { m: THREE.InstancedMesh; o: THREE.InstancedMesh }[] = [];
   function hullMat(c: [number, number, number]) {
     return new THREE.ShaderMaterial({
-      uniforms: { uW: hullU.uW, uC: { value: new THREE.Vector3(...c) }, uInk: { value: new THREE.Color(P.ink) } },
+      uniforms: { uW: hullU.uW, uC: { value: new THREE.Vector3(...c) }, uInk: hullU.uInk },
       vertexShader: `uniform float uW; uniform vec3 uC; void main(){ float sc = length(instanceMatrix[0].xyz);
         vec3 p = position + normalize(position - uC + vec3(0.,.001,0.)) * (uW / sc); gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(p, 1.); }`,
       fragmentShader: 'uniform vec3 uInk; void main(){ gl_FragColor = vec4(uInk, 1.); }',
@@ -798,7 +799,7 @@ export function createView(host: HTMLElement) {
     const live = new Set<number>();
     const seenSet = state.fog ? new Set<number>(state.seen?.[viewer] ?? []) : null; // fog of war: enemies you cannot see are not drawn
     const k = 1 - Math.exp(-10 * dt);
-    const sl = [0, 0], byId = new Map<number, any>(state.units.map((q: any) => [q.id, q]));
+    const sl = [0, 0], farT = far(), byId = new Map<number, any>(state.units.map((q: any) => [q.id, q])); // farT: zoomed out the men grow a little so ranks read as solid blocks, not speckle
     buildCrowd();
     // cull regiments that are clearly off-screen (no figures placed; smoothing and bookkeeping still run). Not on the first frame or after a camera jump.
     const still = camReady && Math.hypot(cam.x - lastCam.x, cam.z - lastCam.z) < 20 && Math.abs(cam.dist / lastCam.d - 1) < 0.2 && Math.abs(cam.yaw - lastCam.y) < 0.1 && Math.abs(tl.v - lastCam.t) < 0.1;
@@ -833,7 +834,7 @@ export function createView(host: HTMLElement) {
       const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number) => {
         const h1 = hash(u.id * 13 + fi * 7), h2 = hash(u.id * 5 + fi * 3), h3 = hash(u.id * 3 + fi * 11), rider = mount != null, walk = mv && !rider;
         if (mount) mRoot.compose(V.set(0, 1.44 - HY - HIP * 1.1, -0.02), Q.identity(), SV.setScalar(1.1)).premultiply(mount);
-        else { const sc = sc0 * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk && Math.abs(s) > 0.55 ? 0.1 * sc : 0), z, yaw, sc); baseM.setMatrixAt(nbs++, mRoot); } // toy hop on each step
+        else { const sc = sc0 * (1 + 0.3 * farT) * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk && Math.abs(s) > 0.55 ? 0.1 * sc : 0), z, yaw, sc); baseM.setMatrixAt(nbs++, mRoot); } // toy hop on each step
         const lf = u.fired - h3 * 0.2, kick = lf >= 0 && lf < 0.25 ? 1 - lf / 0.25 : 0; // the volley ripples down the line
         const aim = !rider && !u.routed && u.type !== 'commander' && (charging || inFight && (u.type === 'skirmisher' ? (u.fired + h3 * 5) % 5 < 1.6 : u.fired < 0.8 || u.reload < 0.8));
         const jab = foe ? Math.max(0, Math.sin(clock * 7 + h2 * 6.28)) : 0; // bayonet thrusts and sabre cuts in melee
@@ -1078,6 +1079,7 @@ export function createView(host: HTMLElement) {
 
     const fz = Math.max(1, H / 60), fg = scene.fog as THREE.Fog; fg.near = CAM_D + atm.fn * fz; fg.far = CAM_D + atm.ff * fz; // keep haze constant as you zoom out
     hullU.uW.value = px * 0.95; // 1 buffer pixel
+    hullU.uInk.value.setHex(P.ink).lerp(INK_FAR, far()); // zoomed out, a near-black outline on every tiny soldier is all you see: fade it toward a soft shade
     for (const q of outlined) q.o.count = q.m.count;
 
     const savedBg = scene.background, savedFog = scene.fog;

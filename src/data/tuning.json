@@ -123,7 +123,13 @@
     "cavalry": 1,
     "artillery": 0.6,
     "slack": 0.5,
-    "arc": 0.7
+    "arc": 0.7,
+    "engage": 1.2,
+    "rout": 3
+  },
+  "separation": {
+    "_note": "Regiments that overlap without being locked in melee are pushed apart: at most `max` units/s in total, shared by weight (the lighter one gives way), so a squadron cannot shove a whole line faster than it can walk. turn.engage is the rate in rad/s at which a regiment wheels to face the foe that has hit it.",
+    "max": 2
   },
   "limber": {
     "_note": "Seconds for a battery to unlimber after it halts (down) and to limber up before it can move (up).",

@@ -488,7 +488,7 @@ export function step(sim: Sim, dt: number) {
       const d = Math.hypot(dx, dz) || 1;
       const sp = T.speed * 1.2 * terrainSpeed(u, f, tu) * W.move * tired * dt;
       u.x += (dx / d) * sp; u.z += (dz / d) * sp;
-      u.facing = Math.atan2(dx, dz);
+      { const dd = Math.atan2(Math.sin(Math.atan2(dx, dz) - u.facing), Math.cos(Math.atan2(dx, dz) - u.facing)), m = tu.turn.rout * dt; u.facing += Math.max(-m, Math.min(m, dd)); } // broken men turn and run, not a one-tick flip of the whole box
       u.mv = true;
       if (nd > tu.rallyDistance) {
         u.morale += tu.morale.rally * (u.aura ? tu.morale.auraRally : 1) * (1 - tu.fatigue.regen * u.fat) * dt; // a commander nearby gathers broken men faster
@@ -607,11 +607,12 @@ export function step(sim: Sim, dt: number) {
       const hc = T.cav ? Math.max(0.7, Math.min(1.3, 1 + (tu.terrain.charge * (heightAt(scn, u.x - (ex / el) * 8, u.z - (ez / el) * 8) - heightAt(scn, u.x + (ex / el) * 8, u.z + (ez / el) * 8))) / 16)) : 1;
       if (u.eng !== c.id) {
         u.eng = c.id;
-        { const want = Math.atan2(c.x - u.x, c.z - u.z), dd = Math.atan2(Math.sin(want - u.facing), Math.cos(want - u.facing)); u.facing += Math.max(-1, Math.min(1, dd)); } // turn once, at most ~57 degrees, no per-tick swinging
+        { const want = Math.atan2(c.x - u.x, c.z - u.z), dd = Math.atan2(Math.sin(want - u.facing), Math.cos(want - u.facing)); u.eF = u.facing + Math.max(-1, Math.min(1, dd)); } // face the foe once, at most ~57 degrees (no per-tick swinging), wheeling there below
         if (T.cav && u.spUntil > s.t && u.spKind === 'charge' && !u.tested && !c.routed) { u.fat = Math.min(1, u.fat + tu.fatigue.blown); if (shock(sim, u, c) === 'recoil') continue; } // horses are blown by the charge; the foe's nerve is tested on impact
         if (T.cav && !c.routed && c.form !== 'square' && !tu.types[c.type].cav) { c.morale -= tu.chargeShock * hc; ev(sim, { k: 'charge', x: c.x, z: c.z }); }
       }
-      const asp = aspect(u, c), gm = c.garrison != null ? (T.cav ? tu.garrison.meleeCav : tu.garrison.meleeInf) : 1;
+      if (u.eF != null) { const dd = Math.atan2(Math.sin(u.eF - u.facing), Math.cos(u.eF - u.facing)), m = tu.turn.engage * dt; if (Math.abs(dd) <= m) { u.facing = u.eF; u.eF = null; } else u.facing += Math.sign(dd) * m; } // wheel into contact, not a one-tick snap of the whole box
+      const asp = aspect(u, c), gm =c.garrison != null ? (T.cav ? tu.garrison.meleeCav : tu.garrison.meleeInf) : 1;
       if (asp && s.t - c.flankT > 6) { c.flankT = s.t; ev(sim, { k: 'flank', x: c.x, z: c.z, side: c.side, kind: asp }); chron(sim, 1 - c.side, `${asp === 2 ? 'Rear' : 'Flank'} attack on ${c.name}`); }
       damage(sim, c, u.men * T.melee * meleeMult(u, c) * hc * gm * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.melee) * tu.meleeRate * (u.spUntil > s.t && u.spKind === 'charge' ? 1.6 : 1) * (u.bay === c.id ? tu.bayonet.melee : 1) * (1 - tu.fatigue.melee * u.fat) * dt,
         tu.flank.morale[asp] * (T.cav || tu.types[c.type].cav ? 1 : tu.bayonet.grind), u); // foot against foot does not grind on for long: one side gives way
@@ -619,7 +620,7 @@ export function step(sim: Sim, dt: number) {
       if (c.dead) u.eng = null;
       continue;
     }
-    u.eng = null;
+    u.eng = null; u.eF = null;
 
     // ranged fire (only when standing still, not changing formation, guns unlimbered)
     if (T.range <= 0 || u.mv || u.busy > 0 || u.reload > 0 || u.limbered || u.limT > 0) continue;
@@ -667,8 +668,8 @@ export function step(sim: Sim, dt: number) {
       if (d < 0.001) continue;
       const min = a.side === b.side ? 0.7 * (rad(a) + rad(b)) + 1 : d - gapBetween(a, b, tu) + 0.2; // enemies are kept edge-to-edge apart, never overlapped
       if (d >= min) continue;
-      const p = (min - d) * 0.25;
-      a.x -= (dx / d) * p; a.z -= (dz / d) * p; b.x += (dx / d) * p; b.z += (dz / d) * p;
+      const p = Math.min((min - d) * 0.5, tu.separation.max * dt), wa = (b.men + 50) / (a.men + b.men + 100); // total push, capped; the lighter regiment gives way more
+      a.x -= (dx / d) * p * wa; a.z -= (dz / d) * p * wa; b.x += (dx / d) * p * (1 - wa); b.z += (dz / d) * p * (1 - wa);
     }
   }
 
