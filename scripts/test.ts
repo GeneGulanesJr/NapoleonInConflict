@@ -140,7 +140,7 @@ test('a posted regiment (standing still a while) takes fewer casualties than one
   const p = hit(true), m = hit(false);
   assert.ok(p.cas > 0 && p.cas < m.cas * 0.93, `posted lost ${p.cas.toFixed(0)}, shifting lost ${m.cas.toFixed(0)}`);
   assert.ok(p.mor < m.mor * 0.9, `posted morale per man ${p.mor.toFixed(2)}, shifting ${m.mor.toFixed(2)}`);
-  assert.ok(!posted({ still: 99, type: 'artillery', limbered: true }, data('tuning')), 'limbered guns have not dressed their ranks');
+  assert.ok(!posted({ still: 99, type: 'artillery', limT: 3 }, data('tuning')), 'guns hitching up to move are not posted');
 });
 
 test('off our objectives a draft marches in from our map edge at double cost and joins the regiment', () => {
