@@ -1,7 +1,7 @@
 // In-battle controller: input, HUD, and all the Anime.js presentation (banners, popups, counters, intro, outro).
 import { animate, createTimeline, stagger, steps } from 'animejs';
 import { ICONS, pxCanvas } from './pixel.ts';
-import { distToFoot } from './sim/sim.ts';
+import { distToFoot, manPrice } from './sim/sim.ts';
 import type { View } from './render.ts';
 import { SIDE_COLOR } from './render.ts';
 import type { Source } from './game.ts';
@@ -14,7 +14,7 @@ export const CONTROLS: [string, [string, string][]][] = [
   ['Camera', [['WASD / arrows', 'pan'], ['Mouse at screen edge', 'pan'], ['Q/E, middle-drag', 'rotate'], ['Wheel', 'zoom'], ['F', 'focus selection'], ['Backspace', 'jump to last alert'], ['Minimap left-click', 'look there']]],
   ['Selection', [['Left-click / drag', 'select'], ['Shift+click', 'add to selection'], ['Double-click', 'all of that kind on screen'], ['Ctrl+A', 'all regiments'], ['Shift+1-9', 'save group'], ['1-9', 'recall group (tap twice: fly there)'], ['I', 'next idle regiment'], ['Army bar', 'click select, Shift add, double-click fly'], ['Hover', 'regiment details, range, flank'], ['Esc', 'cancel / clear selection']]],
   ['Orders', [['Right-click', 'move or attack'], ['Right-drag', 'form a line facing away from you'], ['Shift+right-click', 'waypoint'], ['Right-click a farm', 'garrison'], ['A (tap), left-click', 'attack-move'], ['H', 'halt'], ['G', 'stance'], ['Minimap right-click', 'move there']]],
-  ['Formations & specials', [['Z/X/C', 'line / column / square'], ['B', 'auto-square'], ['V', 'unit special']]],
+  ['Formations & specials', [['Z/X/C', 'line / column / square'], ['B', 'auto-square'], ['V', 'unit special'], ['K + click foe', 'bayonet charge']]],
   ['Aids & reserves', [['F1/F2/F3', 'tactical aid'], ['N', 'replenish (on a held objective)'], ['Reserves panel', 'call in a regiment']]],
   ['View', [['Space', 'pause'], ['M', 'mute'], ['R', 'radio'], ['L', 'edge scrolling on/off'], ['T', 'dusk'], ['Y/U', 'silhouette / top-down check'], ['P', 'render quality'], ['? / F10', 'this help']]],
 ];
@@ -57,13 +57,13 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     <div id="popups"></div>
     <div id="banner"><b></b><span></span></div>
     <div class="bl panel" id="sel"><div class="hd">No selection</div><div class="rows"></div>
-      <div class="forms">${FORMS.map(([f, k, l]) => `<button data-form="${f}">${l} <kbd>${k}</kbd></button>`).join('')}<button data-stop>Halt <kbd>H</kbd></button><button data-stance>Hold <kbd>G</kbd></button><button data-auto>Auto-sq <kbd>B</kbd></button><button data-refill style="display:none" title="Fresh men march in while the regiment stands on an objective you hold and is out of the fight. Paid in reserve points as they arrive."></button><button data-special class="spbtn" style="display:none"></button></div></div>
+      <div class="forms">${FORMS.map(([f, k, l]) => `<button data-form="${f}">${l} <kbd>${k}</kbd></button>`).join('')}<button data-stop>Halt <kbd>H</kbd></button><button data-stance>Hold <kbd>G</kbd></button><button data-auto>Auto-sq <kbd>B</kbd></button><button data-bay style="display:none" title="Bayonet charge: then click an enemy regiment. Shaken defenders break before contact; steady ones fire a last volley.">Bayonet <kbd>K</kbd></button><button data-refill style="display:none" title="Fresh men march in while the regiment stands on an objective you hold and is out of the fight. Paid in reserve points as they arrive."></button><button data-special class="spbtn" style="display:none"></button></div></div>
     <div class="bc" id="abil">${abilities.map((a) => {
       const ab = TUNING.abilities[a];
       return `<button class="ab" data-ab="${a}" title="${ab.label}"><span class="ico"></span><span class="nm">${ab.label}</span><kbd>${ab.key}</kbd><span class="cd"></span><i class="sweep"></i></button>`;
     }).join('')}</div>
     <div class="br">
-      <div class="panel" id="res"><div class="hd">Reserves <b id="rp">0</b> pts</div>
+      <div class="panel" id="res"><div class="hd">Reserves <b id="rp">0</b> pts <small id="pool"></small></div>
         <div class="rbtns">${reserveTypes.map((t) => `<button data-res="${t}"><span>${TUNING.types[t].label}</span><em>${TUNING.types[t].cost}</em><u></u></button>`).join('')}</div></div>
       <canvas id="mini" width="64" height="64"></canvas>
     </div>
@@ -78,7 +78,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   hud.querySelectorAll<HTMLElement>('.ab').forEach((b) => b.querySelector('.ico')!.replaceChildren(pxCanvas(ICONS[b.dataset.ab!], 2)));
 
   // ---------------------------------------------------------------- state helpers
-  const mine = (u: any) => u.side === me && !u.dead;
+  const mine = (u: any) => u.side === me && !u.dead && u.draftFor == null; // drafts on the march aren't yours to command
+  const drafting = (u: any) => src.state.units.some((d: any) => d.draftFor === u.id && !d.dead); // a draft is marching to it
   let selection: number[] = [];
   let targeting: string | null = null;
   let lastLogT = state0.t;
@@ -192,15 +193,17 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const stB = $<HTMLElement>(hud, '[data-stance]'), auB = $<HTMLElement>(hud, '[data-auto]');
     const sel0 = selection.map((id) => st.units.find((q: any) => q.id === id)).filter(Boolean);
     stB.style.display = auB.style.display = sel0.length ? '' : 'none';
+    $<HTMLElement>(hud, '[data-bay]').style.display = sel0.some((u: any) => (u.type === 'line' || u.type === 'guard') && !u.routed && u.form !== 'square') ? '' : 'none'; // only formed infantry can charge
     if (sel0.length) { stB.innerHTML = `${({ hold: 'Hold', aggressive: 'Attack', skirmish: 'Skirmish' } as any)[sel0[0].stance] ?? 'Hold'} <kbd>G</kbd>`; auB.classList.toggle('on', sel0.filter((u: any) => u.type === 'line' || u.type === 'guard').every((u: any) => u.auto) && sel0.some((u: any) => u.type === 'line' || u.type === 'guard')); }
     const rfB = $<HTMLElement>(hud, '[data-refill]'), hurt = sel0.filter((u: any) => u.type !== 'commander' && u.men < u.maxMen);
-    if (hurt.length) { // cost at the deploy rate: a whole regiment costs its reserve price
+    if (hurt.length) { // a whole regiment costs its reserve price on an objective we hold, refillOffCost times that anywhere else
       const onOurs = (u: any) => st.zones.some((z: any) => z.owner === me && Math.hypot(u.x - z.x, u.z - z.z) < z.r);
-      const cost = Math.ceil(hurt.reduce((a: number, u: any) => a + ((u.maxMen - u.men) * TUNING.types[u.type].cost) / u.maxMen, 0));
-      rfB.style.display = ''; rfB.classList.toggle('on', hurt.every((u: any) => u.refill)); rfB.classList.toggle('off', !hurt.some(onOurs));
-      rfB.innerHTML = `Replenish <kbd>N</kbd> ${cost} pts`;
+      const cost = Math.ceil(hurt.reduce((a: number, u: any) => a + (u.maxMen - u.men) * manPrice(TUNING, u) * (onOurs(u) ? 1 : TUNING.refillOffCost), 0)); // at today's price; it rises as the regiment fills
+      rfB.style.display = ''; rfB.classList.toggle('on', hurt.every((u: any) => u.refill)); rfB.classList.remove('off');
+      rfB.innerHTML = `Replenish <kbd>N</kbd> ${cost} pts${hurt.every(onOurs) ? '' : ' · draft marches in'}`;
+      rfB.title = `On an objective you hold, fresh men trickle in (deploy price). Elsewhere a draft sets out from your map edge at ${TUNING.refillOffCost}× the price and joins on arrival; it can be caught on the way.`;
     } else rfB.style.display = 'none';
-    view.setRefillHint(hurt.length > 0); // pulse the objectives we hold: that's where they can refill
+    view.setRefillHint(hurt.length > 0); // pulse the objectives we hold: replenishing is cheapest there
     const spBtn = $<HTMLElement>(hud, '[data-special]');
     const su = selection.map((id) => st.units.find((q: any) => q.id === id)).find((u: any) => u && TUNING.specials[u.type]);
     if (su) { const sp = TUNING.specials[su.type], cd = Math.ceil(su.spReady - st.t); spBtn.style.display = ''; spBtn.classList.toggle('off', cd > 0); spBtn.innerHTML = `${sp.label} <kbd>V</kbd>${cd > 0 ? ` ${cd}s` : ''}`; } else spBtn.style.display = 'none';
@@ -209,7 +212,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     (rows as any)._sig = sig;
     rows.innerHTML = selection.slice(0, 6).map((id) => {
       const u = st.units.find((q: any) => q.id === id);
-      return `<div class="srow${u.routed ? ' routed' : ''}"><span>${u.refill ? '+ ' : ''}${esc(u.name)}</span><i class="b m"><s style="width:${(u.men / u.maxMen) * 100}%"></s></i><i class="b o"><s style="width:${Math.max(0, (u.morale / u.maxMorale) * 100)}%"></s></i><em>${Math.round(u.men)}</em></div>`;
+      return `<div class="srow${u.routed ? ' routed' : ''}"><span>${u.refill || drafting(u) ? '+ ' : ''}${esc(u.name)}</span><i class="b m"><s style="width:${(u.men / u.maxMen) * 100}%"></s></i><i class="b o"><s style="width:${Math.max(0, (u.morale / u.maxMorale) * 100)}%"></s></i><em>${Math.round(u.men)}</em></div>`;
     }).join('') + (selection.length > 6 ? `<div class="srow more">+${selection.length - 6} more</div>` : '');
   }
 
@@ -231,7 +234,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
         cards.set(u.id, c);
       }
       const mp = Math.round((u.men / u.maxMen) * 100), op = Math.max(0, Math.round((u.morale / u.maxMorale) * 100));
-      const mk = u.routed ? 'R' : `${u.refill ? '+' : ''}${u.garrison != null ? 'G' : ''}${isIdle(u) ? '?' : ''}`; // '?' = awaiting orders (a pixel-font z reads as 2)
+      const mk = u.routed ? 'R' : `${u.refill || drafting(u) ? '+' : ''}${u.garrison != null ? 'G' : ''}${isIdle(u) ? '?' : ''}`; // '?' = awaiting orders (a pixel-font z reads as 2)
       const cls = `ac${selection.includes(u.id) ? ' sel' : ''}${u.routed ? ' routed' : op < 30 ? ' waver' : ''}`;
       const sig = `${mp}|${op}|${mk}|${cls}`;
       if (sig === c.sig) continue;
@@ -249,10 +252,14 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const vis = (u: any) => !u.dead && (u.side === me || !st.fog || st.seen?.[me]?.includes(u.id));
     const g = mouse.view && mouse.in && !drag && !rdrag ? view.ground(mouse.x, mouse.y) : null;
     const u = g && (unitAt(g, vis) ?? view.pickUnit(st, mouse.x, mouse.y, vis, 24));
+    view.setHover(u ? u.id : null); // the hovered regiment shows its full plate
     if (!u) { tip.style.display = 'none'; return; }
     const T = TUNING.types[u.type], inf = u.type === 'line' || u.type === 'guard';
-    const ls = [`<b style="color:${SIDE_COLOR[u.side]}">${esc(u.name)}</b>`, `${T.label}${inf ? ` · ${u.form}` : ''}`, `Men ${Math.round(u.men)}/${u.maxMen} · Morale ${Math.max(0, Math.round((u.morale / u.maxMorale) * 100))}%`];
+    const ls = [`<b style="color:${u.side === me ? '#4f86ff' : '#e8463a'}">${esc(u.name)}</b>`, `${T.label}${inf ? ` · ${u.form}` : ''}`, `Men ${Math.round(u.men)}/${u.maxMen} · Morale ${Math.max(0, Math.round((u.morale / u.maxMorale) * 100))}%`];
     if (u.vet) ls.push(`${'*'.repeat(u.vet)} ${VET[u.vet] ?? ''}`);
+    if ((u.fat ?? 0) >= 0.05 || (u.mcap ?? u.maxMorale) < u.maxMorale) ls.push(`Fatigue ${Math.round((u.fat ?? 0) * 100)}%${u.mcap < u.maxMorale ? ` · morale can only reach ${Math.round((u.mcap / u.maxMorale) * 100)}%` : ''}`); // tired and badly hurt units are shakier
+    if (u.type === 'artillery') ls.push(u.limT > 0 ? (u.limbered ? 'Unlimbering…' : 'Limbering up…') : u.limbered ? 'Limbered (cannot fire)' : 'Unlimbered (cannot move)');
+    if (u.bay != null) ls.push('Charging with the bayonet!');
     if (u.garrison != null) ls.push(`Garrison: ${esc(scn.map.villages?.[u.garrison]?.name ?? 'farm')}`);
     if (u.routed) ls.push('<i class="no">Routed</i>');
     const sel = st.units.filter((q: any) => selection.includes(q.id) && !q.routed);
@@ -305,7 +312,11 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     if (e.button === 0) {
       if (targeting) {
         const g = groundOf(e);
-        if (g && targeting === 'amove') src.cmd({ c: 'move', ids: selection, x: g.x, z: g.z, q: e.shiftKey, am: true });
+        if (targeting === 'bayonet') { // charge the enemy regiment under the cursor
+          const st = src.state, foeOk = (u: any) => u.side !== me && !u.dead && !u.routed && (!st.fog || st.seen?.[me]?.includes(u.id));
+          const foe = (g && unitAt(g, foeOk)) ?? view.pickUnit(st, e.clientX, e.clientY, foeOk, 34);
+          if (foe) src.cmd({ c: 'bayonet', ids: selection, target: foe.id });
+        } else if (g && targeting === 'amove') src.cmd({ c: 'move', ids: selection, x: g.x, z: g.z, q: e.shiftKey, am: true });
         else if (g) {
           src.cmd({ c: 'ability', name: targeting, x: g.x, z: g.z });
           const btn = $<HTMLElement>(hud, `[data-ab="${targeting}"]`);
@@ -361,8 +372,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     }
     if (targeting) {
       const g = view.ground(e.clientX, e.clientY);
-      const r = targeting === 'amove' ? 4 : abCfg(targeting).r ?? 8;
-      if (g) view.setReticle(g.x, g.z, r, targeting === 'cavalry' ? 0x66ccff : targeting === 'amove' ? 0xffe34a : 0xff7755);
+      const r = targeting === 'amove' ? 4 : targeting === 'bayonet' ? 6 : abCfg(targeting)?.r ?? 8;
+      if (g) view.setReticle(g.x, g.z, r, targeting === 'cavalry' ? 0x66ccff : targeting === 'amove' ? 0xffe34a : targeting === 'bayonet' ? 0xff3b2f : 0xff7755);
     }
   }
   let lastPick = { id: -1, t: 0 };
@@ -396,6 +407,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   const keydown = (e: KeyboardEvent) => {
     unlock();
     if (intro) { skipIntro(); return; }
+    if (e.key === 'Alt') { e.preventDefault(); view.setShowAll(true); return; } // hold Alt: every regiment's full plate (preventDefault keeps the browser menu from grabbing focus)
     if (e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); setSel(myUnits().filter((u: any) => !u.routed).map((u: any) => u.id)); return; } // not the browser's select-all
     if (e.key === '?' || e.code === 'F10') { e.preventDefault(); toggleHelp(); return; }
     keys.add(e.code);
@@ -414,6 +426,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     else if (e.code === 'KeyG') cycleStance();
     else if (e.code === 'KeyB') src.cmd({ c: 'auto', ids: selection });
     else if (e.code === 'KeyN') src.cmd({ c: 'replenish', ids: selection });
+    else if (e.code === 'KeyK' && selection.length) startTargeting('bayonet');
     else if (e.code === 'KeyR') toast(toggleRadio() ? 'Radio on' : 'Radio off');
     else if (e.code === 'KeyT') { duskOn = !duskOn; view.setDusk(duskOn); toast(duskOn ? 'Dusk' : 'Daylight'); }
     else if (e.code === 'KeyY') { silOn = !silOn; view.setSilhouette(silOn); toast(silOn ? 'Silhouette check' : 'Silhouette off'); }
@@ -449,9 +462,9 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const u = idle[idleIx++ % idle.length];
     setSel([u.id]); view.flyTo(u.x, u.z, undefined, 600);
   }
-  const keyup = (e: KeyboardEvent) => { keys.delete(e.code); if (e.code === 'KeyA' && selection.length && performance.now() - aDown < 200) startTargeting('amove'); }; // a tap of A: attack-move
+  const keyup = (e: KeyboardEvent) => { keys.delete(e.code); if (e.key === 'Alt') { e.preventDefault(); view.setShowAll(false); } if (e.code === 'KeyA' && selection.length && performance.now() - aDown < 200) startTargeting('amove'); }; // a tap of A: attack-move
   addEventListener('keydown', keydown); addEventListener('keyup', keyup);
-  const onOut = (e: MouseEvent) => { if (!e.relatedTarget) mouse.in = false; }, onBlur = () => { mouse.in = false; keys.clear(); }; // the pointer left the window: no edge scrolling
+  const onOut = (e: MouseEvent) => { if (!e.relatedTarget) mouse.in = false; }, onBlur = () => { mouse.in = false; keys.clear(); view.setShowAll(false); }; // the pointer left the window: no edge scrolling
   document.addEventListener('mouseout', onOut); addEventListener('blur', onBlur);
   const help = $<HTMLElement>(hud, '#help');
   const toggleHelp = () => { help.style.display = help.style.display === 'none' ? '' : 'none'; };
@@ -466,6 +479,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   $<HTMLElement>(hud, '[data-stance]').onclick = cycleStance;
   $<HTMLElement>(hud, '[data-auto]').onclick = () => src.cmd({ c: 'auto', ids: selection });
   $<HTMLElement>(hud, '[data-refill]').onclick = () => src.cmd({ c: 'replenish', ids: selection });
+  $<HTMLElement>(hud, '[data-bay]').onclick = () => startTargeting('bayonet');
   hud.querySelectorAll<HTMLElement>('[data-ab]').forEach((b) => (b.onclick = () => startTargeting(b.dataset.ab!)));
   hud.querySelectorAll<HTMLElement>('[data-res]').forEach((b) => (b.onclick = () => { src.cmd({ c: 'deploy', type: b.dataset.res! }); animate(b, { scale: [0.9, 1], duration: 300, ease: 'outBack' }); }));
   const setSpeed = (s: number) => {
@@ -583,7 +597,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   }
 
   // ---------------------------------------------------------------- per-frame
-  let last = performance.now(), hudAcc = 0, lastWx = '', lastClk = '';
+  let last = performance.now(), hudAcc = 0, lastWx = '', lastClk = '', lastPool = '';
   function frame(now: number) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
@@ -650,6 +664,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       renderSel();
       const sd = st.side[me];
       tweenNumbers([st.side[0].score, st.side[1].score], sd.rp);
+      const pl = `Replacements ${Math.floor(sd.pool ?? 0)}${sd.earned >= sd.cap ? ' · RP cap' : ''}`; if (pl !== lastPool) { $(hud, '#pool').textContent = pl; lastPool = pl; } // replacements left; "cap" = no more RP this battle
       const hr = parseInt(scn.clock.start) + (st.t / scn.duration) * scn.clock.hours;
       const clk = `${pad(hr)}:${pad((hr % 1) * 60)}`;
       if (clk !== lastClk) { $(hud, '#clk').textContent = clk; lastClk = clk; }

@@ -630,6 +630,36 @@ export function createView(host: HTMLElement) {
   const rangeGeo = new THREE.RingGeometry(0.985, 1, 72).rotateX(-Math.PI / 2), rangeRings: THREE.Mesh[] = [];
   for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(rangeGeo, new THREE.MeshBasicMaterial({ color: 0xe9e4d6, transparent: true, opacity: 0.35, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 4; scene.add(m); rangeRings.push(m); }
   let refillHint = false, dragLine: { ax: number; az: number; bx: number; bz: number; f: number } | null = null;
+  let hoverId = -1, showAll = false; // full name plates only for these (plus selected / in trouble); everyone else gets a pip
+
+  // coloured bases: a ribbon round each regiment's footprint on the ground, blue yours, red the enemy's (coats stay historical, and French and Prussian coats are both blue)
+  const BASE_Q = 8000, basePos = new Float32Array(BASE_Q * 18), baseCol = new Float32Array(BASE_Q * 18), baseGeo = new THREE.BufferGeometry();
+  baseGeo.setAttribute('position', new THREE.BufferAttribute(basePos, 3).setUsage(THREE.DynamicDrawUsage)); baseGeo.setAttribute('color', new THREE.BufferAttribute(baseCol, 3).setUsage(THREE.DynamicDrawUsage));
+  const baseMesh = new THREE.Mesh(baseGeo, new THREE.MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 })); // unlit, so it reads at dusk too
+  baseMesh.frustumCulled = false; scene.add(baseMesh);
+  const BASE_COL = { mine: new THREE.Color(0x4f86ff), foe: new THREE.Color(0xe8463a), routed: new THREE.Color(0x8d8a82) };
+  let nb = 0;
+  function baseSeg(ax: number, az: number, bx: number, bz: number, th: number, c: THREE.Color) {
+    if (nb >= BASE_Q) return;
+    const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1, ox = ((-dz / L) * th) / 2, oz = ((dx / L) * th) / 2;
+    const ya = heightAt(scn, ax, az) + 0.2, yb = heightAt(scn, bx, bz) + 0.2, o = nb++ * 18;
+    basePos.set([ax + ox, ya, az + oz, bx + ox, yb, bz + oz, bx - ox, yb, bz - oz, ax + ox, ya, az + oz, bx - ox, yb, bz - oz, ax - ox, ya, az - oz], o);
+    for (let q = 0; q < 18; q += 3) { baseCol[o + q] = c.r; baseCol[o + q + 1] = c.g; baseCol[o + q + 2] = c.b; }
+  }
+  /** b = [x0, x1, z0, z1] in the regiment's own frame; edges are cut into ~3-unit pieces so the ribbon hugs the ground */
+  function baseRing(cx: number, cz: number, sin: number, cos: number, b: number[], th: number, c: THREE.Color) {
+    const P = [[b[0], b[2]], [b[1], b[2]], [b[1], b[3]], [b[0], b[3]]];
+    for (let e = 0; e < 4; e++) {
+      let [ax, az] = P[e], [bx, bz] = P[(e + 1) % 4];
+      const L = Math.hypot(bx - ax, bz - az) || 1, ux = (((bx - ax) / L) * th) / 2, uz = (((bz - az) / L) * th) / 2;
+      ax -= ux; az -= uz; bx += ux; bz += uz; // overlap at the corners
+      const k = Math.max(1, Math.ceil((L + th) / 3));
+      for (let i = 0; i < k; i++) {
+        const t0 = i / k, t1 = (i + 1) / k, lx0 = ax + (bx - ax) * t0, lz0 = az + (bz - az) * t0, lx1 = ax + (bx - ax) * t1, lz1 = az + (bz - az) * t1;
+        baseSeg(cx + lx0 * cos + lz0 * sin, cz - lx0 * sin + lz0 * cos, cx + lx1 * cos + lz1 * sin, cz - lx1 * sin + lz1 * cos, th, c);
+      }
+    }
+  }
   const fxRings: THREE.Mesh[] = [];
   for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(ringGeo, ringMat(0xff5533)); m.visible = false; m.renderOrder = 5; scene.add(m); fxRings.push(m); }
   const reticle = new THREE.Mesh(ringGeo, ringMat(0xffffff)); reticle.visible = false; reticle.renderOrder = 6; scene.add(reticle);
@@ -725,6 +755,7 @@ export function createView(host: HTMLElement) {
     const still = camReady && Math.hypot(cam.x - lastCam.x, cam.z - lastCam.z) < 20 && Math.abs(cam.dist / lastCam.d - 1) < 0.2 && Math.abs(cam.yaw - lastCam.y) < 0.1 && Math.abs(tl.v - lastCam.t) < 0.1;
     if (still) frustum.setFromProjectionMatrix(fMat.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     const cw = hudW, ch = hudH; // plates live in HUD pixels
+    nb = 0; const bTh = Math.max(0.45, ((cam.dist * ZOOM_K) / bh) * 1.5); // base ribbon: at least ~1.5 buffer pixels wide at any zoom
     for (const u of state.units) {
       live.add(u.id);
       if (seenSet && u.side !== viewer && !seenSet.has(u.id)) { const hp = plateMap.get(u.id); if (hp) hp.el.style.display = 'none'; vis.delete(u.id); continue; }
@@ -761,6 +792,7 @@ export function createView(host: HTMLElement) {
         if (u.type === 'skirmisher') put(skirM, nsk++, x, y, z, ry, sc);
         if (u.type === 'lancer') { put(lanceM, nlc, x, y, z, ry, sc); put(pennM, nlc, x, y, z, ry, sc); pennM.setColorAt(nlc++, tmpC); }
       };
+      const fb = [1e9, -1e9, 1e9, -1e9]; // the figures' footprint in the regiment's frame, for its base
       for (let i = 0; i < (cull ? 0 : n); i++) {
         if (isArt) {
           const g = i >> 1, lx = (g - (nGun - 1) / 2) * 4.2 + (i & 1 ? 1.4 : -1.4), lz = i & 1 ? -2.4 : 0;
@@ -771,6 +803,7 @@ export function createView(host: HTMLElement) {
         const first = v.form === '';
         const nx = first ? sl[0] : ox + (sl[0] - ox) * Math.min(1, 6 * dt), nz = first ? sl[1] : oz + (sl[1] - oz) * Math.min(1, 6 * dt);
         v.off[i * 2] = nx; v.off[i * 2 + 1] = nz;
+        fb[0] = Math.min(fb[0], nx); fb[1] = Math.max(fb[1], nx); fb[2] = Math.min(fb[2], nz); fb[3] = Math.max(fb[3], nz);
         const wx = v.x + nx * cos + nz * sin, wz = v.z - nx * sin + nz * cos;
         // stepped hop instead of a smooth bob
         const bob = u.routed || moving && (u.tx != null || u.chase != null) ? (Math.sin(clock * 9 + i) > 0 ? 0.14 : 0) : 0;
@@ -787,6 +820,7 @@ export function createView(host: HTMLElement) {
         } else if (nf < 4990) addFig(wx, y + bob, wz, 1.7 * FS, i);
       }
       v.form = cull ? '' : u.form;
+      if (fb[0] < 1e9) { const mg = (isCav ? 1.4 : 0.9) * FS; baseRing(v.x, v.z, sin, cos, [fb[0] - mg, fb[1] + mg, fb[2] - mg, fb[3] + mg], bTh, u.routed ? BASE_COL.routed : u.side === viewer ? BASE_COL.mine : BASE_COL.foe); }
       if (!cull && (u.type === 'line' || u.type === 'guard') && !u.routed && nfl < 399) {
         const gy = heightAt(scn, v.x, v.z), sway = Math.sin(clock * 3 + u.id) * 0.35;
         put(flagM, nfl, v.x, gy, v.z, v.f, 1.3 * FS);
@@ -803,7 +837,7 @@ export function createView(host: HTMLElement) {
         plates.appendChild(el);
         p = { el, men: el.querySelector('.men i')!, mor: el.querySelector('.mor i')!, name: el.querySelector('.pn')!, lm: -1, lmo: -1, ls: '', mc: '', lab: '' };
         p.name.textContent = u.name;
-        el.style.setProperty('--side', SIDE_COLOR[u.side]);
+        el.style.setProperty('--side', u.side === viewer ? '#4f86ff' : '#e8463a'); // yours vs the enemy's, matching the bases
         plateMap.set(u.id, p);
       }
       const lab = `${u.vet ? '*'.repeat(u.vet) + ' ' : ''}${u.garrison != null ? '[G] ' : ''}${u.name}`;
@@ -816,7 +850,8 @@ export function createView(host: HTMLElement) {
       const mc = mo > 0.6 ? 'hi' : mo > 0.3 ? 'mid' : 'lo'; if (mc !== p.mc) { p.mor.parentElement!.className = `bar mor ${mc}`; p.mc = mc; }
       if (Math.abs(m - p.lm) > 0.01) { if (p.lm < 0) p.men.style.width = `${Math.round(m * 100)}%`; else animate(p.men, { width: [`${Math.round(p.lm * 100)}%`, `${Math.round(m * 100)}%`], duration: 450, ease: 'outQuad' }); p.lm = m; }
       if (Math.abs(mo - p.lmo) > 0.02) { if (p.lmo < 0) p.mor.style.width = `${Math.round(mo * 100)}%`; else animate(p.mor, { width: [`${Math.round(p.lmo * 100)}%`, `${Math.round(mo * 100)}%`], duration: 450, ease: 'outQuad' }); p.lmo = mo; }
-      const cls = `plate${selected.has(u.id) ? ' sel' : ''}${u.routed ? ' routed' : u.morale < u.maxMorale * 0.3 ? ' waver' : ''}${cam.dist > 95 && !selected.has(u.id) ? ' far' : ''}`;
+      const full = showAll || selected.has(u.id) || u.id === hoverId || u.routed || u.eng != null || u.morale < u.maxMorale * 0.4; // in trouble: routed, in melee or shaken
+      const cls = `plate${full ? '' : ' pip'}${selected.has(u.id) ? ' sel' : ''}${u.routed ? ' routed' : u.morale < u.maxMorale * 0.3 ? ' waver' : ''}`;
       if (cls !== p.ls) { p.el.className = cls; p.ls = cls; }
     }
     horses.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = pennM.count = nlc; capM.count = ncp; skirM.count = nsk;
@@ -826,6 +861,7 @@ export function createView(host: HTMLElement) {
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
     for (const m of [foot, kit, legL, legR, horses, guns, plumeM, cuirM, lanceM, pennM, capM, skirM, bearM, bicM, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
     for (const m of [foot, plumeM, pennM, horses, bannerM]) if (m.instanceColor) upl(m.instanceColor, m.count, 3);
+    baseGeo.setDrawRange(0, nb * 6); upl(baseGeo.attributes.position as THREE.BufferAttribute, nb * 6, 3); upl(baseGeo.attributes.color as THREE.BufferAttribute, nb * 6, 3);
     for (const [id, p] of plateMap) if (!live.has(id)) { p.el.remove(); plateMap.delete(id); vis.delete(id); }
     for (const l of vlabels) {
       v3.set(l.x, heightAt(scn, l.x, l.z) + 6, l.z).project(camera);
@@ -944,14 +980,14 @@ export function createView(host: HTMLElement) {
       scene.overrideMaterial = silMat; scene.background = silBg; scene.fog = null; fxMesh.visible = craters.visible = false;
       for (const o of terrain) o.visible = false;
       for (const q of outlined) q.o.visible = false;
-      shadowP.visible = false; // overrideMaterial would paint the invisible shadow box solid
+      shadowP.visible = baseMesh.visible = false; // overrideMaterial would paint the invisible shadow box solid; bases aren't part of the silhouette
     }
     renderer.setRenderTarget(rt); renderer.render(scene, camera);
     if (silhouette) {
       scene.overrideMaterial = null; scene.background = savedBg; scene.fog = savedFog; fxMesh.visible = craters.visible = true;
       for (const o of terrain) o.visible = true;
       for (const q of outlined) q.o.visible = true;
-      shadowP.visible = true;
+      shadowP.visible = baseMesh.visible = true;
     }
     camReady = true; lastCam.x = cam.x; lastCam.z = cam.z; lastCam.d = cam.dist; lastCam.y = cam.yaw; lastCam.t = tl.v;
 
@@ -1004,6 +1040,7 @@ export function createView(host: HTMLElement) {
   }
   function setSelection(ids: Iterable<number>) { selected.clear(); for (const i of ids) selected.add(i); }
   const setRefillHint = (on: boolean) => { refillHint = on; };
+  const setHover = (id: number | null) => { hoverId = id ?? -1; }, setShowAll = (on: boolean) => { showAll = on; };
   const setDragLine = (d: typeof dragLine) => { dragLine = d; };
   function setReticle(x: number | null, z = 0, r = 10, color = 0xffffff) {
     if (x == null) { reticle.visible = false; return; }
@@ -1011,6 +1048,6 @@ export function createView(host: HTMLElement) {
     (reticle.material as THREE.MeshBasicMaterial).color.setHex(color);
   }
 
-  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get guide() { return guideOn(); }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
+  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get guide() { return guideOn(); }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, setHover, setShowAll, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
 }
 export type View = ReturnType<typeof createView>;

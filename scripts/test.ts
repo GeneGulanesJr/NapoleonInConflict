@@ -6,7 +6,7 @@ import { WebSocket } from 'ws';
 import { applyResult, type CampaignState } from '../src/sim/roster.ts';
 import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
-import { createSim, step, command } from '../src/sim/sim.ts';
+import { createSim, step, command, manPrice, distToFoot } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
 import { heightAt, groundAt } from '../src/sim/world.ts';
 
@@ -27,7 +27,7 @@ test('friendly regiments march through each other without shoving', () => {
   let a: any, b: any;
   const sim = arena((fr, co) => { [a, b] = fr.filter((u) => u.type === 'line'); return [Object.assign(a, { x: 0, z: -40, facing: 0, form: 'column' }), Object.assign(b, { x: 0, z: 0, facing: 0, form: 'line' }), Object.assign(co[0], { x: 170, z: 170 })]; });
   command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: 40 });
-  run(sim, 20);
+  run(sim, 35);
   assert.ok(Math.hypot(a.x, a.z - 40) < 2, `marcher arrived (at ${a.x.toFixed(1)}, ${a.z.toFixed(1)})`);
   assert.ok(Math.hypot(b.x, b.z) < 0.5, 'the standing regiment kept its post');
 });
@@ -99,19 +99,47 @@ test('artillery misses more the further it shoots', () => {
   assert.ok(far > 0.35 && far > near + 0.15, `long range misses more (near ${near.toFixed(2)}, far ${far.toFixed(2)})`);
 });
 
-test('replenishing refills a regiment on held objective ground at the deploy rate, and only there', () => {
-  let home: any, away: any;
-  const sim = arena((fr, co) => { [home, away] = fr.filter((u) => u.type === 'line'); return [home, away, Object.assign(co[0], { x: 170, z: 170 })]; });
-  sim.scn = { ...sim.scn, rpRate: [0, 0] }; sim.s.side[0].rp = 100;
+test('replenishing on an objective we hold (a depot) trickles men in at the deploy rate', () => {
+  let home: any;
+  const sim = arena((fr, co) => [home = fr.find((u) => u.type === 'line'), Object.assign(co[0], { x: 170, z: 170 })]);
+  sim.tu.rpPerObjective = 0; sim.s.side[0].rp = 100; // no objective income during the test
   const z = Object.assign(sim.s.zones[0], { owner: 0, p: 1 });
-  Object.assign(home, { x: z.x, z: z.z, men: 270 }); Object.assign(away, { x: -170, z: -170, men: 270 });
-  command(sim, 0, { c: 'replenish', ids: [home.id, away.id] });
+  Object.assign(home, { x: z.x, z: z.z, men: 270 });
+  command(sim, 0, { c: 'replenish', ids: [home.id] });
+  assert.ok(!sim.s.units.some((u: any) => u.draftFor != null), 'no draft needed at a depot');
   run(sim, 20);
   assert.equal(Math.round(home.men), home.maxMen, 'the regiment on our objective is back to full strength');
-  assert.equal(away.men, 270, 'the one off our ground waited');
-  const cost = (30 * (home.maxMen - 270)) / home.maxMen; // line infantry deploys for 30 pts
+  const m = home.maxMen - 270, cost = (30 / home.maxMen) * (m + (sim.tu.refillRise * m * m) / (2 * home.maxMen)); // deploy price (line = 30 pts), rising as the regiment fills
   assert.ok(Math.abs(sim.s.side[0].rp - (100 - cost)) < 0.5, `paid ${cost} pts (rp left ${sim.s.side[0].rp.toFixed(1)})`);
   assert.equal(home.refill, false, 'the order clears itself once full');
+});
+
+test('the war chest is finite: RP comes only from objectives held and stops at the cap; the replacement pool runs dry', () => {
+  let a: any, b: any;
+  const sim = arena((fr, co) => { [a, b] = fr.filter((u) => u.type === 'line'); return [a, b, Object.assign(co[0], { x: 170, z: 170 })]; });
+  const sd = sim.s.side[0], z = sim.s.zones[0];
+  sim.s.zones.forEach((q: any) => Object.assign(q, { owner: null, p: 0 })); sd.rp = 0;
+  run(sim, 10); assert.equal(sd.rp, 0, 'no objectives held, no income');
+  Object.assign(z, { owner: 0, p: 1 }); sd.cap = 5;
+  run(sim, 200); assert.ok(Math.abs(sd.rp - 5) < 1e-9 && sd.earned === 5, `income from the objective stops at the cap (rp ${sd.rp.toFixed(2)})`);
+  Object.assign(a, { x: z.x - 6, z: z.z, men: 300 }); Object.assign(b, { x: z.x + 6, z: z.z, men: 300 }); sd.rp = 1e6; sd.pool = 100;
+  command(sim, 0, { c: 'replenish', ids: [a.id, b.id] });
+  run(sim, 40);
+  assert.ok(Math.round(a.men + b.men) === 700 && sd.pool < 1, `only the 100-man pool came in (${Math.round(a.men + b.men - 600)} men)`);
+  assert.ok(sim.tu.refillRise > 0 && Math.abs(manPrice(sim.tu, { type: 'line', maxMen: 540, refilled: 270 }) / manPrice(sim.tu, { type: 'line', maxMen: 540, refilled: 0 }) - 1.5) < 1e-9, 'half a regiment of replacements already in: +50% per man');
+});
+
+test('off our objectives a draft marches in from our map edge at double cost and joins the regiment', () => {
+  let reg: any;
+  const sim = arena((fr, co) => [reg = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: 100, men: 270 }), Object.assign(co[0], { x: 170, z: -170 })]);
+  sim.s.side[0].rp = 100; sim.s.zones = []; // no depots (and so no income) anywhere
+  command(sim, 0, { c: 'replenish', ids: [reg.id] });
+  const d = sim.s.units.find((u: any) => u.draftFor === reg.id), cost = (2 * 30 * (reg.maxMen - 270)) / reg.maxMen;
+  assert.ok(d && Math.max(Math.abs(d.x), Math.abs(d.z)) > 195 && d.men === reg.maxMen - 270, `a ${d?.men}-man draft sets out from the map edge (${d?.x.toFixed(0)}, ${d?.z.toFixed(0)})`);
+  assert.ok(Math.abs(sim.s.side[0].rp - (100 - cost)) < 0.5, `paid ${cost} pts up front (rp left ${sim.s.side[0].rp.toFixed(1)})`);
+  assert.equal(reg.men, 270, 'nobody appears out of thin air');
+  run(sim, 120, () => d.dead);
+  assert.ok(d.dead && Math.round(reg.men) === reg.maxMen, `the draft marched in and joined (${Math.round(reg.men)}/${reg.maxMen})`);
 });
 
 test('a dragged line order spreads the group over the drag and wheels it to face the ordered way', () => {
@@ -127,15 +155,104 @@ test('a dragged line order spreads the group over the drag and wheels it to face
 test('an attack-moving line stops to fire at an enemy it passes; a plain move marches on', () => {
   const pass = (am: boolean) => {
     let a: any;
-    const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'line'), { x: -120, z: 0, facing: Math.PI / 2, form: 'line', morale: 9999, maxMorale: 9999 }), Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 30, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999 })]);
-    command(sim, 0, { c: 'move', ids: [a.id], x: 120, z: 0, am });
+    const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'line'), { x: -80, z: 0, facing: Math.PI / 2, form: 'line', morale: 9999, maxMorale: 9999 }), Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 24, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999 })]);
+    command(sim, 0, { c: 'move', ids: [a.id], x: 80, z: 0, am });
     let shots = 0;
     run(sim, 120, undefined, () => { for (const e of sim.s.events) if (e.k === 'shot' && e.side === 0) shots++; sim.s.events.length = 0; });
     return { shots, x: a.x };
   };
   const am = pass(true), plain = pass(false);
-  assert.ok(am.shots > 0 && am.x < 60, `attack-move halted and fired (${am.shots} shots, at x ${am.x.toFixed(1)})`);
-  assert.ok(plain.shots === 0 && plain.x > 110, `plain move marched past without firing (${plain.shots} shots, at x ${plain.x.toFixed(1)})`);
+  assert.ok(am.shots > 0 && am.x < 40, `attack-move halted and fired (${am.shots} shots, at x ${am.x.toFixed(1)})`);
+  assert.ok(plain.shots === 0 && plain.x > 70, `plain move marched past without firing (${plain.shots} shots, at x ${plain.x.toFixed(1)})`);
+});
+
+// ---------------------------------------------------------------- realism pass
+test('infantry marches at the real-scale pace (a column covers ~30 units in 10 s)', () => {
+  const d = march('line', 'column', 10, { size: 400 });
+  assert.ok(d > 24 && d < 36, `column covered ${d.toFixed(1)}`);
+});
+
+test('musketry reaches ~15 units: lines 25 apart do nothing, 10 apart trade volleys', () => {
+  const lost = (gap: number) => { // front ranks sit 0.91 ahead of the unit position
+    const sim = arena((fr, co) => [Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: -gap / 2 - 0.91, facing: 0, form: 'line' }), Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: gap / 2 + 0.91, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999 })]);
+    run(sim, 20);
+    return sim.s.side[1].lost;
+  };
+  assert.equal(lost(25), 0, 'out of range at 25');
+  assert.ok(lost(10) > 0, 'deadly at 10');
+});
+
+test('a line wheels slowly before stepping off; a column turns quickly', () => {
+  const after = (form: string) => {
+    let u: any;
+    const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: 0, z: 0, facing: 0, form }), Object.assign(co[0], { x: 170, z: 170 })]);
+    command(sim, 0, { c: 'move', ids: [u.id], x: 40, z: 0 });
+    run(sim, 2);
+    return u;
+  };
+  const l = after('line'), c = after('column');
+  assert.ok(Math.abs(l.x) < 0.01 && l.facing > 0.3 && l.facing < Math.PI / 2 - 0.3, `line still wheeling after 2 s (facing ${l.facing.toFixed(2)}, x ${l.x.toFixed(2)})`);
+  assert.ok(c.x > 1.5, `column already marching (x ${c.x.toFixed(2)})`);
+});
+
+test('a regiment that lost half its men cannot recover to full morale', () => {
+  let u: any;
+  const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: 0, z: 0, men: 270, morale: 20 }), Object.assign(co[0], { x: 170, z: 170 })]);
+  run(sim, 200);
+  assert.ok(u.morale > 50 && u.morale <= 0.75 * u.maxMorale, `recovered to ${u.morale.toFixed(1)} of ${u.maxMorale} (ceiling ${u.mcap.toFixed(1)})`);
+});
+
+test('marching tires a regiment, and tired men march slower', () => {
+  let u: any;
+  const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: -150, z: 0, facing: Math.PI / 2, form: 'column' }), Object.assign(co[0], { x: 170, z: 170 })]);
+  command(sim, 0, { c: 'move', ids: [u.id], x: 150, z: 0 });
+  run(sim, 60);
+  assert.ok(u.fat > 0.04, `fatigue after a 60 s march ${u.fat.toFixed(3)}`);
+  const fresh = march('line', 'column', 10, { size: 400 }), tired = march('line', 'column', 10, { size: 400 }, { fat: 0.8 });
+  assert.ok(tired < 0.8 * fresh, `tired ${tired.toFixed(1)} vs fresh ${fresh.toFixed(1)}`);
+});
+
+test('a bayonet charge breaks a shaken regiment before contact; a steady one gives a closing volley', () => {
+  const charge = (morale: number) => {
+    let a: any, d: any;
+    const sim = arena((fr, co) => [a = Object.assign(fr.find((q) => q.type === 'line'), { x: 0, z: -20, facing: 0, form: 'line' }), d = Object.assign(co.find((q) => q.type === 'line'), { x: 0, z: 0, facing: Math.PI, form: 'line', morale, reload: 1e9 })]); // no ordinary fire: only the closing volley
+    command(sim, 0, { c: 'bayonet', ids: [a.id], target: d.id });
+    let contact = false, shots = 0;
+    run(sim, 30, () => d.routed || a.eng != null || a.chase == null, () => { if (a.eng != null) contact = true; shots += sim.s.events.filter((e: any) => e.k === 'shot' && e.side === 1).length; sim.s.events.length = 0; });
+    return { routed: d.routed, contact, shots, lost: a.maxMen - a.men };
+  };
+  const shaken = charge(15), steadyR = charge(100);
+  assert.ok(shaken.routed && !shaken.contact && shaken.shots === 0, `shaken regiment broke before contact (${JSON.stringify(shaken)})`);
+  assert.ok(!steadyR.routed && steadyR.shots === 1 && steadyR.lost > 20, `steady regiment stood and fired (${JSON.stringify(steadyR)})`);
+});
+
+test('a battery must limber up to move and unlimber before it can fire', () => {
+  let g: any;
+  const sim = arena((fr, co) => [g = Object.assign(fr.find((q) => q.type === 'artillery'), { x: 0, z: 0, facing: 0, reload: 0 }), Object.assign(co.find((q) => q.type === 'line'), { x: 0, z: 105, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999 })]);
+  command(sim, 0, { c: 'move', ids: [g.id], x: 0, z: 10 });
+  let t = 0, moved = -1, halted = -1, shot = -1;
+  run(sim, 40, () => shot >= 0, () => {
+    t += 0.05;
+    if (moved < 0 && g.z > 0.01) moved = t;
+    if (moved >= 0 && halted < 0 && !g.mv) halted = t;
+    if (sim.s.events.some((e: any) => e.k === 'shot' && e.side === 0)) shot = t;
+    sim.s.events.length = 0;
+  });
+  const L = sim.tu.limber;
+  assert.ok(moved >= L.up - 0.1, `limbered up before moving (moved at ${moved.toFixed(2)} s)`);
+  assert.ok(halted > 0 && shot - halted >= L.down - 0.1, `unlimbered before firing (halted ${halted.toFixed(2)}, first shot ${shot.toFixed(2)})`);
+});
+
+test('artillery hurts a square about twice as much as a line', () => {
+  const hurt = (form: string) => {
+    let tg: any;
+    const sim = arena((fr, co) => [Object.assign(fr.find((q) => q.type === 'artillery'), { x: 0, z: 0, facing: 0 }), tg = Object.assign(co.find((q) => q.type === 'line'), { x: 0, z: 45, facing: Math.PI, form, morale: 9999, maxMorale: 9999 })]);
+    tg.z += 45 - distToFoot(tg, sim.tu, 0, 0); // same gap to the nearest rank whatever the formation
+    run(sim, 60);
+    return sim.s.side[1].lost;
+  };
+  const r = hurt('square') / hurt('line');
+  assert.ok(r > 1.7 && r < 2.4, `square/line casualty ratio ${r.toFixed(2)}`);
 });
 
 // ---------------------------------------------------------------- terrain
@@ -156,7 +273,7 @@ test('heightAt follows the map schema (rough ground, rotated plateau hills) and 
 
 test('a ridge between two regiments blocks their fire; open ground does not', () => {
   const shots = (hills: any[]) => {
-    const sim = arena((fr, co) => [Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: -14, facing: 0, form: 'line' }), Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 14, facing: Math.PI, form: 'line' })], { size: 400, rough: FLAT, hills });
+    const sim = arena((fr, co) => [Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: -8, facing: 0, form: 'line' }), Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 8, facing: Math.PI, form: 'line' })], { size: 400, rough: FLAT, hills });
     let n = 0;
     run(sim, 20, undefined, () => { n += sim.s.events.filter((e: any) => e.k === 'shot').length; sim.s.events.length = 0; });
     return n;
@@ -166,9 +283,9 @@ test('a ridge between two regiments blocks their fire; open ground does not', ()
 });
 
 /** distance a unit covers in `secs` heading east from x=-60 over the given map */
-function march(type: string, form: string, secs: number, map: any) {
+function march(type: string, form: string, secs: number, map: any, extra = {}) {
   let u: any;
-  const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === type), { x: -60, z: 0, facing: Math.PI / 2, form }), Object.assign(co[0], { x: 170, z: 170 })], map);
+  const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === type), { x: -60, z: 0, facing: Math.PI / 2, form, ...extra }), Object.assign(co[0], { x: 170, z: 170 })], map);
   command(sim, 0, { c: 'move', ids: [u.id], x: 100, z: 0 });
   run(sim, secs);
   return u.x + 60;
@@ -278,7 +395,7 @@ test('server survives malformed packets and keeps state finite', async () => {
       { t: 'cmd', c: { c: 'form', ids: [u.id], f: 'constructor' } },
       { t: 'cmd', c: { c: 'deploy', type: 'constructor' } },
       { t: 'cmd', c: { c: 'ability', name: 'barrage' } },
-      { t: 'cmd', c: { c: 'attack', ids: [u.id] } },
+      { t: 'cmd', c: { c: 'attack', ids: [u.id] } }, { t: 'cmd', c: { c: 'bayonet', ids: [u.id], target: 'x' } },
     ];
     for (const m of bad) a.send(m);
     const evil = await connect('', false);
@@ -300,7 +417,7 @@ test('server applies valid move and stance commands', async () => {
     const u = a.last.units.find((x: any) => x.side === a.side && x.type === 'line');
     a.send({ t: 'cmd', c: { c: 'move', ids: [u.id], x: u.x + 30, z: u.z - 30 } });
     a.send({ t: 'cmd', c: { c: 'stance', ids: [u.id], s: 'aggressive' } });
-    await wait(2500);
+    await wait(4500);
     const u2 = a.last.units.find((x: any) => x.id === u.id);
     assert.ok(Math.hypot(u2.x - u.x, u2.z - u.z) > 3, 'unit moved');
     assert.equal(u2.stance, 'aggressive');
@@ -312,7 +429,7 @@ test('a scripted reinforcement keeps to its historical route until it arrives, t
   const sim = arena((fr, co) => [Object.assign(fr[0], { x: -170, z: 170 }), Object.assign(co.find((u) => u.type === 'line'), { x: 170, z: -170 })]);
   sim.tl = [{ t: 0.1, type: 'reinforce', side: 1, units: [{ type: 'line', n: 1, name: 'Bülow', x: 0, z: 0 }], entry: { x: 150, z: 100 }, go: { x: 150, z: -60 } }];
   const bot = makeBot(sim, 1);
-  run(sim, 12, undefined, () => bot(0.05));
+  run(sim, 20, undefined, () => bot(0.05));
   const b = sim.s.units.find((u: any) => u.name === 'Bülow');
   assert.ok(b && b.tz === -60 && b.z < 100 - 30, `still marching on its route (z ${b?.z.toFixed(1)}, target z ${b?.tz})`);
 });

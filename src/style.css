@@ -219,3 +219,13 @@ button.alt { background: #1b1510; }
 .hud #help .hd small { color: #8e8a7a; margin-left: 6px; }
 .hud .hcols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 8px; }
 .hud .hcols b { display: block; font-weight: 400; color: var(--gold); margin-bottom: 1px; } .hud .hcols p { margin: 0; line-height: 9px; } .hud .hcols kbd { margin: 0 2px 0 0; color: var(--gold); }
+
+/* readability: every plate carries its side colour (blue yours, red the enemy's); most regiments only show a compact pip, the full plate appears when selected, hovered, in trouble or with Alt held */
+.plates .plate { border-top: 2px solid var(--side); }
+.plates .plate.pip { width: 14px; padding: 1px; }
+.plates .plate.pip .pn { display: none; }
+.plates .plate.pip .bar { height: 1px; margin-top: 1px; }
+.plates .plate.pip .bar::after { display: none; }
+
+/* war chest: replacement men left (and RP cap reached) on its own line under the reserves header */
+.hud #pool { display: block; color: #b8b2a0; margin-top: 2px; }

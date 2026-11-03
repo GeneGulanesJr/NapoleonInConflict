@@ -40,7 +40,7 @@ function clean(c: any): Cmd | null {
   if (!c || typeof c !== 'object') return null;
   switch (c.c) {
     case 'move': return ids(c.ids) && num(c.x) && num(c.z) && (c.f == null || num(c.f)) && (c.w == null || (num(c.w) && c.w >= 0 && c.w < 1000)) && (c.am == null || typeof c.am === 'boolean') ? { c: 'move', ids: c.ids, x: c.x, z: c.z, q: c.q === true, f: c.f ?? undefined, w: c.w ?? undefined, am: c.am === true } : null;
-    case 'attack': return ids(c.ids) && num(c.target) ? { c: 'attack', ids: c.ids, target: c.target } : null;
+    case 'attack': case 'bayonet': return ids(c.ids) && num(c.target) ? { c: c.c, ids: c.ids, target: c.target } : null;
     case 'form': return ids(c.ids) && known(tu.formFire, c.f) ? { c: 'form', ids: c.ids, f: c.f } : null;
     case 'stance': return ids(c.ids) && typeof c.s === 'string' ? { c: 'stance', ids: c.ids, s: c.s } : null;
     case 'garrison': return ids(c.ids) && num(c.vid) ? { c: 'garrison', ids: c.ids, vid: c.vid } : null;
