@@ -834,7 +834,7 @@ export function createView(host: HTMLElement) {
       const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number) => {
         const h1 = hash(u.id * 13 + fi * 7), h2 = hash(u.id * 5 + fi * 3), h3 = hash(u.id * 3 + fi * 11), rider = mount != null, walk = mv && !rider;
         if (mount) mRoot.compose(V.set(0, 1.44 - HY - HIP * 1.1, -0.02), Q.identity(), SV.setScalar(1.1)).premultiply(mount);
-        else { const sc = sc0 * (1 + 0.3 * farT) * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk && Math.abs(s) > 0.55 ? 0.1 * sc : 0), z, yaw, sc); baseM.setMatrixAt(nbs++, mRoot); } // toy hop on each step
+        else { const sc = sc0 * grow * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk && Math.abs(s) > 0.55 ? 0.1 * sc : 0), z, yaw, sc); baseM.setMatrixAt(nbs++, mRoot); } // toy hop on each step
         const lf = u.fired - h3 * 0.2, kick = lf >= 0 && lf < 0.25 ? 1 - lf / 0.25 : 0; // the volley ripples down the line
         const aim = !rider && !u.routed && u.type !== 'commander' && (charging || inFight && (u.type === 'skirmisher' ? (u.fired + h3 * 5) % 5 < 1.6 : u.fired < 0.8 || u.reload < 0.8));
         const jab = foe ? Math.max(0, Math.sin(clock * 7 + h2 * 6.28)) : 0; // bayonet thrusts and sabre cuts in melee
@@ -861,7 +861,10 @@ export function createView(host: HTMLElement) {
       };
       const fb = [1e9, -1e9, 1e9, -1e9]; // the figures' footprint in the regiment's frame, for its base
       const snapAll = v.form === '', top = v.rs * 1.2 + T.speed * 1.1, gait = (u.routed ? 13 : charging ? 11 : 8) / T.speed;
+      // zoomed out: every 2nd/3rd man is drawn, bigger, so ranks still read as men (not barcode, not a slab); guns keep their crew
+      const thin = isArt ? 1 : cam.dist > 440 ? 3 : cam.dist > 260 ? 2 : 1, grow = thin === 3 ? 1.7 : thin === 2 ? 1.45 : 1 + 0.3 * farT;
       for (let i = 0; i < (cull ? 0 : n); i++) {
+        if (thin > 1 && i % thin) continue;
         if (isArt) {
           const g = i >> 1, lx = (g - (nGun - 1) / 2) * 4.2 + (i & 1 ? 1.4 : -1.4), lz = i & 1 ? -2.4 : 0;
           sl[0] = lx; sl[1] = lz;
@@ -915,7 +918,7 @@ export function createView(host: HTMLElement) {
         } else if (isCav) {
           if (nh < 1490 && nf < 4990) { // gallop: the body rocks, front and hind legs reach and gather in turn
             const hp = m[o + 5] * 1.4, hs = Math.sin(hp), gal = mv ? (charging ? 1 : 0.55) : 0;
-            rootAt(mRoot, wx, y, wz, yaw, 1.4 * FS); hbaseM.setMatrixAt(nh, mRoot);
+            rootAt(mRoot, wx, y, wz, yaw, 1.4 * FS * grow); hbaseM.setMatrixAt(nh, mRoot);
             joint(mHorse, mRoot, 0, HY + gal * Math.abs(Math.cos(hp)) * 0.14, 0, gal ? gal * hs * 0.12 : Math.sin(clock * 0.7 + i) * 0.02);
             const hc = HORSE_COL[Math.floor(hash(u.id * 7 + i) * 4)];
             horses.setMatrixAt(nh, mHorse); horses.setColorAt(nh, hc); legsF.setColorAt(nh, hc); legsH.setColorAt(nh, hc);
@@ -925,7 +928,7 @@ export function createView(host: HTMLElement) {
           }
         } else if (nf < 4990) addFig(i, wx, y, wz, yaw, 1.7 * FS, null, mv, s);
       }
-      v.form = cull ? '' : u.form;
+      v.form = cull || thin > 1 ? '' : u.form; // '' = every man snaps to his slot when the camera comes back in
       if (fb[0] < 1e9) { const mg = (isCav ? 1.4 : 0.9) * FS; baseRing(v.x, v.z, st, ct, [fb[0] - mg, fb[1] + mg, fb[2] - mg, fb[3] + mg], bTh, u.routed ? BASE_COL.routed : u.side === viewer ? BASE_COL.mine : BASE_COL.foe); }
       if (!cull && (u.type === 'line' || u.type === 'guard') && !u.routed && nfl < 399) {
         const gy = heightAt(scn, v.x, v.z), sway = Math.sin(clock * 3 + u.id) * 0.35;
