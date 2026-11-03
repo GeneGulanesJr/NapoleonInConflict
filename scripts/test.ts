@@ -11,12 +11,13 @@ import { makeBot } from '../src/sim/bot.ts';
 
 // ---------------------------------------------------------------- unit-vs-unit rules
 const data = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.json`, import.meta.url), 'utf8'));
-/** a bare quatrebras sim with just these units (French a, Coalition b) plus a far-off foe so the battle doesn't end */
-function arena(setup: (fr: any[], co: any[]) => any[]) {
+/** a bare quatrebras sim on flat open ground with just these units (French a, Coalition b) plus a far-off foe so the battle doesn't end */
+function arena(setup: (fr: any[], co: any[]) => any[], map?: any) {
   const sim = createSim(data('quatrebras'), data('tuning'), { seed: 1 });
   const fr = sim.s.units.filter((u: any) => u.side === 0), co = sim.s.units.filter((u: any) => u.side === 1);
   sim.s.units = setup(fr, co).map((u) => Object.assign(u, { tx: null, tz: null, vet: 0, busy: 0 })); sim.tl = [];
-  sim.s.side.forEach((sd: any) => (sd.reserves = {})); sim.scn = { ...sim.scn, abilities: [[], []] }; // bots must not deploy or call in aid mid-test
+  sim.s.side.forEach((sd: any) => (sd.reserves = {})); // bots must not deploy or call in aid mid-test
+  sim.scn = { ...sim.scn, abilities: [[], []], map: map ?? { size: 400 } }; // unit-rule tests must not depend on the scenario's terrain; pass a map to test terrain
   return sim;
 }
 const run = (sim: any, secs: number, until = () => false, each = () => {}) => { for (let t = 0; t < secs && !until(); t += 0.05) { step(sim, 0.05); each(); } };
