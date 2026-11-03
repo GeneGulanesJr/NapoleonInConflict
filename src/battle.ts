@@ -1,7 +1,7 @@
 // In-battle controller: input, HUD, and all the Anime.js presentation (banners, popups, counters, intro, outro).
 import { animate, createTimeline, stagger, steps } from 'animejs';
 import { ICONS, pxCanvas } from './pixel.ts';
-import { distToFoot, manPrice, posted, masked, verdict } from './sim/sim.ts';
+import { distToFoot, manPrice, posted, masked, verdict, hour } from './sim/sim.ts';
 import { los } from './sim/world.ts';
 import type { View } from './render.ts';
 import { SIDE_COLOR } from './render.ts';
@@ -204,7 +204,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const sel0 = selection.map((id) => st.units.find((q: any) => q.id === id)).filter(Boolean);
     stB.style.display = auB.style.display = sel0.length ? '' : 'none';
     $<HTMLElement>(hud, '[data-bay]').style.display = sel0.some((u: any) => (u.type === 'line' || u.type === 'guard') && !u.routed && u.form !== 'square') ? '' : 'none'; // only formed infantry can charge
-    if (sel0.length) { stB.innerHTML = `${({ hold: 'Hold', aggressive: 'Attack', skirmish: 'Skirmish' } as any)[sel0[0].stance] ?? 'Hold'} <kbd>G</kbd>`; auB.classList.toggle('on', sel0.filter((u: any) => u.type === 'line' || u.type === 'guard').every((u: any) => u.auto) && sel0.some((u: any) => u.type === 'line' || u.type === 'guard')); }
+    if (sel0.length) { stB.innerHTML = `${({ hold: 'Hold', aggressive: 'Attack', skirmish: 'Skirmish', holdfire: 'Hold fire' } as any)[sel0[0].stance] ?? 'Hold'} <kbd>G</kbd>`; auB.classList.toggle('on', sel0.filter((u: any) => u.type === 'line' || u.type === 'guard').every((u: any) => u.auto) && sel0.some((u: any) => u.type === 'line' || u.type === 'guard')); }
     const rfB = $<HTMLElement>(hud, '[data-refill]'), hurt = sel0.filter((u: any) => u.type !== 'commander' && u.men < u.maxMen);
     if (hurt.length) { // a whole regiment costs its reserve price on an objective we hold, refillOffCost times that anywhere else
       const onOurs = (u: any) => st.zones.some((z: any) => z.owner === me && Math.hypot(u.x - z.x, u.z - z.z) < z.r);
@@ -274,6 +274,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     else if (u.shaken > 0) ls.push(`<i class="no">Shaken by fire (${Math.ceil(u.shaken)}s): slower to load, weaker fire, cannot change formation</i>`);
     if (u.bay != null) ls.push('Charging with the bayonet!');
     else if (posted(u, TUNING)) ls.push('Posted: steadier under fire'); // stood still long enough for the defensive bonus
+    if (u.stance === 'holdfire') ls.push(`Holding fire${u.fired >= TUNING.holdFire.loaded ? ': a heavy first volley when they close' : ''}`);
     if (u.garrison != null) ls.push(`Garrison: ${esc(scn.map.villages?.[u.garrison]?.name ?? 'farm')}`);
     if (u.routed) ls.push('<i class="no">Routed</i>');
     const sel = st.units.filter((q: any) => selection.includes(q.id) && !q.routed);
@@ -499,7 +500,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   hud.querySelectorAll<HTMLElement>('[data-form]').forEach((b) => (b.onclick = () => { src.cmd({ c: 'form', ids: selection, f: b.dataset.form! }); flashBtn(`[data-form="${b.dataset.form}"]`); }));
   $<HTMLElement>(hud, '[data-stop]').onclick = () => src.cmd({ c: 'stop', ids: selection });
   $<HTMLElement>(hud, '[data-special]').onclick = () => src.cmd({ c: 'special', ids: selection });
-  const cycleStance = () => { const u = src.state.units.find((q: any) => q.id === selection[0]); if (!u) return; const order = u.type === 'skirmisher' ? ['hold', 'aggressive', 'skirmish'] : ['hold', 'aggressive']; src.cmd({ c: 'stance', ids: selection, s: order[(order.indexOf(u.stance) + 1) % order.length] }); };
+  const cycleStance = () => { const u = src.state.units.find((q: any) => q.id === selection[0]); if (!u) return; const order = u.type === 'skirmisher' ? ['hold', 'aggressive', 'skirmish'] : u.type === 'artillery' ? ['hold', 'holdfire'] : u.type === 'line' || u.type === 'guard' ? ['hold', 'aggressive', 'holdfire'] : ['hold', 'aggressive']; src.cmd({ c: 'stance', ids: selection, s: order[(order.indexOf(u.stance) + 1) % order.length] }); };
   $<HTMLElement>(hud, '[data-stance]').onclick = cycleStance;
   $<HTMLElement>(hud, '[data-auto]').onclick = () => src.cmd({ c: 'auto', ids: selection });
   $<HTMLElement>(hud, '[data-refill]').onclick = () => src.cmd({ c: 'replenish', ids: selection });
@@ -731,7 +732,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
         else if (u.routed || r > 0.45) wav.delete(u.id);
       }
       const pl = `Replacements ${Math.floor(sd.pool ?? 0)}${sd.earned >= sd.cap ? ' · RP cap' : ''}`; if (pl !== lastPool) { $(hud, '#pool').textContent = pl; lastPool = pl; } // replacements left; "cap" = no more RP this battle
-      const hr = parseInt(scn.clock.start) + (st.t / scn.duration) * scn.clock.hours;
+      const hr = hour(scn, st.t); // the sim's clock (minutes included): night falls by it
       const clk = `${pad(hr)}:${pad((hr % 1) * 60)}`;
       if (clk !== lastClk) { $(hud, '#clk').textContent = clk; lastClk = clk; }
       if (st.weather !== lastWx) { $(hud, '#wx').textContent = TUNING.weather[st.weather].label; lastWx = st.weather; }

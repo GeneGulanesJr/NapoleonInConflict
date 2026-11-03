@@ -9,6 +9,8 @@
   "plough": { "_note": "Round shot that hits carries on up to `reach` units behind its target and strikes the next regiment of that side in its path for `carry` x the casualties", "reach": 30, "carry": 0.4 },
   "breakoff": { "_note": "Horse ordered away from its foe in a melee strikes no blows while it gets clear; the foe hits it at `hit` x the usual rate, with no flank or rear bonus", "hit": 0.5 },
   "hold": { "_note": "posted: foot or guns standing still for `after` seconds take `fire` x casualties and `morale` x morale loss, and get +`shock` on the charge morale test", "after": 15, "fire": 0.85, "morale": 0.8, "shock": 0.1 },
+  "holdFire": { "_note": "Hold fire stance (line, guard, guns): no fire until a foe is within `range` x the regiment's range (an ordered target excepted); the first volley after `loaded` s without firing does `first` x damage (not on top of the Volley special)", "range": 0.4, "loaded": 10, "first": 1.8 },
+  "night": { "_note": "Darkness from the scenario clock: 0 at `dusk`, 1 at `dark` (hours); sight (fog of war, and so what the bot sees) x (1 - dark x `sight`), fire x (1 - dark x `fire`)", "dusk": 20.5, "dark": 22, "sight": 0.6, "fire": 0.5 },
   "types": {
     "line": {
       "label": "Line Infantry",

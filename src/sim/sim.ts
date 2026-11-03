@@ -157,7 +157,7 @@ export function command(sim: Sim, side: number, c: Cmd) {
   } else if (c.c === 'stop') {
     for (const u of mine(c.ids)) { u.tx = u.tz = u.chase = null; u.via = null; u.queue = []; u.garrison = u.gTarget = null; u.am = false; u.tf = null; }
   } else if (c.c === 'stance') {
-    for (const u of mine(c.ids)) u.stance = c.s === 'aggressive' || c.s === 'skirmish' ? c.s : 'hold';
+    for (const u of mine(c.ids)) u.stance = c.s === 'aggressive' || c.s === 'skirmish' || (c.s === 'holdfire' && (isInf(u) || u.type === 'artillery')) ? c.s : 'hold';
   } else if (c.c === 'auto') {
     const us = mine(c.ids).filter(isInf), on = !us.every((u: any) => u.auto);
     for (const u of us) u.auto = on;
@@ -308,6 +308,10 @@ function blocker(u: any, x: number, z: number, live: any[], tu: any, fr: Map<any
   return null;
 }
 const isInf = (u: any) => u.type === 'line' || u.type === 'guard';
+/** Hour of day on the scenario clock ('HH:MM' start, then `hours` over `duration` s) at battle time t. */
+export const hour = (scn: any, t: number) => { const [h, m] = (scn.clock?.start ?? '12:00').split(':').map(Number); return h + (m || 0) / 60 + (t / scn.duration) * (scn.clock?.hours ?? 0); };
+/** Darkness 0 (day) .. 1 (night) from the scenario clock (tuning.night). */
+export const dark = (sim: Sim) => { const n = sim.tu.night; return Math.max(0, Math.min(1, (hour(sim.scn, sim.s.t) - n.dusk) / (n.dark - n.dusk))); };
 /** eye height above the ground for sight lines (riders sit higher); targets are seen at 2 */
 const eye = (u: any, tu: any) => (tu.types[u.type].cav ? 3 : 2);
 /** movement multiplier from the ground under u (tuning.terrain): woods and villages by arm, wading, roads for columns, guns and horse not in a fight */
@@ -444,6 +448,7 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
   const { s, scn, tu } = sim, T = tu.types[u.type], W = tu.weather[s.weather] ?? tu.weather.clear;
   // round shot falls short or wide more often the further it flies; canister at close range always tells
   const canister = u.spUntil > s.t && u.spKind === 'canister', volley = u.spUntil > s.t && u.spKind === 'volley', close = td < tu.canisterRange * (canister ? 2.2 : 1);
+  const first = u.stance === 'holdfire' && u.fired >= tu.holdFire.loaded; // a fresh, carefully loaded first volley after holding fire
   const miss = u.type === 'artillery' && !close && rand(s) > 1 - 0.65 * (td / T.range);
   const fm = u.type === 'skirmisher' || u.type === 'artillery' ? 1 : tu.formFire[u.form];
   const dmgForm = tu.types[tg.type].cav ? 0.8 : tg.type === 'skirmisher' ? 0.6 : (u.type === 'artillery' ? tu.artDmg : tu.formDmg)[tg.form]; // round shot ploughs through dense columns and squares
@@ -451,11 +456,12 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
   const elev = Math.max(0.8, Math.min(1.25, 1 + 0.02 * (heightAt(scn, u.x, u.z) - heightAt(scn, tg.x, tg.z))));
   const asp = aspect(u, tg);
   if (asp && s.t - tg.flankT > 6) { tg.flankT = s.t; ev(sim, { k: 'flank', x: tg.x, z: tg.z, side: tg.side, kind: asp }); chron(sim, 1 - tg.side, `${asp === 2 ? 'Rear' : 'Flank'} fire on ${tg.name}`); }
-  let cas = u.men * T.power * rf * fm * dmgForm * (tg.garrison != null ? tu.garrison.cover : featureAt(scn, tg.x, tg.z).cover) * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.fire) * smokeFactor(sim, tg.x, tg.z) * W.fire * elev
+  let cas = u.men * T.power * rf * fm * dmgForm * (tg.garrison != null ? tu.garrison.cover : featureAt(scn, tg.x, tg.z).cover) * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.fire) * smokeFactor(sim, tg.x, tg.z) * W.fire * (1 - dark(sim) * tu.night.fire) * elev
     * (0.5 + 0.5 * Math.max(0, u.morale) / u.maxMorale) * (1 - tu.fatigue.fire * u.fat) * (posted(tg, tu) ? tu.hold.fire : 1) * (0.8 + 0.4 * rand(s))
     * (u.shaken > 0 ? tu.shaken.fire : 1) * (u.type === 'skirmisher' && tg.type === 'artillery' ? tu.screen.guns : screened(sim, u, tg) ? tu.screen.fire : 1); // rattled men shoot worse; sharpshooters pick off gun crews; a skirmish screen soaks up fire
   if (u.type === 'artillery' && close) cas *= tu.canisterMult * (canister ? 1.4 : 1);
   if (volley) { cas *= 2.2; u.spUntil = 0; }
+  else if (first) cas *= tu.holdFire.first;
   if (miss) ev(sim, { k: 'boom', x: tg.x + (rand(s) - 0.5) * 16, z: tg.z + (rand(s) - 0.5) * 16 }); // the ball ploughs up the ground nearby
   else {
     const bite = hit(sim, tg, cas, tu.flank.morale[asp], u, tu.shaken.flank[asp]); // caught on the flank, men are rattled the more
@@ -508,11 +514,11 @@ export function step(sim: Sim, dt: number) {
   // fog of war: an enemy is seen when one of your units is within sight with a clear line (ground, woods, smoke), or it has just fired; re-checked 4x a second
   if (!s.fog || s.t >= (s.seenT ?? 0)) {
     s.seenT = s.t + 0.25;
-    const sn: number[][] = [[], []];
+    const sn: number[][] = [[], []], nt = 1 - dark(sim) * tu.night.sight; // night closes in on every eye
     for (const e of live) {
       if (!s.fog) { sn[1 - e.side].push(e.id); continue; }
       const wood = featureAt(scn, e.x, e.z).kind === 'wood' ? 0.6 : 1;
-      const vis = (e.fired < tu.sight.reveal) || live.some((f: any) => f.side !== e.side && Math.hypot(f.x - e.x, f.z - e.z) < (tu.sight[f.type] ?? 70) * (s.weather === 'storm' ? tu.sight.storm : s.weather === 'rain' ? tu.sight.rain : 1) * wood && !smokeBlocked(sim, f.x, f.z, e.x, e.z) && los(scn, f.x, f.z, eye(f, tu), e.x, e.z, 2));
+      const vis = (e.fired < tu.sight.reveal) || live.some((f: any) => f.side !== e.side && Math.hypot(f.x - e.x, f.z - e.z) < (tu.sight[f.type] ?? 70) * (s.weather === 'storm' ? tu.sight.storm : s.weather === 'rain' ? tu.sight.rain : 1) * wood * nt && !smokeBlocked(sim, f.x, f.z, e.x, e.z) && los(scn, f.x, f.z, eye(f, tu), e.x, e.z, 2));
       if (vis) sn[1 - e.side].push(e.id);
     }
     s.seen = sn;
@@ -557,7 +563,7 @@ export function step(sim: Sim, dt: number) {
       else if (u.sq && u.form === 'square' && s.t - u.cavSeen > 6 && u.busy <= 0 && !(u.shaken > 0)) { u.form = 'line'; u.busy = tu.formChangeTime; u.sq = false; }
     }
     // stances: aggressive units go for anything close when idle; skirmishers kite
-    if (u.gTarget == null && u.garrison == null && u.tx == null && u.chase == null && u.eng == null && u.busy <= 0 && u.stance !== 'hold') {
+    if (u.gTarget == null && u.garrison == null && u.tx == null && u.chase == null && u.eng == null && u.busy <= 0 && u.stance !== 'hold' && u.stance !== 'holdfire') {
       let ne: any = null, nd = 1e9;
       for (const e of live) if (e.side !== u.side && !e.dead && seen[u.side].has(e.id)) { const d = Math.hypot(e.x - u.x, e.z - u.z); if (d < nd) { nd = d; ne = e; } }
       if (ne && u.stance === 'aggressive' && nd < 42) u.chase = ne.id;
@@ -688,12 +694,12 @@ export function step(sim: Sim, dt: number) {
     // ranged fire (only when standing still, not changing formation, guns unlimbered)
     if (T.range <= 0 || u.mv || u.busy > 0 || u.reload > 0 || u.limbered || u.limT > 0) continue;
     let tg: any = null, td = 1e9, best = 1e9;
-    const hu = heightAt(scn, u.x, u.z);
+    const hu = heightAt(scn, u.x, u.z), hf = u.stance === 'holdfire' ? tu.holdFire.range : 1; // holding fire: only a foe close in (or the ordered target) draws a volley
     for (const e of live) {
       if (e.dead || e.side === u.side || !seen[u.side].has(e.id)) continue;
       const d = Math.max(0, gapBetween(u, e, tu)), reach = T.range * (u.type === 'artillery' ? Math.max(1, Math.min(1.3, 1 + tu.terrain.gunReach * (hu - heightAt(scn, e.x, e.z)))) : 1); // guns on high ground reach further
       const k = e.id === u.chase ? -1 : d; // the ordered target comes first whenever it can be hit, else the nearest
-      if (k < best && d < reach && !smokeBlocked(sim, u.x, u.z, e.x, e.z) && !masked(u, e, live, tu) && los(scn, u.x, u.z, eye(u, tu), e.x, e.z, 2)) { best = k; td = d; tg = e; } // range is measured to the nearest part of the target formation; no shooting over a crest
+      if (k < best && d < reach * (k < 0 ? 1 : hf) && !smokeBlocked(sim, u.x, u.z, e.x, e.z) && !masked(u, e, live, tu) && los(scn, u.x, u.z, eye(u, tu), e.x, e.z, 2)) { best = k; td = d; tg = e; } // range is measured to the nearest part of the target formation; no shooting over a crest
     }
     if (!tg) continue;
     u.tf = null; // the enemy comes before the ordered facing
