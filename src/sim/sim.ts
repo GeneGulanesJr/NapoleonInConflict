@@ -336,7 +336,7 @@ function meleeMult(a: any, d: any): number {
   return 1;
 }
 /** Posted: formed foot or guns that have stood still a while (tuning.hold.after) have dressed their ranks, found the folds of the ground and lie down between volleys */
-export const posted = (u: any, tu: any) => (u.still ?? 0) >= tu.hold.after && !u.routed && !(u.limT > 0) && !tu.types[u.type].cav;
+export const posted = (u: any, tu: any) => (u.still ?? 0) >= tu.hold.after && !u.routed && !tu.types[u.type].cav;
 /** Morale ceiling: a regiment that has lost men can't get back to its full spirit (tuning.morale.cap). */
 const mcap = (u: any, tu: any) => u.maxMorale * (1 - tu.morale.cap * (1 - Math.min(1, u.men / u.maxMen)));
 /** Wheel u toward angle a at its rate (tuning.turn); returns the angle still left to turn. */
@@ -346,7 +346,7 @@ function face(u: any, a: number, dt: number, tu: any): number {
   return Math.abs(d - k);
 }
 /** Morale test for d as a charge by a closes in (tuning.shock): true = it stands. */
-function steady(sim: Sim, d: any, a: any): boolean {
+export function steady(sim: Sim, d: any, a: any): boolean {
   const tu = sim.tu, k = tu.shock, cav = tu.types[a.type].cav && !tu.types[d.type].cav && d.form !== 'square';
   const st = Math.max(0, d.morale) / d.maxMorale - k.loss * (1 - d.men / d.maxMen) - k.fat * d.fat + (d.form === 'square' ? k.square : 0) + (d.garrison != null ? k.garrison : 0) - k.flank[aspect(a, d)]
     - k.size * Math.max(0, Math.min(1, a.men / Math.max(1, d.men) - 1)) - k.fresh * Math.max(0, d.fat - a.fat) + k.vet * d.vet + (d.aura ? k.aura : 0) - (cav ? k.cav : 0) + (posted(d, tu) ? tu.hold.shock : 0) + k.spread * (rand(sim.s) - 0.5);
@@ -641,7 +641,7 @@ export function step(sim: Sim, dt: number) {
   // morale: recovery, routs
   for (const u of live) {
     if (u.dead) continue;
-    u.still = u.mv || u.routed ? 0 : u.still + dt; // seconds standing in place: after tuning.hold.after the regiment is posted (see posted())
+    u.still = u.mv || u.routed || u.busy > 0 || u.limT > 0 ? 0 : u.still + dt; // seconds standing in place (not reforming or hitching up): after tuning.hold.after the regiment is posted (see posted())
     const half2 = half - 1;
     u.x = Math.max(-half2, Math.min(half2, u.x)); u.z = Math.max(-half2, Math.min(half2, u.z));
     if (u.acc >= 3 && s.t - u.accT > 0.8) { ev(sim, { k: 'dmg', x: u.x, z: u.z, side: u.side, n: Math.round(u.acc) }); u.acc = 0; u.accT = s.t; }
