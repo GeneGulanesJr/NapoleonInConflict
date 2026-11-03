@@ -510,6 +510,8 @@ export function createView(host: HTMLElement) {
   const shakoM = fig(shakoG, 5000, hat), belgM = fig(belgicG, 3000, hat), bearM = fig(bearG, 1500, hat), cuirM = fig(cuirG, 1500, [0, 0.5, 0]), capM = fig(capG, 1500, hat), bicM = fig(bicG, 200, hat);
   const skirM = fig(skirG, 2500, null), lanceM = fig(lanceG, 1500, null);
   // one standard per infantry regiment (pole + finial, waving banner in the nation's colour, gold eagle)
+  // far LOD: zoomed right out a regiment is one clean slab in its coat colour (men are 1-2 px there and read as noise); unit box, base on y=0, scaled per instance
+  const LOD_DIST = 380, blockM = mkI(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), 800, Object.assign(toon({ gradientMap: figRamp, color: new THREE.Color(GL, GL, GL) }), { flatShading: true }), null, true);
   const flagM = mkI(merge([bx(0.07, 3.6, 0.07, 0, 1.8, 0, P.wood), bx(0.18, 0.2, 0.18, 0, 3.7, 0, P.brass)]), 400, toon({ vertexColors: true }), [0, 1.8, 0], false);
   const bannerM = mkI(paint(new THREE.BoxGeometry(1.0, 0.75, 0.05).translate(0.55, 3.1, 0), 0xffffff), 400, toon({ color: 0xffffff }), null, false);
   const eagleM = mkI(paint(new THREE.BoxGeometry(0.32, 0.32, 0.07).translate(0.55, 3.1, 0), P.brass), 400, toon({ vertexColors: true }), null, false);
@@ -795,7 +797,7 @@ export function createView(host: HTMLElement) {
     }
 
     // units
-    let nf = 0, nh = 0, ng = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0, nbs = 0, nac = 0, naa = 0, nar = 0, nsh = 0, nbg = 0, npk = 0;
+    let nf = 0, nh = 0, ng = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0, nbs = 0, nac = 0, naa = 0, nar = 0, nsh = 0, nbg = 0, npk = 0, nbk = 0;
     const live = new Set<number>();
     const seenSet = state.fog ? new Set<number>(state.seen?.[viewer] ?? []) : null; // fog of war: enemies you cannot see are not drawn
     const k = 1 - Math.exp(-10 * dt);
@@ -861,7 +863,19 @@ export function createView(host: HTMLElement) {
       };
       const fb = [1e9, -1e9, 1e9, -1e9]; // the figures' footprint in the regiment's frame, for its base
       const snapAll = v.form === '', top = v.rs * 1.2 + T.speed * 1.1, gait = (u.routed ? 13 : charging ? 11 : 8) / T.speed;
-      for (let i = 0; i < (cull ? 0 : n); i++) {
+      const lod = !cull && cam.dist > LOD_DIST && nbk < 799;
+      if (lod) { // footprint from the slots, then one block
+        let e0 = 1e9, e1 = -1e9, e2 = 1e9, e3 = -1e9;
+        for (let i = 0; i < n; i++) {
+          if (isArt) { sl[0] = (((i >> 1) - (nGun - 1) / 2) * 4.2) + (i & 1 ? 1.4 : -1.4); sl[1] = i & 1 ? -2.4 : 0; } else slots(u, n, i, sl);
+          sl[0] *= FS; sl[1] *= FS; e0 = Math.min(e0, sl[0]); e1 = Math.max(e1, sl[0]); e2 = Math.min(e2, sl[1]); e3 = Math.max(e3, sl[1]);
+        }
+        const pad = 0.5 * FS, cx = (e0 + e1) / 2, cz = (e2 + e3) / 2, wx = v.x + cx * ct + cz * st, wz = v.z - cx * st + cz * ct, hgt = (isArt ? 1.5 : isCav ? 3.2 : u.routed || u.type === 'skirmisher' ? 1.1 : 2.3) * FS;
+        dummy.position.set(wx, heightAt(scn, wx, wz) - 0.4, wz); dummy.rotation.set(0, tf, 0); dummy.scale.set(e1 - e0 + 2 * pad, hgt + 0.4, e3 - e2 + 2 * pad); dummy.updateMatrix(); dummy.rotation.set(0, 0, 0);
+        blockM.setMatrixAt(nbk, dummy.matrix); blockM.setColorAt(nbk++, tmpC);
+        fb[0] = e0; fb[1] = e1; fb[2] = e2; fb[3] = e3;
+      }
+      for (let i = 0; i < (cull || lod ? 0 : n); i++) {
         if (isArt) {
           const g = i >> 1, lx = (g - (nGun - 1) / 2) * 4.2 + (i & 1 ? 1.4 : -1.4), lz = i & 1 ? -2.4 : 0;
           sl[0] = lx; sl[1] = lz;
@@ -925,7 +939,7 @@ export function createView(host: HTMLElement) {
           }
         } else if (nf < 4990) addFig(i, wx, y, wz, yaw, 1.7 * FS, null, mv, s);
       }
-      v.form = cull ? '' : u.form;
+      v.form = cull || lod ? '' : u.form; // '' = the men snap to their slots when the camera comes back in
       if (fb[0] < 1e9) { const mg = (isCav ? 1.4 : 0.9) * FS; baseRing(v.x, v.z, st, ct, [fb[0] - mg, fb[1] + mg, fb[2] - mg, fb[3] + mg], bTh, u.routed ? BASE_COL.routed : u.side === viewer ? BASE_COL.mine : BASE_COL.foe); }
       if (!cull && (u.type === 'line' || u.type === 'guard') && !u.routed && nfl < 399) {
         const gy = heightAt(scn, v.x, v.z), sway = Math.sin(clock * 3 + u.id) * 0.35;
@@ -960,9 +974,9 @@ export function createView(host: HTMLElement) {
       const cls = `plate${full ? '' : ' pip'}${selected.has(u.id) ? ' sel' : ''}${u.routed ? ' routed' : u.morale < u.maxMorale * 0.3 ? ' waver' : ''}`;
       if (cls !== p.ls) { p.el.className = cls; p.ls = cls; }
     }
-    horses.count = legsF.count = legsH.count = hbaseM.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; baseM.count = nbs; packM.count = npk;
+    horses.count = legsF.count = legsH.count = hbaseM.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; baseM.count = nbs; packM.count = npk; blockM.count = nbk;
     body.count = legL.count = legR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; shakoM.count = nsh; belgM.count = nbg; bearM.count = nbr; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
-    const figs = [body, packM, legL, legR, armsCarry, armsAim, armsRide, baseM, shakoM, belgM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, hbaseM, guns];
+    const figs = [blockM, body, packM, legL, legR, armsCarry, armsAim, armsRide, baseM, shakoM, belgM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, hbaseM, guns];
     // upload only the live [0, count) slice; clear first so ranges never pile up across frames (hull twins share these attributes)
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
     for (const m of [...figs, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
