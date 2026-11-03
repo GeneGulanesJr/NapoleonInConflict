@@ -6,7 +6,7 @@ import { WebSocket } from 'ws';
 import { applyResult, type CampaignState } from '../src/sim/roster.ts';
 import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
-import { createSim, step, command, manPrice, distToFoot } from '../src/sim/sim.ts';
+import { createSim, step, command, manPrice, distToFoot, posted } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
 import { heightAt, groundAt } from '../src/sim/world.ts';
 
@@ -135,10 +135,12 @@ test('a posted regiment (standing still a while) takes fewer casualties than one
     let tg: any;
     const sim = arena((fr, co) => [Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: -12, facing: 0, form: 'line', morale: 9999, maxMorale: 9999 }), tg = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 0, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999, still: settled ? 99 : 0 })]);
     run(sim, 40, undefined, () => { if (!settled) tg.still = 0; });
-    return tg.maxMen - tg.men;
+    return { cas: tg.maxMen - tg.men, mor: (9999 - tg.morale) / (tg.maxMen - tg.men) }; // men lost, morale lost per man lost
   };
   const p = hit(true), m = hit(false);
-  assert.ok(p > 0 && p < m * 0.93, `posted lost ${p.toFixed(0)}, shifting lost ${m.toFixed(0)}`);
+  assert.ok(p.cas > 0 && p.cas < m.cas * 0.93, `posted lost ${p.cas.toFixed(0)}, shifting lost ${m.cas.toFixed(0)}`);
+  assert.ok(p.mor < m.mor * 0.9, `posted morale per man ${p.mor.toFixed(2)}, shifting ${m.mor.toFixed(2)}`);
+  assert.ok(!posted({ still: 99, type: 'artillery', limbered: true }, data('tuning')), 'limbered guns have not dressed their ranks');
 });
 
 test('off our objectives a draft marches in from our map edge at double cost and joins the regiment', () => {
