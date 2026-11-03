@@ -46,7 +46,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     <div id="popups"></div>
     <div id="banner"><b></b><span></span></div>
     <div class="bl panel" id="sel"><div class="hd">No selection</div><div class="rows"></div>
-      <div class="forms">${FORMS.map(([f, k, l]) => `<button data-form="${f}">${l} <kbd>${k}</kbd></button>`).join('')}<button data-stop>Halt <kbd>H</kbd></button><button data-stance>Hold <kbd>G</kbd></button><button data-auto>Auto-sq <kbd>B</kbd></button><button data-special class="spbtn" style="display:none"></button></div></div>
+      <div class="forms">${FORMS.map(([f, k, l]) => `<button data-form="${f}">${l} <kbd>${k}</kbd></button>`).join('')}<button data-stop>Halt <kbd>H</kbd></button><button data-stance>Hold <kbd>G</kbd></button><button data-auto>Auto-sq <kbd>B</kbd></button><button data-refill style="display:none" title="Fresh men march in while the regiment stands on an objective you hold and is out of the fight. Paid in reserve points as they arrive."></button><button data-special class="spbtn" style="display:none"></button></div></div>
     <div class="bc" id="abil">${abilities.map((a) => {
       const ab = TUNING.abilities[a];
       return `<button class="ab" data-ab="${a}" title="${ab.label}"><span class="ico"></span><span class="nm">${ab.label}</span><kbd>${ab.key}</kbd><span class="cd"></span><i class="sweep"></i></button>`;
@@ -172,6 +172,13 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const sel0 = selection.map((id) => st.units.find((q: any) => q.id === id)).filter(Boolean);
     stB.style.display = auB.style.display = sel0.length ? '' : 'none';
     if (sel0.length) { stB.innerHTML = `${({ hold: 'Hold', aggressive: 'Attack', skirmish: 'Skirmish' } as any)[sel0[0].stance] ?? 'Hold'} <kbd>G</kbd>`; auB.classList.toggle('on', sel0.filter((u: any) => u.type === 'line' || u.type === 'guard').every((u: any) => u.auto) && sel0.some((u: any) => u.type === 'line' || u.type === 'guard')); }
+    const rfB = $<HTMLElement>(hud, '[data-refill]'), hurt = sel0.filter((u: any) => u.type !== 'commander' && u.men < u.maxMen);
+    if (hurt.length) { // cost at the deploy rate: a whole regiment costs its reserve price
+      const onOurs = (u: any) => st.zones.some((z: any) => z.owner === me && Math.hypot(u.x - z.x, u.z - z.z) < z.r);
+      const cost = Math.ceil(hurt.reduce((a: number, u: any) => a + ((u.maxMen - u.men) * TUNING.types[u.type].cost) / u.maxMen, 0));
+      rfB.style.display = ''; rfB.classList.toggle('on', hurt.every((u: any) => u.refill)); rfB.classList.toggle('off', !hurt.some(onOurs));
+      rfB.innerHTML = `Replenish <kbd>N</kbd> ${cost} pts`;
+    } else rfB.style.display = 'none';
     const spBtn = $<HTMLElement>(hud, '[data-special]');
     const su = selection.map((id) => st.units.find((q: any) => q.id === id)).find((u: any) => u && TUNING.specials[u.type]);
     if (su) { const sp = TUNING.specials[su.type], cd = Math.ceil(su.spReady - st.t); spBtn.style.display = ''; spBtn.classList.toggle('off', cd > 0); spBtn.innerHTML = `${sp.label} <kbd>V</kbd>${cd > 0 ? ` ${cd}s` : ''}`; } else spBtn.style.display = 'none';
@@ -180,7 +187,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     (rows as any)._sig = sig;
     rows.innerHTML = selection.slice(0, 6).map((id) => {
       const u = st.units.find((q: any) => q.id === id);
-      return `<div class="srow${u.routed ? ' routed' : ''}"><span>${esc(u.name)}</span><i class="b m"><s style="width:${(u.men / u.maxMen) * 100}%"></s></i><i class="b o"><s style="width:${Math.max(0, (u.morale / u.maxMorale) * 100)}%"></s></i><em>${Math.round(u.men)}</em></div>`;
+      return `<div class="srow${u.routed ? ' routed' : ''}"><span>${u.refill ? '+ ' : ''}${esc(u.name)}</span><i class="b m"><s style="width:${(u.men / u.maxMen) * 100}%"></s></i><i class="b o"><s style="width:${Math.max(0, (u.morale / u.maxMorale) * 100)}%"></s></i><em>${Math.round(u.men)}</em></div>`;
     }).join('') + (selection.length > 6 ? `<div class="srow more">+${selection.length - 6} more</div>` : '');
   }
 
@@ -285,6 +292,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     else if (e.code === 'KeyV') src.cmd({ c: 'special', ids: selection });
     else if (e.code === 'KeyG') cycleStance();
     else if (e.code === 'KeyB') src.cmd({ c: 'auto', ids: selection });
+    else if (e.code === 'KeyN') src.cmd({ c: 'replenish', ids: selection });
     else if (e.code === 'KeyR') toast(toggleRadio() ? 'Radio on' : 'Radio off');
     else if (e.code === 'KeyT') { duskOn = !duskOn; view.setDusk(duskOn); toast(duskOn ? 'Dusk' : 'Daylight'); }
     else if (e.code === 'KeyY') { silOn = !silOn; view.setSilhouette(silOn); toast(silOn ? 'Silhouette check' : 'Silhouette off'); }
@@ -310,6 +318,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   const cycleStance = () => { const u = src.state.units.find((q: any) => q.id === selection[0]); if (!u) return; const order = u.type === 'skirmisher' ? ['hold', 'aggressive', 'skirmish'] : ['hold', 'aggressive']; src.cmd({ c: 'stance', ids: selection, s: order[(order.indexOf(u.stance) + 1) % order.length] }); };
   $<HTMLElement>(hud, '[data-stance]').onclick = cycleStance;
   $<HTMLElement>(hud, '[data-auto]').onclick = () => src.cmd({ c: 'auto', ids: selection });
+  $<HTMLElement>(hud, '[data-refill]').onclick = () => src.cmd({ c: 'replenish', ids: selection });
   hud.querySelectorAll<HTMLElement>('[data-ab]').forEach((b) => (b.onclick = () => startTargeting(b.dataset.ab!)));
   hud.querySelectorAll<HTMLElement>('[data-res]').forEach((b) => (b.onclick = () => { src.cmd({ c: 'deploy', type: b.dataset.res! }); animate(b, { scale: [0.9, 1], duration: 300, ease: 'outBack' }); }));
   const setSpeed = (s: number) => {

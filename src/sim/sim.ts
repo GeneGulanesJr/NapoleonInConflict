@@ -83,7 +83,7 @@ export function spawn(sim: Sim, side: number, d: any) {
     rid: d.rid ?? null, dead: false, via: null as { x: number; z: number } | null,
     spReady: 0, spUntil: 0, spKind: '', acc: 0, accT: 0,
     xp: d.xp ?? 0, vet: rankOf(sim.tu, d.xp ?? 0), stance: 'hold', auto: false, sq: false, cavSeen: -99, queue: [] as number[][],
-    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99,
+    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false,
   };
   sim.s.units.push(u);
   return u;
@@ -94,6 +94,7 @@ export type Cmd =
   | { c: 'move'; ids: number[]; x: number; z: number; q?: boolean }
   | { c: 'stance'; ids: number[]; s: string }
   | { c: 'auto'; ids: number[] }
+  | { c: 'replenish'; ids: number[] }
   | { c: 'garrison'; ids: number[]; vid: number }
   | { c: 'attack'; ids: number[]; target: number }
   | { c: 'form'; ids: number[]; f: string }
@@ -138,6 +139,9 @@ export function command(sim: Sim, side: number, c: Cmd) {
   } else if (c.c === 'auto') {
     const us = mine(c.ids).filter(isInf), on = !us.every((u: any) => u.auto);
     for (const u of us) u.auto = on;
+  } else if (c.c === 'replenish') { // toggle; the men only march in while the regiment stands on ground its side holds (see step)
+    const us = mine(c.ids).filter((u: any) => u.type !== 'commander' && u.men < u.maxMen), on = !us.every((u: any) => u.refill);
+    for (const u of us) u.refill = on;
   } else if (c.c === 'garrison') {
     const v = (sim.scn.map.villages ?? [])[c.vid];
     if (!v || !garrisonable(v)) return;
@@ -546,6 +550,16 @@ export function step(sim: Sim, dt: number) {
     z.owner = z.p > 0.5 ? 0 : z.p < -0.5 ? 1 : null;
     if (z.owner !== prev && z.owner != null) { log(sim, `${z.name} is taken by the ${z.owner === 0 ? 'French' : 'Coalition'}!`); chron(sim, z.owner, `${z.name} captured`); }
     if (z.owner != null) s.side[z.owner].score += z.value * dt;
+  }
+
+  // replenishing: fresh men march in while a regiment holds friendly objective ground out of the fight, paid in RP at the deploy rate
+  for (const u of live) {
+    if (!u.refill || u.dead) continue;
+    if (u.routed || u.men >= u.maxMen) { if (!u.routed) log(sim, `${u.name} is back to full strength.`); u.refill = false; continue; }
+    if (u.eng != null || u.hurt < 3 || !s.zones.some((z: any) => z.owner === u.side && Math.hypot(u.x - z.x, u.z - z.z) < z.r)) continue; // paused: fighting, under fire, or off our ground
+    const sd = s.side[u.side], per = tu.types[u.type].cost / u.maxMen; // RP per man: a whole regiment costs its deploy price
+    const add = Math.min((u.maxMen / tu.refillTime) * dt, u.maxMen - u.men, sd.rp / per);
+    u.men += add; sd.rp -= add * per;
   }
 
   // smoke ageing

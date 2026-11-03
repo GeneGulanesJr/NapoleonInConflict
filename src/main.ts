@@ -57,7 +57,7 @@ function title() {
       <button class="stag alt" id="fog">Fog of war: ${fogOn() ? 'ON' : 'OFF'}</button>
     </div>
     <p class="help stag">Left-click / drag: select · Right-click: move or attack · WASD: pan · Q/E or middle-drag: rotate · Wheel: zoom · P: render quality · V: unit special · R: radio · T: dusk · Y/U: silhouette / top-down check<br>
-    Z/X/C: line/column/square · B: auto-square · G: stance · H: halt · Shift+right-click: waypoint · right-click a farm: garrison · 1/2/3: tactical aid · Space: pause · F: focus selection · M: mute</p>`, (el) => {
+    Z/X/C: line/column/square · B: auto-square · N: replenish (on a held objective) · G: stance · H: halt · Shift+right-click: waypoint · right-click a farm: garrison · 1/2/3: tactical aid · Space: pause · F: focus selection · M: mute</p>`, (el) => {
     el.querySelector<HTMLElement>('#new')!.onclick = () => { unlock(); clearSave(); const c = newCampaign(); save(c); campaignScreen(c); };
     el.querySelector<HTMLElement>('#cont')?.addEventListener('click', () => { unlock(); campaignScreen(saved!); });
     el.querySelector<HTMLElement>('#quick')!.onclick = () => { unlock(); quickScreen(); };

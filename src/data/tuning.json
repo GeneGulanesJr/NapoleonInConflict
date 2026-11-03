@@ -109,6 +109,7 @@
     "square": 0.25
   },
   "formChangeTime": 2.8,
+  "refillTime": 15,
   "moraleLoss": 250,
   "rangeFloor": 0.25,
   "canisterRange": 30,

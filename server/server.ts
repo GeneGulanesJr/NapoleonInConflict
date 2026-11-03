@@ -44,7 +44,7 @@ function clean(c: any): Cmd | null {
     case 'form': return ids(c.ids) && known(tu.formFire, c.f) ? { c: 'form', ids: c.ids, f: c.f } : null;
     case 'stance': return ids(c.ids) && typeof c.s === 'string' ? { c: 'stance', ids: c.ids, s: c.s } : null;
     case 'garrison': return ids(c.ids) && num(c.vid) ? { c: 'garrison', ids: c.ids, vid: c.vid } : null;
-    case 'stop': case 'special': case 'auto': return ids(c.ids) ? { c: c.c, ids: c.ids } : null;
+    case 'stop': case 'special': case 'auto': case 'replenish': return ids(c.ids) ? { c: c.c, ids: c.ids } : null;
     case 'ability': return known(tu.abilities, c.name) && num(c.x) && num(c.z) ? { c: 'ability', name: c.name, x: c.x, z: c.z } : null;
     case 'deploy': return known(tu.types, c.type) ? { c: 'deploy', type: c.type } : null;
   }
