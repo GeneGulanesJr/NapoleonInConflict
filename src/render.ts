@@ -773,8 +773,35 @@ export function createView(host: HTMLElement) {
     }
   }
 
+  /** the viewer's deployment zone: its circles as one translucent ground-hugging area (2-unit cells inside any circle) with its outer edge, rebuilt only when the zone set changes */
+  let depZs: any = null, depObjs: THREE.Mesh[] = [];
+  function deployZone(zs: any[] | null) {
+    if (zs === depZs) return;
+    depZs = zs;
+    for (const o of depObjs) { scene.remove(o); o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
+    depObjs = [];
+    if (!zs?.length) return;
+    const G = 2, y = (x: number, z: number) => heightAt(scn, x, z) + 0.3, inside = (x: number, z: number, skip?: any) => zs.some((d) => d !== skip && Math.hypot(x - d.x, z - d.z) < d.r);
+    const fill: number[] = [], edge: number[] = [];
+    const x0 = Math.min(...zs.map((d) => d.x - d.r)), x1 = Math.max(...zs.map((d) => d.x + d.r)), z0 = Math.min(...zs.map((d) => d.z - d.r)), z1 = Math.max(...zs.map((d) => d.z + d.r));
+    for (let x = x0; x < x1; x += G) for (let z = z0; z < z1; z += G) if (inside(x + G / 2, z + G / 2)) fill.push(x, y(x, z), z, x, y(x, z + G), z + G, x + G, y(x + G, z + G), z + G, x, y(x, z), z, x + G, y(x + G, z + G), z + G, x + G, y(x + G, z), z);
+    for (const d of zs) for (let k = 0; k < 64; k++) {
+      const a0 = (k / 64) * Math.PI * 2, a1 = ((k + 1) / 64) * Math.PI * 2, am = (a0 + a1) / 2;
+      if (inside(d.x + Math.cos(am) * d.r, d.z + Math.sin(am) * d.r, d)) continue; // an arc inside a neighbour's circle is not the zone's edge
+      const q = (a: number, r: number) => { const x = d.x + Math.cos(a) * r, z = d.z + Math.sin(a) * r; return [x, y(x, z) + 0.1, z]; };
+      const a = q(a0, d.r - 0.7), b = q(a0, d.r), c = q(a1, d.r), e = q(a1, d.r - 0.7);
+      edge.push(...a, ...b, ...c, ...a, ...c, ...e);
+    }
+    for (const [p, op] of [[fill, 0.16], [edge, 0.85]] as [number[], number][]) {
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+      const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x4f86ff, transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+      m.frustumCulled = false; scene.add(m); depObjs.push(m);
+    }
+  }
+
   function sync(state: any, dt: number, viewer: number, evs: any[]) {
     clock += dt;
+    deployZone(state.phase === 'deploy' ? state.deploy?.[viewer] ?? null : null);
     if (state.weather !== prevWeather) { setWeather(state.weather, prevWeather === ''); prevWeather = state.weather; }
     eat(evs, viewer); lightFlashes(dt);
     updateFog(state, viewer);

@@ -1,5 +1,6 @@
 {
   "_note": "All gameplay numbers live here. Speeds are world units/s, ranges world units, reload seconds. power = casualties per man per volley at point blank.",
+  "deploy": { "_note": "Deployment phase (local battles): a side may place its regiments anywhere within `r` units of where any of its starting regiments stands", "r": 35 },
   "difficulty": { "_note": "Easy / Normal / Hard: the bot's regiments (start, reinforcements, reserves) at this share of their scenario strength", "labels": ["Easy", "Normal", "Hard"], "enemyStrength": [0.8, 1, 1.25] },
   "stun": { "_note": "Foot or guns (not in square or a farm) hit by a cavalry charge are stunned for `time` s x the slope factor x (horse men / foot men, clamped to `size`) x `charge` with the Charge special: they cannot fire, move or change formation, and fight at `melee` x their usual rate", "time": 4, "size": [0.5, 1.5], "charge": 1.5, "melee": 0.6 },
   "shaken": { "_note": "Fire rattles what it hits: `k` s per 100% of the regiment lost in one blow (so ~4 s for a 10% bite), + flank[aspect] s on a flank or rear hit, + up to `routers` s when broken men run through; capped at `max`. Shaken: reload takes `reload` x as long, fire does `fire` x, no formation changes (it can still move)", "k": 40, "max": 8, "flank": [0, 1.5, 3], "routers": 3, "reload": 1.5, "fire": 0.7 },

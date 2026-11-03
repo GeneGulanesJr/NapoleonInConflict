@@ -42,11 +42,11 @@ function drive(tu: any, r: Replay, play: boolean): Source {
  * A battle against the bot. side: which army you command (the bot gets the other, at the chosen difficulty's strength).
  * resume: a saved sim state to carry on from. The campaign roster only fills the French side.
  */
-export function localSource(scn: any, opts: { roster?: any[]; won?: Record<string, boolean>; seed?: number; side?: number; resume?: any }): Source {
+export function localSource(scn: any, opts: { roster?: any[]; won?: Record<string, boolean>; seed?: number; side?: number; resume?: any; deploy?: boolean }): Source {
   const side = opts.side ?? 0, strength = [...(scn.strength ?? [1, 1])];
   strength[1 - side] *= TUNING.difficulty.enemyStrength[difficulty()];
   const s2 = { ...scn, strength };
-  const s0 = opts.resume ?? createSim(s2, TUNING, { roster: opts.roster, won: opts.won, fog: fogOn(), seed: opts.seed ?? (Date.now() & 0x7fffffff) }).s;
+  const s0 = opts.resume ?? createSim(s2, TUNING, { roster: opts.roster, won: opts.won, fog: fogOn(), seed: opts.seed ?? (Date.now() & 0x7fffffff), deploy: opts.deploy }).s;
   return drive(TUNING, { scn: s2, won: opts.won, side, start: JSON.stringify(s0), cmds: [] }, false);
 }
 

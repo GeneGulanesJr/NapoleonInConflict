@@ -686,3 +686,46 @@ test('broken men running through a formed regiment shake it', () => {
   step(sim, 0.05);
   assert.ok(line.shaken > 2.5, `shaken for ${line.shaken.toFixed(1)} s by ${Math.round(router.men)} fugitives`);
 });
+
+// ---------------------------------------------------------------- WS4b deployment & tutorial
+test('deployment: a placed regiment stands on its spot at once, facing the enemy, but only inside its zone; the clock waits for the start', () => {
+  const sim = createSim(data('quatrebras'), data('tuning'), { seed: 2, deploy: true }), s = sim.s;
+  const [a, b] = s.units.filter((u: any) => u.side === 0 && u.type === 'line'), z = s.deploy[0][0], co = s.units.filter((u: any) => u.side === 1);
+  command(sim, 0, { c: 'place', ids: [a.id], x: z.x + 10, z: z.z });
+  assert.ok(Math.hypot(a.x - z.x - 10, a.z - z.z) < 0.01 && a.tx == null, `placed at once (${a.x.toFixed(1)}, ${a.z.toFixed(1)}), no march left over`);
+  const cx = co.reduce((t: number, u: any) => t + u.x, 0) / co.length, cz = co.reduce((t: number, u: any) => t + u.z, 0) / co.length;
+  assert.ok(Math.abs(a.facing - Math.atan2(cx - a.x, cz - a.z)) < 0.01, 'facing the enemy army');
+  command(sim, 0, { c: 'place', ids: [a.id], x: z.x + 10, z: z.z, f: Math.atan2(cx - a.x, cz - a.z) + Math.PI, w: 30 });
+  assert.ok(Math.cos(a.facing - Math.atan2(cx - a.x, cz - a.z)) > 0.99, 'a line dragged facing away still fronts the enemy');
+  const far = co[0], bx = b.x;
+  assert.ok(!s.deploy[0].some((d: any) => Math.hypot(far.x - d.x, far.z - d.z) < d.r), 'the test spot lies outside the French zone');
+  command(sim, 0, { c: 'place', ids: [b.id], x: far.x, z: far.z });
+  assert.ok(b.x === bx && b.tx == null, 'a spot outside the zone: it stays put, with no order');
+  for (let i = 0; i < 20; i++) step(sim, 0.05);
+  assert.equal(s.t, 0, 'time stands still while deploying');
+  command(sim, 0, { c: 'start' });
+  step(sim, 0.05);
+  assert.ok(s.phase === 'battle' && s.t > 0, 'the start sets the clock going');
+  const ax = a.x;
+  command(sim, 0, { c: 'place', ids: [a.id], x: z.x - 10, z: z.z });
+  assert.ok(a.x === ax && a.tx == null, 'no placing once the battle is on');
+  const plain = createSim(data('quatrebras'), data('tuning'), { seed: 2 }), u = plain.s.units[0], ux = u.x;
+  command(plain, 0, { c: 'place', ids: [u.id], x: ux + 5, z: u.z }); command(plain, 0, { c: 'start' });
+  assert.ok(u.x === ux && plain.s.phase === undefined, 'a battle without deployment refuses both');
+});
+
+test('a replay reproduces the deployment exactly', () => {
+  const scn = data('quatrebras'), tu = data('tuning');
+  const rec: Replay = { scn, side: 0, start: JSON.stringify(createSim(scn, tu, { seed: 5, deploy: true }).s), cmds: [] };
+  const live = runner(tu, rec), s = live.sim.s, ids = s.units.filter((u: any) => u.side === 0 && u.type === 'line').map((u: any) => u.id), z = s.deploy[0][1];
+  live.cmd({ c: 'place', ids, x: z.x, z: z.z, f: 0.3, w: 60 });
+  live.tick(); live.tick(); // ticks while deploying (the battle UI pauses instead, but a replay must not depend on it)
+  live.cmd({ c: 'place', ids: ids.slice(0, 1), x: z.x + 8, z: z.z + 8 });
+  live.cmd({ c: 'start' });
+  for (let n = 0; n < 1200; n++) live.tick();
+  const again = runner(tu, rec, true);
+  for (let n = 0; n < 1202; n++) again.tick();
+  assert.equal(rec.cmds.length, 3);
+  assert.ok(s.t > 59, 'the battle ran after the start');
+  assert.equal(JSON.stringify(again.sim.s), JSON.stringify(s));
+});
