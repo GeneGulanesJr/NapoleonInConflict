@@ -850,3 +850,23 @@ test('a defending bot line steps back off the forward slope to a spot in its zon
   run(sim, 40, undefined, () => bot(0.05));
   assert.ok(!los(sim.scn, gun.x, gun.z, 2, line.x, line.z, 2) && Math.hypot(line.x, line.z) < 30, `behind the crest, in the zone (${line.x.toFixed(1)}, ${line.z.toFixed(1)})`);
 });
+
+// ---------------------------------------------------------------- WS5 UI/UX
+const { unitStatus, hudScale } = await import('../src/render.ts');
+
+test('status marks: a rout says only that; otherwise every mark that applies, most urgent first', () => {
+  const tu = data('tuning'), u = (o: any) => ({ type: 'line', morale: 100, maxMorale: 100, fat: 0, stun: 0, shaken: 0, bay: null, spUntil: 0, still: 0, ...o });
+  assert.deepEqual(unitStatus(u({ routed: true, stun: 3, fat: 0.9 }), 0, tu), ['routed']);
+  assert.deepEqual(unitStatus(u({ stun: 2, shaken: 1, morale: 20, fat: 0.6, still: tu.hold.after }), 0, tu), ['stun', 'shaken', 'waver', 'tired', 'posted']);
+  assert.deepEqual(unitStatus(u({ bay: 7 }), 0, tu), ['charge']);
+  assert.deepEqual(unitStatus(u({ type: 'lancer', chase: 3, still: 99 }), 0, tu), ['charge'], 'charging horse, and cavalry is never posted');
+  assert.deepEqual(unitStatus(u({ spUntil: 5, spKind: 'charge' }), 6, tu), [], 'the Charge has worn off');
+});
+
+test('interface size steps the HUD scale up only while the 640x360 layout still fits', () => {
+  assert.deepEqual([0, 1, 2].map((ui) => hudScale(1, 1280, 720, ui)), [2, 2, 2], '1280x720: no room to grow');
+  assert.deepEqual([0, 1, 2].map((ui) => hudScale(2, 1920, 1080, ui)), [2, 3, 3]);
+  assert.deepEqual([0, 1, 2].map((ui) => hudScale(1, 1920, 1080, ui)), [2, 3, 3], 'from the auto scale, not the world pixel');
+  assert.deepEqual([0, 1, 2].map((ui) => hudScale(4, 3840, 2160, ui)), [4, 5, 6]);
+  assert.equal(hudScale(1, 1920, 700, 2), 2, 'wide enough but too short for a bigger layout');
+});
