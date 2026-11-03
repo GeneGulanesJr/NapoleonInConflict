@@ -1,5 +1,5 @@
 // Procedural WebAudio: no asset files. SFX fall off with distance from the camera and share a small reverb;
-// a drum-and-fife march plays during battles and the drums swell with the amount of shooting.
+// a drum-and-fife march (each nation its own tune) plays during battles and the drums swell with the amount of shooting.
 import { pref, setPref, prefNum, setPrefNum } from './campaign.ts';
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -88,8 +88,17 @@ export function cue(kind: string) {
 const BPM = 104, S = 60 / BPM / 4;
 const SNARE = [1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1];
 const KICK = [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0];
-const TUNE = [0, -1, 2, -1, 4, -1, 2, -1, 5, -1, 4, -1, 2, -1, 0, -1, 4, -1, 5, -1, 7, -1, 5, -1, 4, -1, 2, -1, 0, -1, -1, -1];
-let timer = 0, nextT = 0, step = 0;
+const SEMI: Record<string, number> = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+/** A tune as text: a note letter C-B (lower case an octave up), then its length in 16ths (none: a quarter); z rests. Laid out per 16th: [semitones, length] where a note starts. */
+const score = (notes: string) => [...notes.matchAll(/([A-Ga-gz])(\d*)/g)].flatMap(([, n, d]) => [n === 'z' ? null : [SEMI[n.toLowerCase()] + (n >= 'a' ? 12 : 0), +d || 4], ...Array((+d || 4) - 1).fill(null)]);
+/** Each army marches to its own public-domain tune (bar: 16ths per bar, for the drums). Written in C, the fife plays it a tone higher, in D. */
+const MARCH: Record<string, { bar: number; seq: any[] }> = {
+  // La Marseillaise (Rouget de Lisle, 1792), sung again in the Hundred Days: "Allons enfants de la Patrie, le jour de gloire est arrivé!"
+  fr: { bar: 16, seq: score('z12 G3G1 | G c c d | d g6 e2 c3c1 | e3c1 A f d3B1 | c8 z8') },
+  // God Save the King (first printed 1744). Anyone else marches to it too: Prussia's anthem since 1795, Heil dir im Siegerkranz, is the same tune.
+  gb: { bar: 12, seq: score('c c d | B6c2 d | e e f | e6d2 c | d c B | c12 | g g g | g6f2 e | f f f | f6e2 d | e f2e2d2c2 | e6f2 g | a2f2 e d | c12') },
+};
+let timer = 0, nextT = 0, step = 0, march = MARCH.fr;
 
 function drum(t: number, kind: 'snare' | 'kick', v: number) {
   if (!ctx || !mus || !noise) return;
@@ -105,32 +114,32 @@ function drum(t: number, kind: 'snare' | 'kick', v: number) {
     o.connect(g); g.connect(mus); o.start(t); o.stop(t + 0.25);
   }
 }
-function fife(t: number, semis: number, v: number) {
+function fife(t: number, semis: number, len: number, v: number) {
   if (!ctx || !mus) return;
-  const f = 587.33 * 2 ** (semis / 12), o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+  const f = 293.66 * 2 ** (semis / 12), d = S * len, o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
   o.type = 'sine'; o2.type = 'sine'; o.frequency.value = f; o2.frequency.value = f * 2;
   lfo.frequency.value = 5.5; lg.gain.value = f * 0.006; lfo.connect(lg); lg.connect(o.frequency);
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + 0.03); g.gain.exponentialRampToValueAtTime(0.001, t + S * 1.9);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + 0.03); g.gain.setValueAtTime(v, t + d * 0.6); g.gain.exponentialRampToValueAtTime(0.001, t + d * 0.95);
   const g2 = ctx.createGain(); g2.gain.value = 0.25; o2.connect(g2); g2.connect(g);
-  o.connect(g); g.connect(mus); [o, o2, lfo].forEach((n) => { n.start(t); n.stop(t + S * 2); });
+  o.connect(g); g.connect(mus); [o, o2, lfo].forEach((n) => { n.start(t); n.stop(t + d); });
 }
 function tick() {
   if (!ctx || !mus) return;
   intensity *= 0.992;
   while (nextT < ctx.currentTime + 0.25) {
-    const i = step % 16, phrase = Math.floor(step / 32);
+    const i = step % march.bar, n = march.seq[step % march.seq.length];
     const dv = 0.05 + 0.1 * intensity;
     if (SNARE[i]) { if (i % 4 === 0) drum(nextT - 0.025, 'snare', dv * 0.5); drum(nextT, 'snare', dv * (i % 4 === 0 ? 1 : 0.7)); }
     if (KICK[i]) drum(nextT, 'kick', dv * 0.9);
-    const n = TUNE[step % 32];
-    if (n >= 0 && phrase % 2 === 0) fife(nextT, n, 0.07 * (1 - 0.5 * intensity));
+    if (n && Math.floor(step / march.seq.length) % 2 === 0) fife(nextT, n[0], n[1], 0.07 * (1 - 0.5 * intensity)); // the tune, then a turn of drums alone
     nextT += S; step++;
   }
 }
-/** Start or stop the march. Safe to call before the user has interacted (it simply stays silent until unlock). */
-export function music(on: boolean) {
+/** Start or stop the march of nation `nat` (scenario nat code). Safe to call before the user has interacted (it simply stays silent until unlock). */
+export function music(on: boolean, nat = 'fr') {
   if (!on) { clearInterval(timer); timer = 0; try { speechSynthesis.cancel(); } catch { /* no speech */ } return; }
   if (!init() || !ctx || timer) return;
+  march = MARCH[nat] ?? MARCH.gb;
   ctx.resume(); nextT = ctx.currentTime + 0.1; step = 0; intensity = 0;
   timer = window.setInterval(tick, 50);
 }

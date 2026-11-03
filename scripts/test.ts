@@ -686,3 +686,35 @@ test('broken men running through a formed regiment shake it', () => {
   step(sim, 0.05);
   assert.ok(line.shaken > 2.5, `shaken for ${line.shaken.toFixed(1)} s by ${Math.round(router.men)} fugitives`);
 });
+
+// ---------------------------------------------------------------- WS4a campaign & music
+import { freshRoster, fieldRoster, grouchyDue } from '../src/sim/roster.ts';
+import { expandForces } from '../src/sim/sim.ts';
+
+test("Grouchy's orders change who fights at Waterloo and when the Prussians, or Gérard, arrive", () => {
+  const camp = data('campaign'), tu = data('tuning'), wl = data('waterloo');
+  const at = (grouchy?: string) => {
+    const c: CampaignState = { idx: 4, results: {}, roster: freshRoster(camp, tu), ended: null, grouchy };
+    const sim = createSim(wl, tu, { roster: fieldRoster(c, camp, 'waterloo'), won: { ligny: true }, grouchy, seed: 1 });
+    const wave = (side: number, name: string) => sim.tl.find((e) => e.type === 'reinforce' && e.side === side && e.units.some((u: any) => (u.names ?? [u.name]).join().includes(name)));
+    return { french: sim.s.units.filter((u: any) => u.side === 0).length, bulow: wave(1, 'Bülow').t, prussians: expandForces(wave(1, 'Bülow').units).length, zieten: wave(1, 'Zieten').t, gerard: wave(0, 'Gérard')?.t };
+  };
+  assert.deepEqual(at(), { french: 28, bulow: 1000, prussians: 8, zieten: 1170, gerard: undefined }, 'no orders (quick battle, old save): as before');
+  assert.deepEqual(at('pursue'), { french: 25, bulow: 1120, prussians: 6, zieten: 1350, gerard: undefined }, 'pursue: 2 line + 1 lancer away; Prussians 40/60 min later, without Tippelskirch and the uhlans');
+  assert.deepEqual(at('screen'), { french: 27, bulow: 1060, prussians: 8, zieten: 1260, gerard: undefined }, 'screen: 1 lancer away (the spare line absorbs Pécheux); Prussians 20/30 min later');
+  assert.deepEqual(at('march'), { french: 28, bulow: 1000, prussians: 8, zieten: 1170, gerard: 1260 }, 'march: everyone fights, Prussians on time, Gérard at six');
+  const c: CampaignState = { idx: 3, results: {}, roster: freshRoster(camp, tu), ended: null, grouchy: 'pursue' };
+  assert.equal(fieldRoster(c, camp, 'genappe'), c.roster, 'the detachment only misses Waterloo');
+  const rec: Replay = { scn: wl, grouchy: 'march', side: 0, start: JSON.stringify(createSim(wl, tu, { grouchy: 'march' }).s), cmds: [] };
+  assert.ok(runner(tu, rec).sim.tl.some((e) => e.ifGrouchy === 'march'), 'a replay rebuilds the timeline under the same orders');
+});
+
+test('Grouchy: a save from before the choice still loads, fights Waterloo as before, and is asked once, after Ligny', () => {
+  const camp = data('campaign'), tu = data('tuning');
+  const old: CampaignState = JSON.parse(JSON.stringify({ idx: 4, results: { charleroi: 'win', quatrebras: 'draw', ligny: 'win', genappe: 'win' }, roster: freshRoster(camp, tu), ended: null }));
+  assert.equal(fieldRoster(old, camp, 'waterloo').length, old.roster.length, 'nobody is away');
+  assert.ok(grouchyDue(old, camp), 'the campaign screen asks');
+  assert.ok(!grouchyDue({ ...old, idx: 2 }, camp), 'not before Ligny is fought');
+  assert.ok(!grouchyDue({ ...old, grouchy: 'march' }, camp), 'only once');
+  assert.ok(!grouchyDue({ ...old, ended: 'waterloo_win' }, camp), 'not after the campaign');
+});

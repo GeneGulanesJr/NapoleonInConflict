@@ -278,3 +278,7 @@ button.alt { background: #1b1510; }
 #menu .rrow.buy { grid-template-columns: calc(var(--u) * 100) 1fr calc(var(--u) * 46) calc(var(--u) * 50); }
 #menu .rrow.buy button { padding: calc(var(--u) * 1) calc(var(--u) * 2); font-size: calc(var(--u) * 8); }
 #menu .glory { color: var(--gold); font-weight: 400; }
+
+/* ---------- WS4a: Grouchy's orders after Ligny: wide buttons, the consequences on their own line ---------- */
+#menu .orders button { width: calc(var(--u) * 340); text-align: left; }
+#menu .orders small { display: block; margin: calc(var(--u) * 2) 0 0; }

@@ -27,8 +27,10 @@ export function expandForces(groups: any[]): any[] {
 /**
  * opts.roster: campaign roster [{rid,type,name,men,maxMen}] used to fill side 0 slots (best-strength first).
  * opts.won: campaign results {battleId: boolean} used by `delayIfWon` timeline events.
+ * opts.grouchy: the campaign's orders for Grouchy (campaign.json grouchy.options id): timeline events and their unit groups
+ * with `ifGrouchy` happen only under that order, with `unlessGrouchy` under any other (or none); `delayIfGrouchy` {id: seconds}.
  */
-export function createSim(scn: any, tu: any, opts: { seed?: number; roster?: any[]; won?: Record<string, boolean>; fog?: boolean } = {}): Sim {
+export function createSim(scn: any, tu: any, opts: { seed?: number; roster?: any[]; won?: Record<string, boolean>; grouchy?: string; fog?: boolean } = {}): Sim {
   const mkSide = (i: number) => ({ rp: scn.rpStart?.[i] ?? 0, score: 0, lost: 0, cd: {} as Record<string, number>, reserves: { ...(scn.reserves?.[i] ?? {}) } });
   const s: any = {
     t: 0, seed: opts.seed ?? 1, nextId: 1, units: [], smoke: [], fx: [], out: [], log: [], events: [],
@@ -36,10 +38,11 @@ export function createSim(scn: any, tu: any, opts: { seed?: number; roster?: any
     side: [mkSide(0), mkSide(1)], weather: scn.weather ?? 'clear', over: false, result: null, ti: 0, endCheck: 0,
     fog: !!opts.fog, seen: [[], []], hist: [], chron: [], fallen: [], histT: 0,
   };
-  const tl = (scn.timeline ?? []).map((e: any) => {
-    let t = e.t;
+  const g = opts.grouchy, has = (x: any) => (!x.ifGrouchy || x.ifGrouchy === g) && (!x.unlessGrouchy || x.unlessGrouchy !== g);
+  const tl = (scn.timeline ?? []).filter(has).map((e: any) => {
+    let t = e.t + (e.delayIfGrouchy?.[g ?? ''] ?? 0);
     for (const [b, d] of Object.entries(e.delayIfWon ?? {})) if (opts.won?.[b]) t += d as number;
-    return { ...e, t };
+    return { ...e, t, units: e.units?.filter(has) };
   }).sort((a: any, b: any) => a.t - b.t);
   const sim: Sim = { s, scn, tu, tl };
 
