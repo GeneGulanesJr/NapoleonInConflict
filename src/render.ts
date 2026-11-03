@@ -47,6 +47,8 @@ export function detailPixels() {
   ch.forEach((c, k) => { let m = 0; for (const v of c) m += v; m = m / c.length - 0.5; for (let i = 0; i < c.length; i++) px[i * 4 + k] = Math.max(0, Math.min(255, Math.round((c[i] - m) * 255))); });
   return px;
 }
+/** Integer upscale for a window H physical pixels tall. Guide floors (always >= 270 rows); the rest round, so a ~950px window on a 1080p screen gets ~475 rows, not full resolution. */
+export const upscale = (quality: number, H: number) => quality === 0 ? Math.max(2, Math.floor(H / 270)) : quality === 1 ? Math.max(2, Math.round(H / 360)) : quality === 2 ? Math.max(1, Math.round(H / 540)) : Math.max(1, Math.ceil(H / 1440));
 const TILT = (35 * Math.PI) / 180, ISO = Math.PI / 4, CAM_D = 300, ZOOM_K = 0.36, STOPS = [28, 45, 64, 90, 130, 190, 280, 420];
 
 // flat-coloured geometry helpers (vertex colours, non-indexed so toon steps stay crisp)
@@ -639,16 +641,17 @@ export function createView(host: HTMLElement) {
 
   type Flash = { x: number; y: number; z: number; r: number; c: THREE.Color; age: number; life: number; w: number };
   const flashes: Flash[] = [], FLC = [new THREE.Color('#ffd45a'), new THREE.Color('#ffb23e'), new THREE.Color('#e0601f')];
-  const flash = (x: number, y: number, z: number, r: number, c: number, life: number, w: number) => { if (flashes.length < 48) flashes.push({ x, y, z, r, c: FLC[c], age: 0, life, w }); };
+  // no cap: flashes live 0.12-0.5 s and only the best 16 reach the GPU, so a far volley can't crowd out a near cannon
+  const flash = (x: number, y: number, z: number, r: number, c: number, life: number, w: number) => flashes.push({ x, y, z, r, c: FLC[c], age: 0, life, w });
   function lightFlashes(dt: number) {
     const boost = 1 + 0.7 * Math.max(0, 1 - atm.sun / 2) + 0.3 * atm.tod; // read more at dusk and in storms
     for (let i = flashes.length - 1; i >= 0; i--) if ((flashes[i].age += dt) >= flashes[i].life) flashes.splice(i, 1);
-    const str = (f: Flash) => { const u = f.age / f.life, a = u < 0.15 ? u / 0.15 : (1 - u) / 0.85; return f.w * a * a / (1 + (Math.hypot(f.x - cam.x, f.z - cam.z) / 70) ** 2); }; // fast attack, quick decay, dimmer far from camera
-    const live = flashes.map(f => [str(f), f] as const).sort((a, b) => b[0] - a[0]);
+    // [fade, nearness, flash]: fast attack, quick decay; ranked by fade * nearness to the camera
+    const live = flashes.map((f) => { const u = f.age / f.life, a = u < 0.15 ? u / 0.15 : (1 - u) / 0.85; return [f.w * a * a, 1 / (1 + (Math.hypot(f.x - cam.x, f.z - cam.z) / 70) ** 2), f] as const; }).sort((p, q) => q[0] * q[1] - p[0] * p[1]);
     for (let i = 0; i < FL; i++) {
       const l = live[i]; if (!l) { flC[i].set(0, 0, 0); continue; }
-      const f = l[1], u = f.age / f.life, a = u < 0.15 ? u / 0.15 : (1 - u) / 0.85;
-      flP[i].set(f.x, f.y, f.z, f.r); flC[i].set(f.c.r, f.c.g, f.c.b).multiplyScalar(f.w * a * a * boost * (0.6 + 0.4 / (1 + (Math.hypot(f.x - cam.x, f.z - cam.z) / 70) ** 2)));
+      const [fade, near, f] = l;
+      flP[i].set(f.x, f.y, f.z, f.r); flC[i].set(f.c.r, f.c.g, f.c.b).multiplyScalar(fade * boost * (0.6 + 0.4 * near));
     }
   }
 
@@ -947,7 +950,7 @@ export function createView(host: HTMLElement) {
     const w = host.clientWidth || innerWidth, h = host.clientHeight || innerHeight;
     dpr = devicePixelRatio || 1; const W = w * dpr, H = h * dpr; // pick S in physical pixels so each buffer pixel covers whole screen pixels at any OS display scaling
     hs = Math.max(2, Math.round(h / 360)); // HUD grid: 640x360 at 720p, 1080p and 1440p alike (CSS pixels, so browser zoom still enlarges it)
-    S = quality === 0 ? Math.max(2, Math.floor(H / 270)) : quality === 1 ? Math.max(2, Math.round(H / 360)) : quality === 2 ? Math.max(1, Math.round(H / 540)) : Math.max(1, Math.ceil(H / 1440)); // round, not floor: a ~950px browser window on a 1080p screen gets ~475 rows, not full resolution
+    S = upscale(quality, H);
     const sm = quality >= 2 ? 4096 : 2048;
     if (sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); sun.shadow.map?.dispose(); (sun.shadow as any).map = null; } // finer shadows at High and Native
     bw = Math.ceil(W / S); bh = Math.ceil(H / S);

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { WebSocket } from 'ws';
 import { applyResult, type CampaignState } from '../src/sim/roster.ts';
+import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
 import { createSim, step, command } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
@@ -113,6 +114,13 @@ test('applyResult drops destroyed regiments, heals survivors, advances the campa
   assert.equal(c.roster.length, 3, 'input is not mutated');
   const n2 = applyResult(n1, camp, 'b', { result: { winner: 1 }, out: [] });
   assert.equal(n2.ended, 'waterloo_loss');
+});
+
+// ---------------------------------------------------------------- render resolution per monitor
+test('upscale keeps every monitor near its quality row target', () => {
+  // [quality, physical window height, expected upscale]: High rounds, so a browser window on 1080p is not rendered at full res
+  for (const [q, H, s] of [[2, 950, 2], [2, 1080, 2], [2, 1300, 2], [2, 912, 2], [2, 960, 2], [2, 1900, 4], [2, 2000, 4], [3, 1440, 1], [3, 2160, 2], [1, 1080, 3], [0, 950, 3], [0, 400, 2]]) assert.equal(upscale(q, H), s, `quality ${q}, ${H}px`);
+  for (let H = 540; H <= 2160; H += 7) assert.ok(H / upscale(0, H) >= 270, `guide keeps >= 270 rows at ${H}px`);
 });
 
 // ---------------------------------------------------------------- multiplayer server
