@@ -249,9 +249,10 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const vis = (u: any) => !u.dead && (u.side === me || !st.fog || st.seen?.[me]?.includes(u.id));
     const g = mouse.view && mouse.in && !drag && !rdrag ? view.ground(mouse.x, mouse.y) : null;
     const u = g && (unitAt(g, vis) ?? view.pickUnit(st, mouse.x, mouse.y, vis, 24));
+    view.setHover(u ? u.id : null); // the hovered regiment shows its full plate
     if (!u) { tip.style.display = 'none'; return; }
     const T = TUNING.types[u.type], inf = u.type === 'line' || u.type === 'guard';
-    const ls = [`<b style="color:${SIDE_COLOR[u.side]}">${esc(u.name)}</b>`, `${T.label}${inf ? ` · ${u.form}` : ''}`, `Men ${Math.round(u.men)}/${u.maxMen} · Morale ${Math.max(0, Math.round((u.morale / u.maxMorale) * 100))}%`];
+    const ls = [`<b style="color:${u.side === me ? '#4f86ff' : '#e8463a'}">${esc(u.name)}</b>`, `${T.label}${inf ? ` · ${u.form}` : ''}`, `Men ${Math.round(u.men)}/${u.maxMen} · Morale ${Math.max(0, Math.round((u.morale / u.maxMorale) * 100))}%`];
     if (u.vet) ls.push(`${'*'.repeat(u.vet)} ${VET[u.vet] ?? ''}`);
     if (u.garrison != null) ls.push(`Garrison: ${esc(scn.map.villages?.[u.garrison]?.name ?? 'farm')}`);
     if (u.routed) ls.push('<i class="no">Routed</i>');
@@ -396,6 +397,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   const keydown = (e: KeyboardEvent) => {
     unlock();
     if (intro) { skipIntro(); return; }
+    if (e.key === 'Alt') { e.preventDefault(); view.setShowAll(true); return; } // hold Alt: every regiment's full plate (preventDefault keeps the browser menu from grabbing focus)
     if (e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); setSel(myUnits().filter((u: any) => !u.routed).map((u: any) => u.id)); return; } // not the browser's select-all
     if (e.key === '?' || e.code === 'F10') { e.preventDefault(); toggleHelp(); return; }
     keys.add(e.code);
@@ -449,9 +451,9 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const u = idle[idleIx++ % idle.length];
     setSel([u.id]); view.flyTo(u.x, u.z, undefined, 600);
   }
-  const keyup = (e: KeyboardEvent) => { keys.delete(e.code); if (e.code === 'KeyA' && selection.length && performance.now() - aDown < 200) startTargeting('amove'); }; // a tap of A: attack-move
+  const keyup = (e: KeyboardEvent) => { keys.delete(e.code); if (e.key === 'Alt') { e.preventDefault(); view.setShowAll(false); } if (e.code === 'KeyA' && selection.length && performance.now() - aDown < 200) startTargeting('amove'); }; // a tap of A: attack-move
   addEventListener('keydown', keydown); addEventListener('keyup', keyup);
-  const onOut = (e: MouseEvent) => { if (!e.relatedTarget) mouse.in = false; }, onBlur = () => { mouse.in = false; keys.clear(); }; // the pointer left the window: no edge scrolling
+  const onOut = (e: MouseEvent) => { if (!e.relatedTarget) mouse.in = false; }, onBlur = () => { mouse.in = false; keys.clear(); view.setShowAll(false); }; // the pointer left the window: no edge scrolling
   document.addEventListener('mouseout', onOut); addEventListener('blur', onBlur);
   const help = $<HTMLElement>(hud, '#help');
   const toggleHelp = () => { help.style.display = help.style.display === 'none' ? '' : 'none'; };
