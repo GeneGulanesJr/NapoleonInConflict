@@ -211,10 +211,11 @@ export function deploy(sim: Sim, side: number, type: string): boolean {
   if (!T || (sd.reserves[type] ?? 0) <= 0 || sd.rp < T.cost || sim.s.over) return false;
   sd.rp -= T.cost;
   sd.reserves[type]--;
-  const p = entryPoint(sim, side);
+  // arrive at the objective we hold nearest our entry (not one under attack); with none, march on from the map edge
+  const g = sim.scn.entry[side], base = sim.s.zones.filter((z: any) => z.owner === side && !z.contested).sort((a: any, b: any) => Math.hypot(a.x - g.x, a.z - g.z) - Math.hypot(b.x - g.x, b.z - g.z))[0];
+  const p = base ? { x: base.x + (rand(sim.s) - 0.5) * base.r, z: base.z } : entryPoint(sim, side);
   const u = spawn(sim, side, { type, name: `Reserve ${T.label}`, x: p.x, z: p.z });
-  const g = sim.scn.entry[side];
-  u.tx = g.x; u.tz = g.z + (side === 0 ? -25 : 25);
+  if (!base) { u.tx = g.x; u.tz = g.z + (side === 0 ? -25 : 25); }
   log(sim, `${side === 0 ? 'French' : 'Coalition'} reserve arrives: ${T.label}.`);
   ev(sim, { k: 'arrive', side, names: [u.name], types: [type] });
   return true;

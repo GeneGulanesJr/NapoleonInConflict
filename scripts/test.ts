@@ -126,6 +126,20 @@ test('replenishing on an objective we hold (a depot) trickles men in at the depl
   assert.equal(home.refill, false, 'the order clears itself once full');
 });
 
+test('a reserve arrives at the objective we hold nearest our entry, skipping one under attack, else at the map edge', () => {
+  const sim = arena((fr, co) => [fr[0], Object.assign(co[0], { x: 170, z: 170 })]);
+  const sd = sim.s.side[0], zone = (id: string) => sim.s.zones.find((z: any) => z.id === id);
+  sim.s.zones.forEach((z: any) => Object.assign(z, { owner: ['pp', 'pi', 'ge'].includes(z.id) ? 0 : null, contested: false })); // pp is nearest the French entry, then pi, then ge
+  sd.reserves = { line: 3 }; sd.rp = 1e6;
+  const deployed = () => { command(sim, 0, { c: 'deploy', type: 'line' }); return sim.s.units[sim.s.units.length - 1]; };
+  const at = (u: any, z: any) => Math.hypot(u.x - z.x, u.z - z.z) < z.r;
+  const a = deployed(); assert.ok(at(a, zone('pp')) && a.tx == null, `at the nearest held objective, standing (${a.x.toFixed(0)}, ${a.z.toFixed(0)})`);
+  zone('pp').contested = true;
+  const b = deployed(); assert.ok(at(b, zone('pi')), `the contested one is skipped (${b.x.toFixed(0)}, ${b.z.toFixed(0)})`);
+  sim.s.zones.forEach((z: any) => (z.owner = null));
+  const c = deployed(); assert.ok(c.z === sim.scn.entry[0].z && c.tx != null, 'holding nothing, it marches on from the entry');
+});
+
 test('the war chest is finite: RP comes only from objectives held and stops at the cap; the replacement pool runs dry', () => {
   let a: any, b: any;
   const sim = arena((fr, co) => { [a, b] = fr.filter((u) => u.type === 'line'); return [a, b, Object.assign(co[0], { x: 170, z: 170 })]; });
