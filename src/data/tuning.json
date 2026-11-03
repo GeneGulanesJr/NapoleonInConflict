@@ -1,5 +1,6 @@
 {
   "_note": "All gameplay numbers live here. Speeds are world units/s, ranges world units, reload seconds. power = casualties per man per volley at point blank.",
+  "hold": { "_note": "posted: foot or guns standing still for `after` seconds take `fire` x casualties and `morale` x morale loss, and get +`shock` on the charge morale test", "after": 15, "fire": 0.85, "morale": 0.8, "shock": 0.1 },
   "types": {
     "line": {
       "label": "Line Infantry",

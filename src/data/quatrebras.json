@@ -536,7 +536,7 @@
   ],
   "rpStart": [
     30,
-    0
+    40
   ],
   "reserves": [
     {
@@ -706,7 +706,7 @@
   ],
   "timeline": [
     {
-      "t": 200,
+      "t": 90,
       "type": "reinforce",
       "side": 1,
       "units": [
@@ -734,7 +734,7 @@
       "msg": "Picton's 5th Division marches down the Brussels road and lines the Namur road!"
     },
     {
-      "t": 380,
+      "t": 220,
       "type": "reinforce",
       "side": 1,
       "units": [
@@ -780,7 +780,7 @@
       "msg": "D'Erlon's I Corps is seen marching in the distance, then recalled by the Emperor. It will not arrive."
     },
     {
-      "t": 640,
+      "t": 400,
       "type": "reinforce",
       "side": 1,
       "units": [
@@ -809,5 +809,9 @@
       "spreadZ": 1.6,
       "msg": "British Guards come up the Nivelles road and push into the Bossu wood!"
     }
+  ],
+  "strength": [
+    1,
+    1.4
   ]
 }

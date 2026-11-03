@@ -1632,13 +1632,15 @@
       "units": [
         {
           "type": "line",
-          "n": 3,
+          "n": 5,
           "x": 0,
           "z": 0,
           "names": [
             "Bülow: Hiller's Brigade",
             "Bülow: Hacke's Brigade",
-            "Bülow: Ryssel's Brigade"
+            "Bülow: Ryssel's Brigade",
+            "Bülow: Losthin's Brigade",
+            "Pirch I: Tippelskirch's Brigade"
           ],
           "nat": "pr"
         },
@@ -1657,6 +1659,14 @@
           "z": 0,
           "name": "Bülow's Battery",
           "nat": "pr"
+        },
+        {
+          "type": "lancer",
+          "n": 1,
+          "x": 0,
+          "z": 0,
+          "nat": "pr",
+          "name": "Prussian Uhlans"
         }
       ],
       "entry": {
@@ -1681,15 +1691,24 @@
       "units": [
         {
           "type": "line",
-          "n": 3,
+          "n": 4,
           "x": 0,
           "z": 0,
           "names": [
             "Zieten: Steinmetz",
             "Zieten: Pirch II",
-            "Zieten: Jagow"
+            "Zieten: Jagow",
+            "Zieten: Donnersmarck"
           ],
           "nat": "pr"
+        },
+        {
+          "type": "cuirassier",
+          "n": 1,
+          "x": 0,
+          "z": 0,
+          "nat": "pr",
+          "name": "Prussian Cuirassiers"
         }
       ],
       "entry": {
@@ -1741,6 +1760,6 @@
   ],
   "strength": [
     1,
-    0.95
+    1
   ]
 }

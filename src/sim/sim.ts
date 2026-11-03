@@ -90,7 +90,7 @@ export function spawn(sim: Sim, side: number, d: any) {
     rid: d.rid ?? null, dead: false, via: null as { x: number; z: number } | null,
     spReady: 0, spUntil: 0, spKind: '', acc: 0, accT: 0,
     xp: d.xp ?? 0, vet: rankOf(sim.tu, d.xp ?? 0), stance: 'hold', auto: false, sq: false, cavSeen: -99, queue: [] as number[][],
-    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false, march: false, draftFor: null as number | null, refilled: 0,
+    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false, march: false, draftFor: null as number | null, refilled: 0, still: 0,
     fat: 0, mcap: T.morale, bay: null as number | null, tested: false, limbered: false, limT: 0, // fatigue 0..1, morale ceiling, bayonet-charge target, charge morale test done, guns hooked to their teams, seconds left limbering/unlimbering
   };
   sim.s.units.push(u);
@@ -289,7 +289,7 @@ function damage(sim: Sim, u: any, cas: number, moraleScale = 1, att?: any) {
   u.men -= cas;
   s.side[u.side].lost += cas;
   s.side[1 - u.side].score += cas * tu.casualtyScore;
-  u.morale -= (cas / u.maxMen) * tu.moraleLoss * moraleScale * (1 - u.vet * tu.veterancy.resist) * (u.aura ? tu.commanderAura.resist : 1) * (u.garrison != null ? tu.garrison.morale : 1);
+  u.morale -= (cas / u.maxMen) * tu.moraleLoss * moraleScale * (1 - u.vet * tu.veterancy.resist) * (u.aura ? tu.commanderAura.resist : 1) * (u.garrison != null ? tu.garrison.morale : 1) * (posted(u, tu) ? tu.hold.morale : 1);
   u.hurt = 0; u.acc += cas;
   if (att && !att.dead) { // inflicting casualties earns rank
     att.xp += cas;
@@ -335,6 +335,8 @@ function meleeMult(a: any, d: any): number {
   if (d.type === 'artillery') return 2;
   return 1;
 }
+/** Posted: formed foot or guns that have stood still a while (tuning.hold.after) have dressed their ranks, found the folds of the ground and lie down between volleys */
+export const posted = (u: any, tu: any) => (u.still ?? 0) >= tu.hold.after && !u.routed && !tu.types[u.type].cav;
 /** Morale ceiling: a regiment that has lost men can't get back to its full spirit (tuning.morale.cap). */
 const mcap = (u: any, tu: any) => u.maxMorale * (1 - tu.morale.cap * (1 - Math.min(1, u.men / u.maxMen)));
 /** Wheel u toward angle a at its rate (tuning.turn); returns the angle still left to turn. */
@@ -347,7 +349,7 @@ function face(u: any, a: number, dt: number, tu: any): number {
 function steady(sim: Sim, d: any, a: any): boolean {
   const tu = sim.tu, k = tu.shock, cav = tu.types[a.type].cav && !tu.types[d.type].cav && d.form !== 'square';
   const st = Math.max(0, d.morale) / d.maxMorale - k.loss * (1 - d.men / d.maxMen) - k.fat * d.fat + (d.form === 'square' ? k.square : 0) + (d.garrison != null ? k.garrison : 0) - k.flank[aspect(a, d)]
-    - k.size * Math.max(0, Math.min(1, a.men / Math.max(1, d.men) - 1)) - k.fresh * Math.max(0, d.fat - a.fat) + k.vet * d.vet + (d.aura ? k.aura : 0) - (cav ? k.cav : 0) + k.spread * (rand(sim.s) - 0.5);
+    - k.size * Math.max(0, Math.min(1, a.men / Math.max(1, d.men) - 1)) - k.fresh * Math.max(0, d.fat - a.fat) + k.vet * d.vet + (d.aura ? k.aura : 0) - (cav ? k.cav : 0) + (posted(d, tu) ? tu.hold.shock : 0) + k.spread * (rand(sim.s) - 0.5);
   return st >= k.pass;
 }
 /** A charge closes on d: d breaks, or stands and gives a closing volley that may throw the charger (a) back. */
@@ -397,7 +399,7 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
   const asp = aspect(u, tg);
   if (asp && s.t - tg.flankT > 6) { tg.flankT = s.t; ev(sim, { k: 'flank', x: tg.x, z: tg.z, side: tg.side, kind: asp }); chron(sim, 1 - tg.side, `${asp === 2 ? 'Rear' : 'Flank'} fire on ${tg.name}`); }
   let cas = u.men * T.power * rf * fm * dmgForm * (tg.garrison != null ? tu.garrison.cover : featureAt(scn, tg.x, tg.z).cover) * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.fire) * smokeFactor(sim, tg.x, tg.z) * W.fire * elev
-    * (0.5 + 0.5 * Math.max(0, u.morale) / u.maxMorale) * (1 - tu.fatigue.fire * u.fat) * (0.8 + 0.4 * rand(s));
+    * (0.5 + 0.5 * Math.max(0, u.morale) / u.maxMorale) * (1 - tu.fatigue.fire * u.fat) * (posted(tg, tu) ? tu.hold.fire : 1) * (0.8 + 0.4 * rand(s));
   if (u.type === 'artillery' && close) cas *= tu.canisterMult * (canister ? 1.4 : 1);
   if (volley) { cas *= 2.2; u.spUntil = 0; }
   if (miss) ev(sim, { k: 'boom', x: tg.x + (rand(s) - 0.5) * 16, z: tg.z + (rand(s) - 0.5) * 16 }); // the ball ploughs up the ground nearby
@@ -639,6 +641,7 @@ export function step(sim: Sim, dt: number) {
   // morale: recovery, routs
   for (const u of live) {
     if (u.dead) continue;
+    u.still = u.mv || u.routed ? 0 : u.still + dt; // seconds standing in place: after tuning.hold.after the regiment is posted (see posted())
     const half2 = half - 1;
     u.x = Math.max(-half2, Math.min(half2, u.x)); u.z = Math.max(-half2, Math.min(half2, u.z));
     if (u.acc >= 3 && s.t - u.accT > 0.8) { ev(sim, { k: 'dmg', x: u.x, z: u.z, side: u.side, n: Math.round(u.acc) }); u.acc = 0; u.accT = s.t; }

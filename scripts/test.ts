@@ -15,6 +15,7 @@ const data = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.js
 /** a bare quatrebras sim on flat open ground with just these units (French a, Coalition b) plus a far-off foe so the battle doesn't end */
 function arena(setup: (fr: any[], co: any[]) => any[], map?: any) {
   const sim = createSim(data('quatrebras'), data('tuning'), { seed: 1 });
+  for (const u of sim.s.units) u.men = u.maxMen = sim.tu.types[u.type].men; // nor on the scenario's strength balance: every regiment at its standard size
   const fr = sim.s.units.filter((u: any) => u.side === 0), co = sim.s.units.filter((u: any) => u.side === 1);
   sim.s.units = setup(fr, co).map((u) => Object.assign(u, { tx: null, tz: null, vet: 0, busy: 0 })); sim.tl = [];
   sim.s.side.forEach((sd: any) => (sd.reserves = {})); // bots must not deploy or call in aid mid-test
@@ -127,6 +128,17 @@ test('the war chest is finite: RP comes only from objectives held and stops at t
   run(sim, 40);
   assert.ok(Math.round(a.men + b.men) === 700 && sd.pool < 1, `only the 100-man pool came in (${Math.round(a.men + b.men - 600)} men)`);
   assert.ok(sim.tu.refillRise > 0 && Math.abs(manPrice(sim.tu, { type: 'line', maxMen: 540, refilled: 270 }) / manPrice(sim.tu, { type: 'line', maxMen: 540, refilled: 0 }) - 1.5) < 1e-9, 'half a regiment of replacements already in: +50% per man');
+});
+
+test('a posted regiment (standing still a while) takes fewer casualties than one that keeps shifting', () => {
+  const hit = (settled: boolean) => {
+    let tg: any;
+    const sim = arena((fr, co) => [Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: -12, facing: 0, form: 'line', morale: 9999, maxMorale: 9999 }), tg = Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 0, facing: Math.PI, form: 'line', morale: 9999, maxMorale: 9999, still: settled ? 99 : 0 })]);
+    run(sim, 40, undefined, () => { if (!settled) tg.still = 0; });
+    return tg.maxMen - tg.men;
+  };
+  const p = hit(true), m = hit(false);
+  assert.ok(p > 0 && p < m * 0.93, `posted lost ${p.toFixed(0)}, shifting lost ${m.toFixed(0)}`);
 });
 
 test('off our objectives a draft marches in from our map edge at double cost and joins the regiment', () => {
