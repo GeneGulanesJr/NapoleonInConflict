@@ -32,9 +32,12 @@ function think(sim: Sim, side: number, mem: any) {
   const enemies = s.units.filter((u: any) => u.side !== side && !u.dead && sv(u));
   const foes = enemies.filter((u: any) => !u.routed);
 
-  // reserves: spend points as soon as something is affordable
+  // replenish weak regiments resting on our objectives first (they keep their veterancy), then spend what is left on reserves
+  const onOurs = (u: any) => s.zones.some((z: any) => z.owner === side && dist(u, z) < z.r);
+  const weak = my.filter((u: any) => u.type !== 'commander' && !u.refill && u.men < 0.6 * u.maxMen && u.eng == null && onOurs(u));
+  if (weak.length && sd.rp > 5) command(sim, side, { c: 'replenish', ids: weak.map((u: any) => u.id) });
   const afford = Object.keys(sd.reserves).filter((t) => sd.reserves[t] > 0 && tu.types[t].cost <= sd.rp);
-  if (afford.length && s.t > 15) command(sim, side, { c: 'deploy', type: afford[Math.floor(rand(s) * afford.length)] });
+  if (afford.length && s.t > 15 && !my.some((u: any) => u.refill && onOurs(u))) command(sim, side, { c: 'deploy', type: afford[Math.floor(rand(s) * afford.length)] });
 
   // tactical aid
   for (const name of scn.abilities?.[side] ?? []) {
