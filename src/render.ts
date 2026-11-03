@@ -418,7 +418,7 @@ export function createView(host: HTMLElement) {
     for (const z of s.zones) {
       const N = 56, pts: number[] = [], pts2: number[] = [];
       for (let k = 0; k < N; k++) {
-        const a0 = (k / N) * Math.PI * 2, a1 = ((k + 1) / N) * Math.PI * 2;
+        const a0 = (k / N - 0.25) * Math.PI * 2, a1 = ((k + 1) / N - 0.25) * Math.PI * 2; // from north, clockwise: ring2's draw range is the capture progress
         const q = (a: number, r: number): [number, number, number] => { const x = z.x + Math.cos(a) * r, zz = z.z + Math.sin(a) * r; return [x, heightAt(s, x, zz) + 0.45, zz]; };
         const a = q(a0, z.r - 0.8), b = q(a0, z.r), c = q(a1, z.r), d = q(a1, z.r - 0.8);
         (k & 1 ? pts2 : pts).push(...a, ...b, ...c, ...a, ...c, ...d);
@@ -578,7 +578,8 @@ export function createView(host: HTMLElement) {
 
   // per regiment: smoothed centre and facing, its speed, and per man MS floats: x, z, facing, vx, vz, gait phase
   const MS = 6;
-  type Vis = { x: number; z: number; f: number; m: Float32Array; form: string; rs: number; n?: number; side: number; kind: number };
+  type Vis = { x: number; z: number; f: number; m: Float32Array; form: string; rs: number; n?: number; side: number; kind: number; seenT?: number };
+  const GHOST = 30; // fog of war: seconds an enemy's plate lingers where it was last seen
   // crowd: last frame's men (and the houses) in a flat grid, counting-sorted by cell, so each man only looks at his neighbours to shoulder them apart
   const CG = 2.4, CMAX = 9000, cX = new Float32Array(CMAX), cZ = new Float32Array(CMAX), cR = new Float32Array(CMAX), cU = new Int32Array(CMAX), cI = new Int32Array(CMAX), cS = new Int8Array(CMAX), cCell = new Int32Array(CMAX), cOrd = new Int32Array(CMAX);
   let cN = 0, cW = 1, cStart = new Int32Array(2), cFill = new Int32Array(1), houseXZ: number[] = [];
@@ -790,7 +791,9 @@ export function createView(host: HTMLElement) {
       const c = z.contested ? ((Math.floor(clock * 3) & 1) ? 0x6f9bff : 0xff6a5c) : z.owner === 0 ? 0x6f9bff : z.owner === 1 ? 0xff6a5c : 0xe9e2cf;
       (o.ring.material as THREE.MeshBasicMaterial).color.setHex(c);
       (o.ring.material as THREE.MeshBasicMaterial).opacity = refillHint && z.owner === viewer ? 0.55 + 0.4 * Math.sin(clock * 6) : 0.95; // pulse: hurt regiments can replenish here
-      (o.ring2.material as THREE.MeshBasicMaterial).color.setHex(c);
+      const p = z.p ?? (z.owner === 0 ? 1 : z.owner === 1 ? -1 : 0); // capture progress -1 (Coalition) .. 1 (French); the backdrop's raw zones have none
+      (o.ring2.material as THREE.MeshBasicMaterial).color.setHex(p > 0 ? 0x6f9bff : 0xff6a5c);
+      o.ring2.geometry.setDrawRange(0, Math.round(Math.abs(p) * 28) * 6); // the dashes fill clockwise from north as a side takes hold (28 dashes of 6 vertices)
       (o.flag.material as THREE.MeshToonMaterial).color.setHex(c);
     }
 
@@ -808,9 +811,22 @@ export function createView(host: HTMLElement) {
     nb = 0; const bTh = Math.max(0.45, ((cam.dist * ZOOM_K) / bh) * 1.5); // base ribbon: at least ~1.5 buffer pixels wide at any zoom
     for (const u of state.units) {
       live.add(u.id);
-      if (seenSet && u.side !== viewer && !seenSet.has(u.id)) { const hp = plateMap.get(u.id); if (hp) hp.el.style.display = 'none'; vis.delete(u.id); continue; }
+      if (seenSet && u.side !== viewer && !seenSet.has(u.id)) { // fog of war: not drawn, but its plate lingers faintly where it was last seen
+        const hp = plateMap.get(u.id), lv = vis.get(u.id), ago = state.t - (lv?.seenT ?? -1e9);
+        if (hp && lv && ago < GHOST) {
+          v3.set(lv.x, heightAt(scn, lv.x, lv.z) + 4.5 * FS, lv.z).project(camera);
+          const ok = v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
+          hp.el.style.display = ok ? '' : 'none';
+          if (ok) hp.el.style.transform = `translate(${Math.round(((v3.x + 1) / 2) * cw)}px,${Math.round(((1 - v3.y) / 2) * ch)}px) translate(-50%,-100%)`;
+          if (hp.ls !== 'ghost') { hp.el.className = 'plate pip ghost'; hp.ls = 'ghost'; }
+          hp.el.style.opacity = String(Math.round((1 - ago / GHOST) * 10) / 10);
+        } else if (hp) hp.el.style.display = 'none';
+        continue;
+      }
       let v = vis.get(u.id);
+      if (v && state.t - (v.seenT ?? state.t) > 0.5) { v = undefined; plateMap.get(u.id)?.el.style.removeProperty('opacity'); } // back in sight after a while: place it afresh instead of sliding from where it was last seen
       if (!v) { v = { x: u.x, z: u.z, f: u.facing, m: new Float32Array(0), form: '', rs: 0, side: u.side, kind: 0 }; vis.set(u.id, v); }
+      v.seenT = state.t;
       const px0 = v.x, pz0 = v.z;
       v.x += (u.x - v.x) * k; v.z += (u.z - v.z) * k;
       v.rs += (Math.hypot(v.x - px0, v.z - pz0) / Math.max(dt, 1e-3) - v.rs) * Math.min(1, dt * 4); // how fast the regiment itself is going
@@ -1114,7 +1130,7 @@ export function createView(host: HTMLElement) {
     hudW = (bw * S) / dpr / hs; hudH = (bh * S) / dpr / hs;
     renderer.setSize(bw, bh, false); rt.setSize(bw, bh); post.uniforms.res.value.set(bw, bh);
     canvas.style.width = (bw * S) / dpr + 'px'; canvas.style.height = (bh * S) / dpr + 'px';
-    const rs = document.documentElement.style; rs.setProperty('--S', String(hs)); rs.setProperty('--u', hs + 'px'); const wide = hudW >= 760; rs.setProperty('--lbl', wide ? 'inline' : 'none'); rs.setProperty('--tp', wide ? '120px' : '6px'); rs.setProperty('--bw', String(Math.ceil(hudW))); rs.setProperty('--bh', String(Math.ceil(hudH))); // HUD and plates are laid out in HUD pixels, scaled by hs
+    const rs = document.documentElement.style; rs.setProperty('--S', String(hs)); rs.setProperty('--u', hs + 'px'); const wide = hudW >= 760; rs.setProperty('--lbl', wide ? 'inline' : 'none'); rs.setProperty('--tp', wide ? '166px' : '6px'); rs.setProperty('--bw', String(Math.ceil(hudW))); rs.setProperty('--bh', String(Math.ceil(hudH))); // HUD and plates are laid out in HUD pixels, scaled by hs
   }
   resize();
   addEventListener('resize', resize);
@@ -1157,6 +1173,6 @@ export function createView(host: HTMLElement) {
     (reticle.material as THREE.MeshBasicMaterial).color.setHex(color);
   }
 
-  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get guide() { return guideOn(); }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, setHover, setShowAll, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
+  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get quality() { return QUALITY[quality].split(':')[0]; }, get guide() { return guideOn(); }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, setHover, setShowAll, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
 }
 export type View = ReturnType<typeof createView>;

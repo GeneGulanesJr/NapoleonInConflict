@@ -2,10 +2,13 @@ import './style.css';
 import { animate, createTimeline, stagger } from 'animejs';
 import { createView } from './render.ts';
 import { runBattle, CONTROLS, type Outcome } from './battle.ts';
-import { localSource, remoteSource } from './game.ts';
+import { localSource, remoteSource, replaySource } from './game.ts';
 import { unlock } from './audio.ts';
+import { settings } from './settings.ts';
+import type { Replay } from './sim/replay.ts';
 import {
-  CAMPAIGN, SCENARIOS, TUNING, newCampaign, load, save, clearSave, applyResult, freshRoster, wonMap, fogOn, setFog, EXTRA_BATTLES, makeSkirmish, type CampaignState,
+  CAMPAIGN, SCENARIOS, TUNING, newCampaign, load, save, clearSave, applyResult, freshRoster, wonMap, EXTRA_BATTLES, makeSkirmish, type CampaignState,
+  loadBattle, saveBattle, clearBattle, type BattleSave, reinforce, recruit, fillCost, recruitCost, prefNum, setPrefNum,
 } from './campaign.ts';
 
 const app = document.getElementById('app')!;
@@ -51,17 +54,25 @@ function title() {
     <p class="sub stag">The Waterloo Campaign — June 1815</p>
     <div class="btns">
       <button class="stag" id="new">New Campaign</button>
-      ${saved ? `<button class="stag" id="cont">Continue Campaign <small>(battle ${Math.min(saved.idx + 1, 5)} of 5)</small></button>` : ''}
+      ${saved ? `<button class="stag" id="cont">Continue Campaign <small>(battle ${Math.min(saved.idx + 1, 5)} of 5${loadBattle(saved) ? ', in progress' : ''})</small></button>` : ''}
       <button class="stag alt" id="quick">Quick Battle</button>
       <button class="stag alt" id="mp">Multiplayer</button>
-      <button class="stag alt" id="fog">Fog of war: ${fogOn() ? 'ON' : 'OFF'}</button>
+      <button class="stag alt" id="set">Settings</button>
     </div>
     <p class="help stag">${CONTROLS.map(([g, ks]) => `<b>${g}</b> ${ks.map(([k, d]) => `${k}: ${d}`).join(' · ')}`).join('<br>')}</p>`, (el) => {
-    el.querySelector<HTMLElement>('#new')!.onclick = () => { unlock(); clearSave(); const c = newCampaign(); save(c); campaignScreen(c); };
+    el.querySelector<HTMLElement>('#new')!.onclick = () => { unlock(); clearSave(); clearBattle(); const c = newCampaign(); save(c); campaignScreen(c); };
     el.querySelector<HTMLElement>('#cont')?.addEventListener('click', () => { unlock(); campaignScreen(saved!); });
     el.querySelector<HTMLElement>('#quick')!.onclick = () => { unlock(); quickScreen(); };
     el.querySelector<HTMLElement>('#mp')!.onclick = () => { unlock(); mpScreen(); };
-    el.querySelector<HTMLElement>('#fog')!.onclick = (e) => { setFog(!fogOn()); (e.currentTarget as HTMLElement).textContent = `Fog of war: ${fogOn() ? 'ON' : 'OFF'}`; };
+    el.querySelector<HTMLElement>('#set')!.onclick = () => { unlock(); settingsScreen(); };
+  });
+}
+
+function settingsScreen() {
+  screen(`<h2 class="stag">Settings</h2><p class="sub stag">Click a setting to change it. Difficulty sets the strength of the army the computer commands.</p>
+    <div class="btns sets stag"></div><div class="btns"><button id="back" class="stag alt">Back</button></div>`, (el) => {
+    settings(el.querySelector<HTMLElement>('.sets')!, view);
+    el.querySelector<HTMLElement>('#back')!.onclick = title;
   });
 }
 
@@ -83,6 +94,13 @@ function campaignScreen(c: CampaignState) {
   for (const u of c.roster) { const b = (byType[u.type] ??= { n: 0, men: 0, max: 0 }); b.n++; b.men += u.men; b.max += u.maxMen; }
   const total = c.roster.reduce((a, u) => a + u.men, 0), totalMax = Object.keys(CAMPAIGN.roster).reduce((a, t) => a + CAMPAIGN.roster[t].length * TUNING.types[t].men, 0);
   const mark: Record<string, string> = { win: '✔', draw: '≈', loss: '✘' };
+  const bs = loadBattle(c), g = c.glory ?? 0; // a battle in progress: resume it (no buying until it is over, its result would overwrite the new men)
+  const shop = (t: string) => { // replacements and new regiments for glory, between battles
+    const fc = fillCost(c, t), rc = recruitCost(t), lost = (byType[t]?.n ?? 0) < CAMPAIGN.roster[t].length;
+    if (bs) return '<span></span><span></span>';
+    return (fc ? `<button data-fill="${t}" class="${g >= 1 ? '' : 'off'}" title="Replacements for the weakest ${TUNING.types[t].label} first, as far as your glory goes">Men ${fc}</button>` : '<span></span>')
+      + (lost ? `<button data-rec="${t}" class="${g >= rc ? '' : 'off'}" title="Raise a destroyed regiment again: full strength, no rank">Raise ${rc}</button>` : '<span></span>');
+  };
   screen(`
     <h2 class="stag">${CAMPAIGN.title}</h2>
     <p class="sub stag">${CAMPAIGN.subtitle}</p>
@@ -94,15 +112,19 @@ function campaignScreen(c: CampaignState) {
       </div>
       <div class="col wide">
         <div class="brief stag"><h3>${scn.title} <small>${scn.date}</small></h3><p>${scn.blurb}</p><p class="hint">${scn.hint}</p><p class="hint">Victory: hold more objectives when time runs out (60% of the verdict, the rest is points banked), or break the enemy army.</p></div>
-        <div class="roster stag"><h4>Your army: ${Math.round((total / totalMax) * 100)}% strength <small>(${c.roster.length} regiments)</small></h4>
-          ${Object.entries(byType).map(([t, b]) => `<div class="rrow"><span>${TUNING.types[t].label} ×${b.n}</span><i><s data-w="${(b.men / b.max) * 100}"></s></i></div>`).join('')}
-          <small>Losses carry over to the next battle; rest restores ${Math.round(CAMPAIGN.healFraction * 100)}% of the missing men.</small></div>
-        <div class="btns row"><button id="go" class="stag">Begin battle</button><button id="back" class="stag alt">Main menu</button></div>
+        <div class="roster stag"><h4>Your army: ${Math.round((total / totalMax) * 100)}% strength <small>(${c.roster.length} regiments) · Glory <b class="glory">${g}</b></small></h4>
+          ${Object.keys(CAMPAIGN.roster).map((t) => { const b = byType[t] ?? { n: 0, men: 0, max: 1 }; return `<div class="rrow buy"><span>${TUNING.types[t].label} ×${b.n}</span><i><s data-w="${(b.men / b.max) * 100}"></s></i>${shop(t)}</div>`; }).join('')}
+          <small>Losses carry over to the next battle; rest restores ${Math.round(CAMPAIGN.healFraction * 100)}% of the missing men. Each battle earns glory (win ${CAMPAIGN.glory.win}, draw ${CAMPAIGN.glory.draw}, loss ${CAMPAIGN.glory.loss}): spend it on replacements, or to raise a destroyed regiment again.${bs ? ' Finish the battle in progress to spend it.' : ''}</small></div>
+        <div class="btns row">${bs ? `<button id="resume" class="stag" title="Carry on from ${Math.floor(bs.s.t / 60)} min in">Resume battle</button><button id="go" class="stag alt">Restart battle</button>` : '<button id="go" class="stag">Begin battle</button>'}<button id="back" class="stag alt">Main menu</button></div>
       </div>
     </div>`, (el) => {
     el.querySelectorAll<HTMLElement>('.rrow s').forEach((s, i) => animate(s, { width: ['0%', `${s.dataset.w}%`], duration: 900, delay: 400 + i * 80, ease: 'outExpo' }));
     el.querySelector<HTMLElement>('#go')!.onclick = () => startCampaignBattle(c);
+    el.querySelector<HTMLElement>('#resume')?.addEventListener('click', () => startCampaignBattle(c, bs!));
     el.querySelector<HTMLElement>('#back')!.onclick = title;
+    const buy = (ok: boolean) => { if (ok) { save(c); campaignScreen(c); } };
+    el.querySelectorAll<HTMLElement>('[data-fill]').forEach((b) => (b.onclick = () => buy(reinforce(c, b.dataset.fill!))));
+    el.querySelectorAll<HTMLElement>('[data-rec]').forEach((b) => (b.onclick = () => buy(recruit(c, b.dataset.rec!))));
   });
 }
 
@@ -115,17 +137,30 @@ function enterBattle(src: any, scn: any, campaign: boolean, onExit: (o: Outcome)
   battle = runBattle(app, view, src, scn, { campaign, onExit: (o) => { battle?.destroy(); battle = null; app.classList.remove('inbattle'); startBackdrop(); onExit(o); } });
 }
 
-function startCampaignBattle(c: CampaignState) {
+function startCampaignBattle(c: CampaignState, resume?: BattleSave) {
   const id = CAMPAIGN.battles[c.idx], scn = SCENARIOS[id];
-  fadeOutMenu(() => {
-    const src = localSource(scn, { roster: c.roster, won: wonMap(c) });
+  if (!resume) clearBattle();
+  const run = () => {
+    const src = localSource(scn, { roster: c.roster, won: wonMap(c), resume: resume?.s });
+    const keep = () => { if (!src.state.over) saveBattle({ id, idx: c.idx, s: src.state }); }; // the battle so far, to resume after quitting or closing the tab
+    const timer = setInterval(keep, 15000);
+    addEventListener('pagehide', keep);
     enterBattle(src, scn, true, (o) => {
-      if (o === 'retry') return startCampaignBattle(c);
+      clearInterval(timer); removeEventListener('pagehide', keep);
+      if (o === 'retry') { resume = undefined; clearBattle(); return run(); }
+      if (o === 'menu') { keep(); return campaignScreen(c); } // "save and quit"
       const next = applyResult(c, id, src.state);
-      save(next);
+      save(next); clearBattle();
+      if (o === 'replay') return watch(src.rec!, scn, () => campaignScreen(next));
       campaignScreen(next);
     });
-  });
+  };
+  fadeOutMenu(run);
+}
+
+/** Watch a recorded battle; back() when done. */
+function watch(rec: Replay, scn: any, back: () => void) {
+  enterBattle(replaySource(rec), scn, false, (o) => (o === 'retry' ? watch(rec, scn, back) : back()));
 }
 
 function endingScreen(c: CampaignState) {
@@ -141,25 +176,24 @@ function endingScreen(c: CampaignState) {
 }
 
 // ------------------------------------------------------------------ quick battle (no campaign effects)
+const SIDES = ['the French', 'the Coalition'];
 function quickScreen() {
   screen(`<h2 class="stag">Quick Battle</h2><p class="sub stag">Fresh full-strength army. Nothing is saved.</p>
-    <div class="btns">${CAMPAIGN.battles.map((b: string) => `<button class="stag" data-b="${b}">${SCENARIOS[b].title} <small>${SCENARIOS[b].date}</small></button>`).join('')}
+    <div class="btns"><button class="stag" id="side">You command: <b>${SIDES[prefNum('nic-side', 0)]}</b></button>
+    ${CAMPAIGN.battles.map((b: string) => `<button class="stag" data-b="${b}">${SCENARIOS[b].title} <small>${SCENARIOS[b].date}</small></button>`).join('')}
     ${EXTRA_BATTLES.map((b: string) => `<button class="stag alt" data-b="${b}">${SCENARIOS[b].title} <small>${SCENARIOS[b].date}</small></button>`).join('')}
     <button class="stag alt" id="rnd">Random skirmish <small>new map every time</small></button>
     <button class="stag alt" id="back">Back</button></div>`, (el) => {
-    el.querySelector<HTMLElement>('#rnd')!.onclick = () => {
-      const scn = makeSkirmish(Date.now() & 0x7fffffff);
-      fadeOutMenu(() => { const src = localSource(scn, { roster: freshRoster() }); enterBattle(src, scn, false, () => quickScreen()); });
-    };
-    el.querySelectorAll<HTMLElement>('[data-b]').forEach((b) => (b.onclick = () => {
-      const scn = SCENARIOS[b.dataset.b!];
-      fadeOutMenu(() => {
-        const src = localSource(scn, { roster: freshRoster() });
-        enterBattle(src, scn, false, () => quickScreen());
-      });
-    }));
+    el.querySelector<HTMLElement>('#side')!.onclick = (e) => { setPrefNum('nic-side', 1 - prefNum('nic-side', 0)); (e.currentTarget as HTMLElement).querySelector('b')!.textContent = SIDES[prefNum('nic-side', 0)]; };
+    el.querySelector<HTMLElement>('#rnd')!.onclick = () => { const scn = makeSkirmish(Date.now() & 0x7fffffff); fadeOutMenu(() => quickBattle(scn)); };
+    el.querySelectorAll<HTMLElement>('[data-b]').forEach((b) => (b.onclick = () => fadeOutMenu(() => quickBattle(SCENARIOS[b.dataset.b!]))));
     el.querySelector<HTMLElement>('#back')!.onclick = title;
   });
+}
+/** A quick battle on the chosen side (the campaign roster names only exist for the French); "play again" keeps the map, a random skirmish included. */
+function quickBattle(scn: any) {
+  const side = prefNum('nic-side', 0) ? 1 : 0, src = localSource(scn, { roster: side ? undefined : freshRoster(), side });
+  enterBattle(src, scn, false, (o) => (o === 'retry' ? quickBattle(scn) : o === 'replay' ? watch(src.rec!, scn, quickScreen) : quickScreen()));
 }
 
 // ------------------------------------------------------------------ multiplayer

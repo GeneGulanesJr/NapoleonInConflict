@@ -8,7 +8,7 @@ import genappe from './data/genappe.json';
 import waterloo from './data/waterloo.json';
 import hougoumont from './data/hougoumont.json';
 import wavre from './data/wavre.json';
-import { freshRoster as buildRoster, applyResult as applyBattle, type RosterUnit, type CampaignState } from './sim/roster.ts';
+import { freshRoster as buildRoster, applyResult as applyBattle, reinforce as buyMen, recruit as buyRegiment, fillCost as menCost, recruitCost as regimentCost, type RosterUnit, type CampaignState } from './sim/roster.ts';
 
 export const TUNING: any = tuning;
 export const CAMPAIGN: any = camp;
@@ -21,7 +21,20 @@ const KEY = 'nic-campaign-v2';
 
 export const freshRoster = (): RosterUnit[] => buildRoster(CAMPAIGN, TUNING);
 export const applyResult = (c: CampaignState, id: string, state: any): CampaignState => applyBattle(c, CAMPAIGN, id, state);
-export const newCampaign = (): CampaignState => ({ idx: 0, results: {}, roster: freshRoster(), ended: null });
+export const newCampaign = (): CampaignState => ({ idx: 0, results: {}, roster: freshRoster(), ended: null, glory: 0 });
+export const reinforce = (c: CampaignState, type: string) => buyMen(c, TUNING, type);
+export const recruit = (c: CampaignState, type: string) => buyRegiment(c, CAMPAIGN, TUNING, type);
+export const fillCost = (c: CampaignState, type: string) => menCost(c, TUNING, type);
+export const recruitCost = (type: string) => regimentCost(CAMPAIGN, TUNING, type);
+
+/** A campaign battle in progress, saved every few seconds so closing the tab doesn't lose it: the battle, the campaign step it belongs to, and the sim state. */
+const BKEY = 'nic-battle-v1';
+export type BattleSave = { id: string; idx: number; s: any };
+export function loadBattle(c: CampaignState): BattleSave | null {
+  try { const b = JSON.parse(localStorage.getItem(BKEY) ?? 'null'); return b && b.idx === c.idx && b.id === CAMPAIGN.battles[c.idx] ? b : null; } catch { return null; }
+}
+export function saveBattle(b: BattleSave) { try { localStorage.setItem(BKEY, JSON.stringify(b)); } catch { /* private mode or full: the battle just can't be resumed */ } }
+export function clearBattle() { try { localStorage.removeItem(BKEY); } catch { /* ignore */ } }
 
 export function load(): CampaignState | null {
   try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch { return null; }
@@ -37,5 +50,10 @@ export const setFog = (on: boolean) => setPref('nic-fog', on);
 /** on/off player settings remembered across visits (private mode just forgets them) */
 export function pref(k: string, def: boolean) { try { const v = localStorage.getItem(k); return v == null ? def : v === '1'; } catch { return def; } }
 export function setPref(k: string, on: boolean) { try { localStorage.setItem(k, on ? '1' : '0'); } catch { /* ignore */ } }
+/** numeric player settings (volumes, difficulty, side) */
+export function prefNum(k: string, def: number) { try { const v = Number(localStorage.getItem(k) ?? NaN); return Number.isFinite(v) ? v : def; } catch { return def; } }
+export function setPrefNum(k: string, v: number) { try { localStorage.setItem(k, String(v)); } catch { /* ignore */ } }
+/** 0 Easy, 1 Normal, 2 Hard (tuning.difficulty) */
+export const difficulty = () => Math.max(0, Math.min(2, prefNum('nic-diff', 1)));
 
 export { makeSkirmish } from './sim/skirmish.ts';

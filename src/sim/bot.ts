@@ -4,10 +4,17 @@ import { command, rand, solid, useAbility, type Sim } from './sim.ts';
 const dist = (a: any, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
 /** a square too strong for this cavalry regiment to charge */
 const firm = (e: any, cav: any) => e.form === 'square' && !e.routed && solid(e, cav) > 0.5;
+/** u stands in front of e (the sim's aspect test: front when the cosine is over 0.5) */
+const ahead = (u: any, e: any) => ((u.x - e.x) * Math.sin(e.facing) + (u.z - e.z) * Math.cos(e.facing)) / (dist(u, e) || 1) > 0.5;
+/** the point `off` from e square to its facing, on u's side: e's flank */
+function flankOf(e: any, u: any, off: number) {
+  const rx = Math.cos(e.facing), rz = -Math.sin(e.facing), sg = Math.sign((u.x - e.x) * rx + (u.z - e.z) * rz) || 1;
+  return { x: e.x + rx * sg * off, z: e.z + rz * sg * off };
+}
 
 export function makeBot(sim: Sim, side: number) {
   let acc = 1.5;
-  const mem: { assign: Record<number, { zid: string; ox: number; oz: number }> } = { assign: {} };
+  const mem: { assign: Record<number, { zid: string; ox: number; oz: number }>; mend: Record<number, boolean> } = { assign: {}, mend: {} };
   return (dt: number) => {
     acc += dt;
     // every tick, not every 2s: a galloping regiment must pull up the moment its target forms a firm square
@@ -31,6 +38,15 @@ function think(sim: Sim, side: number, mem: any) {
   const sv = (e: any) => !s.fog || s.seen[side].includes(e.id); // the bot only knows what it can see
   const enemies = s.units.filter((u: any) => u.side !== side && !u.dead && sv(u));
   const foes = enemies.filter((u: any) => !u.routed);
+  // flanking: a formed foe already busy with another of our regiments (in melee, or facing it at musket range) is worth going round; one flanker per foe
+  const pinned = (e: any, u: any) => e.garrison == null && e.form !== 'square' && !tu.types[e.type].cav && my.some((f: any) => f !== u && (f.eng === e.id || e.eng === f.id || (dist(f, e) < 25 && ahead(f, e))));
+  const claimed: Record<number, number> = {};
+  const flankTarget = (u: any, range: number) => {
+    let t: any = null, td = range;
+    for (const e of foes) { const d = dist(u, e); if (d < td && (claimed[e.id] ?? u.id) === u.id && pinned(e, u)) { td = d; t = e; } }
+    if (t) claimed[t.id] = u.id;
+    return t;
+  };
 
   // replenish weak regiments resting on our objectives first (they keep their veterancy), then spend what is left on reserves
   const onOurs = (u: any) => s.zones.some((z: any) => z.owner === side && dist(u, z) < z.r);
@@ -106,6 +122,13 @@ function think(sim: Sim, side: number, mem: any) {
       command(sim, side, { c: 'move', ids: [u.id], x, z: zz });
     };
     const hold = () => { if (u.tx != null || u.chase != null) command(sim, side, { c: 'stop', ids: [u.id] }); };
+    // worn down: fall back to the nearest quiet objective we hold, take on replacements there (the replenish rule above), then rejoin. Regiments defending one of our objectives stay put.
+    if (u.men < 0.4 * u.maxMen && sd.pool >= 1 && sd.rp > 10 && u.garrison == null && !s.zones.some((q: any) => q.owner === side && dist(u, q) < q.r)) mem.mend[u.id] = true;
+    if (mem.mend[u.id]) {
+      const dz = mineZones.filter((q: any) => !q.contested).sort((p: any, q: any) => dist(u, p) - dist(u, q))[0];
+      if (!dz || u.men >= 0.95 * u.maxMen || (dist(u, dz) < dz.r && !u.refill)) delete mem.mend[u.id]; // done, nowhere to go, or no money to refill: back to the fight
+      else { if (dist(u, dz) > dz.r * 0.5) goto(dz.x, dz.z); else hold(); continue; }
+    }
     if (stance === 'defend' && u.garrison == null && u.gTarget == null && (u.type === 'line' || u.type === 'guard' || u.type === 'skirmisher')) { // man the farm that sits on our objective
       const vs = scn.map.villages ?? [], vi = vs.findIndex((v: any) => v.garrison && dist(v, z) < 25);
       if (vi >= 0 && s.units.filter((q: any) => q.side === side && (q.garrison === vi || q.gTarget === vi)).length < tu.garrison.capacity) { command(sim, side, { c: 'garrison', ids: [u.id], vid: vi }); continue; }
@@ -123,6 +146,13 @@ function think(sim: Sim, side: number, mem: any) {
         if (mine > 2.2 * theirs) { command(sim, side, { c: 'bayonet', ids: [u.id], target: near.id }); continue; }
       }
       if (near && nd <= T.range * 1.05) { hold(); if (u.form !== 'line') command(sim, side, { c: 'form', ids: [u.id], f: 'line' }); continue; }
+      const ft = stance === 'attack' ? flankTarget(u, 80) : null;
+      if (ft) { // go round to its flank and fire into it from there
+        const p = flankOf(ft, u, 26);
+        if (dist(u, p) < 30 && u.form !== 'line') command(sim, side, { c: 'form', ids: [u.id], f: 'line' });
+        if (dist(u, p) < 5) hold(); else goto(p.x, p.z);
+        continue;
+      }
       const far = dist(u, { x: gx, z: gz }) > 50 && nd > 70;
       const want = far ? 'column' : 'line';
       if (u.form !== want && !(want === 'column' && u.form === 'line' && dist(u, { x: gx, z: gz }) < 90)) command(sim, side, { c: 'form', ids: [u.id], f: want });
@@ -145,8 +175,12 @@ function think(sim: Sim, side: number, mem: any) {
         const good = e.routed || e.type === 'artillery' || e.type === 'skirmisher' || (!tu.types[e.type].cav && e.morale < 70) || e.form === 'column' || e.form === 'square'; // a square that is not firm is outnumbered
         if (good) { pd = d; prey = e; }
       }
-      if (prey && u.morale > 45 && u.men > 0.3 * u.maxMen) command(sim, side, { c: 'attack', ids: [u.id], target: prey.id });
-      else if (stance === 'attack') {
+      const fit = u.morale > 45 && u.men > 0.3 * u.maxMen, ft = fit && !prey ? flankTarget(u, 120) : null;
+      if (prey && fit) command(sim, side, { c: 'attack', ids: [u.id], target: prey.id });
+      else if (ft) { // ride round to its flank, then charge (defending horse counter-attacks this way too)
+        const p = flankOf(ft, u, 30);
+        if (!ahead(u, ft) || dist(u, p) < 6) command(sim, side, { c: 'attack', ids: [u.id], target: ft.id }); else goto(p.x, p.z);
+      } else if (stance === 'attack') {
         const inf = my.filter((f: any) => f.type === 'line' || f.type === 'guard');
         if (inf.length) {
           const cx = inf.reduce((q: number, f: any) => q + f.x, 0) / inf.length, cz = inf.reduce((q: number, f: any) => q + f.z, 0) / inf.length;

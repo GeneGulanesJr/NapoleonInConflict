@@ -1,22 +1,24 @@
 // In-battle controller: input, HUD, and all the Anime.js presentation (banners, popups, counters, intro, outro).
 import { animate, createTimeline, stagger, steps } from 'animejs';
 import { ICONS, pxCanvas } from './pixel.ts';
-import { distToFoot, manPrice, posted } from './sim/sim.ts';
+import { distToFoot, manPrice, posted, masked, verdict } from './sim/sim.ts';
+import { los } from './sim/world.ts';
 import type { View } from './render.ts';
 import { SIDE_COLOR } from './render.ts';
 import type { Source } from './game.ts';
 import { TUNING, pref, setPref } from './campaign.ts';
 import { playEvents, cue, toggleMute, unlock, music, say, toggleRadio, muted } from './audio.ts';
+import { settings } from './settings.ts';
 
-export type Outcome = 'continue' | 'retry' | 'menu';
+export type Outcome = 'continue' | 'retry' | 'menu' | 'replay';
 /** every control, grouped: the in-battle help overlay (? / F10) and the title screen's help line both read this one list */
 export const CONTROLS: [string, [string, string][]][] = [
   ['Camera', [['WASD / arrows', 'pan'], ['Mouse at screen edge', 'pan'], ['Q/E, middle-drag', 'rotate'], ['Wheel', 'zoom'], ['F', 'focus selection'], ['Backspace', 'jump to last alert'], ['Minimap left-click', 'look there']]],
-  ['Selection', [['Left-click / drag', 'select'], ['Shift+click', 'add to selection'], ['Double-click', 'all of that kind on screen'], ['Ctrl+A', 'all regiments'], ['Shift+1-9', 'save group'], ['1-9', 'recall group (tap twice: fly there)'], ['I', 'next idle regiment'], ['Army bar', 'click select, Shift add, double-click fly'], ['Hover', 'regiment details, range, flank'], ['Esc', 'cancel / clear selection']]],
+  ['Selection', [['Left-click / drag', 'select'], ['Shift+click', 'add to selection'], ['Double-click', 'all of that kind on screen'], ['Ctrl+A', 'all regiments'], ['Shift+1-9', 'save group'], ['1-9', 'recall group (tap twice: fly there)'], ['I', 'next idle regiment'], ['Army bar', 'click select, Shift add, double-click fly'], ['Hover', 'regiment details, range, flank'], ['Esc', 'cancel / clear selection / menu']]],
   ['Orders', [['Right-click', 'move or attack'], ['Right-drag', 'form a line facing away from you'], ['Shift+right-click', 'waypoint'], ['Right-click a farm', 'garrison'], ['A (tap), left-click', 'attack-move'], ['H', 'halt'], ['G', 'stance'], ['Minimap right-click', 'move there']]],
   ['Formations & specials', [['Z/X/C', 'line / column / square'], ['B', 'auto-square'], ['V', 'unit special'], ['K + click foe', 'bayonet charge']]],
   ['Aids & reserves', [['F1/F2/F3', 'tactical aid'], ['N', 'replenish (on a held objective)'], ['Reserves panel', 'call in a regiment']]],
-  ['View', [['Space', 'pause'], ['M', 'mute'], ['R', 'radio'], ['L', 'edge scrolling on/off'], ['T', 'dusk'], ['Y/U', 'silhouette / top-down check'], ['P', 'render quality'], ['? / F10', 'this help']]],
+  ['View', [['Space', 'pause'], ['+ / -', 'game speed'], ['M', 'mute'], ['R', 'radio'], ['L', 'edge scrolling on/off'], ['T', 'dusk'], ['Y/U', 'silhouette / top-down check'], ['P', 'render quality'], ['? / F10', 'this help']]],
 ];
 const GLYPH: Record<string, string> = { line: 'I', guard: 'G', skirmisher: 'S', lancer: 'L', cuirassier: 'C', artillery: 'A', commander: '*' };
 const VET = ['', 'Seasoned', 'Veteran', 'Elite'];
@@ -44,15 +46,15 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     <div class="topbar">
       <div class="score s0"><span class="lbl">French</span><b id="sc0">0</b></div>
       <div class="center">
-        <div class="ttl">${scn.title} <small>${scn.date}</small></div>
-        <div class="tug"><i id="tug"></i></div>
+        <div class="ttl">${scn.title} <small>${scn.date}${src.replay ? ' · REPLAY' : ''}</small></div>
+        <div class="tug" title="Who wins if the battle ended now: objectives held count ${Math.round(TUNING.endHeldWeight * 100)}%, points ${Math.round((1 - TUNING.endHeldWeight) * 100)}%. Between the marks it is a draw."><i id="tug"></i><b style="left:${50 - TUNING.drawBand * 100}%"></b><b style="left:${50 + TUNING.drawBand * 100}%"></b></div>
         <div class="clock"><span id="clk">--:--</span> · <span id="wx">Clear</span> · <span id="left"></span></div>
         <div class="pips" id="pips"></div>
       </div>
       <div class="score s1"><b id="sc1">0</b><span class="lbl">Coalition</span></div>
     </div>
     <div class="ctl">
-      <button data-sp="0" title="Pause (Space)">⏸</button><button data-sp="1" class="on">1×</button><button data-sp="2">2×</button><button data-sp="4">4×</button><button id="mute" title="Mute (M)">${muted ? '🔇' : '🔊'}</button><button id="hlp" title="Controls (? / F10)">?</button><button id="leave" title="Leave battle" style="display:none">✕</button>
+      <button data-sp="0" title="Pause (Space)">⏸</button><button data-sp="1" class="on">1×</button><button data-sp="2">2×</button><button data-sp="4">4×</button><button data-sp="8">8×</button><button id="mute" title="Mute (M)">${muted ? '🔇' : '🔊'}</button><button id="hlp" title="Controls (? / F10)">?</button><button id="pmb" title="Menu: restart, quit, settings (Esc)">☰</button><button id="leave" title="Leave battle" style="display:none">✕</button>
     </div>
     <div id="toasts"></div>
     <div id="popups"></div>
@@ -71,6 +73,9 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     <div class="panel" id="army"></div>
     <div class="panel" id="tip" style="display:none"></div>
     <div class="panel" id="help" style="display:none"><div class="hd">Controls <small>? / F10 / Esc to close</small></div><div class="hcols">${CONTROLS.map(([g, ks]) => `<div><b>${g}</b>${ks.map(([k, d]) => `<p><kbd>${k}</kbd> ${d}</p>`).join('')}</div>`).join('')}</div></div>
+    <div class="panel" id="pm" style="display:none"><div class="hd">${src.mode === 'local' ? 'Paused' : 'Menu'}</div>
+      <div class="pmb"><button data-pm="resume">Resume</button>${src.mode === 'local' ? `<button data-pm="retry">Restart ${src.replay ? 'replay' : 'battle'}</button>` : ''}<button data-pm="menu">${opts.campaign ? 'Save and quit' : 'Quit to menu'}</button></div>
+      <div class="hd">Settings <small>difficulty and fog apply from the next battle</small></div><div class="sets"></div></div>
     <div class="intro" id="intro"><small></small><h1></h1><p></p></div>
     <div class="fade" id="fade"></div>
     <div class="result" id="result"></div>`;
@@ -160,8 +165,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   // animated score counters
   const disp = { s0: 0, s1: 0, tug: 50, rp: 0 };
   const lastTarget = { s0: -1, s1: -1, tug: -1, rp: -1 };
-  function tweenNumbers(sc: number[], rp: number) {
-    const tot = Math.max(1, sc[0] + sc[1]), tug = (sc[0] / tot) * 100;
+  function tweenNumbers(st: any, rp: number) {
+    const sc = [st.side[0].score, st.side[1].score], tug = verdict(st, TUNING) * 100; // the bar is the verdict if the battle ended now, not just the points
     const to = { s0: Math.round(sc[0]), s1: Math.round(sc[1]), tug: Math.round(tug), rp: Math.round(rp) };
     if (to.s0 === lastTarget.s0 && to.s1 === lastTarget.s1 && to.tug === lastTarget.tug && to.rp === lastTarget.rp) return;
     Object.assign(lastTarget, to);
@@ -228,14 +233,15 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       let c = cards.get(u.id);
       if (!c) {
         const el = document.createElement('div');
-        el.className = 'ac'; el.dataset.id = String(u.id); el.title = `${u.name} (${TUNING.types[u.type].label})\nR routed · + replenishing · G garrisoned · ? idle`;
+        el.className = 'ac'; el.dataset.id = String(u.id); el.title = `${u.name} (${TUNING.types[u.type].label})\n1-9 control group · R routed · + replenishing · G garrisoned · ? idle`;
         el.innerHTML = `<b>${GLYPH[u.type] ?? '?'}</b><i class="b m"><s></s></i><i class="b o"><s></s></i><em></em>`;
         army.appendChild(el);
         c = { el, m: $(el, '.m s'), o: $(el, '.o s'), em: $(el, 'em'), sig: '' };
         cards.set(u.id, c);
       }
       const mp = Math.round((u.men / u.maxMen) * 100), op = Math.max(0, Math.round((u.morale / u.maxMorale) * 100));
-      const mk = u.routed ? 'R' : `${u.refill || drafting(u) ? '+' : ''}${u.garrison != null ? 'G' : ''}${isIdle(u) ? '?' : ''}`; // '?' = awaiting orders (a pixel-font z reads as 2)
+      const grp = Object.keys(groups).find((n) => groups[Number(n)].includes(u.id)) ?? ''; // its control group, first
+      const mk = grp + (u.routed ? 'R' : `${u.refill || drafting(u) ? '+' : ''}${u.garrison != null ? 'G' : ''}${isIdle(u) ? '?' : ''}`); // '?' = awaiting orders (a pixel-font z reads as 2)
       const cls = `ac${selection.includes(u.id) ? ' sel' : ''}${u.routed ? ' routed' : op < 30 ? ' waver' : ''}`;
       const sig = `${mp}|${op}|${mk}|${cls}`;
       if (sig === c.sig) continue;
@@ -266,8 +272,9 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     if (u.routed) ls.push('<i class="no">Routed</i>');
     const sel = st.units.filter((q: any) => selection.includes(q.id) && !q.routed);
     if (u.side !== me && sel.length) {
-      const guns = sel.filter((q: any) => TUNING.types[q.type].range > 0), n = guns.filter((q: any) => distToFoot(u, TUNING, q.x, q.z) <= TUNING.types[q.type].range).length; // the sim's edge-to-edge range, from each shooter's front rank
-      if (guns.length) ls.push(n === guns.length ? '<i class="ok">In range</i>' : n ? `<i class="ok">In range: ${n}/${guns.length}</i>` : '<i class="no">Out of range</i>');
+      const guns = sel.filter((q: any) => TUNING.types[q.type].range > 0), rng = guns.filter((q: any) => distToFoot(u, TUNING, q.x, q.z) <= TUNING.types[q.type].range); // the sim's edge-to-edge range, from each shooter's front rank
+      const n = rng.filter((q: any) => los(scn, q.x, q.z, TUNING.types[q.type].cav ? 3 : 2, u.x, u.z, 2) && !masked(q, u, st.units, TUNING)).length; // ...and, like the sim, no firing over a crest or through our own ranks
+      if (guns.length) ls.push(n === guns.length ? '<i class="ok">In range</i>' : n ? `<i class="ok">In range: ${n}/${guns.length}</i>` : rng.length ? '<i class="no">In range, line of fire blocked</i>' : '<i class="no">Out of range</i>');
       if (u.form !== 'square' && u.garrison == null && !u.routed) { // the sim's aspect(): front if c > 0.5, rear if c < -0.5, else flank
         const c = centre(sel), dx = c.x - u.x, dz = c.z - u.z, k = (dx * Math.sin(u.facing) + dz * Math.cos(u.facing)) / (Math.hypot(dx, dz) || 1);
         if (k <= 0.5) ls.push(`<i class="ok">${k < -0.5 ? 'Rear' : 'Flank'} exposed</i>`);
@@ -420,7 +427,9 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     else if (e.code === 'KeyI') nextIdle();
     else if (e.code === 'Space') { e.preventDefault(); setSpeed(src.paused ? 1 : 0); }
     else if (e.code === 'KeyM') $<HTMLElement>(hud, '#mute').textContent = toggleMute() ? '🔇' : '🔊';
-    else if (e.code === 'Escape') { if (help.style.display !== 'none') toggleHelp(); else if (targeting) cancelTargeting(); else setSel([]); }
+    else if (e.code === 'Escape') { if (help.style.display !== 'none') toggleHelp(); else if (pm.style.display !== 'none') toggleMenu(); else if (targeting) cancelTargeting(); else if (selection.length) setSel([]); else toggleMenu(); }
+    else if (e.code === 'Equal' || e.code === 'NumpadAdd') stepSpeed(1);
+    else if (e.code === 'Minus' || e.code === 'NumpadSubtract') stepSpeed(-1);
     else if (e.code === 'Backspace') { e.preventDefault(); if (lastAlert) view.flyTo(lastAlert.x, lastAlert.z, undefined, 800); }
     else if (e.code === 'KeyL') { edgeOn = !edgeOn; setPref('nic-edge', edgeOn); toast(edgeOn ? 'Edge scrolling on' : 'Edge scrolling off'); }
     else if (e.code === 'KeyH') src.cmd({ c: 'stop', ids: selection });
@@ -490,6 +499,20 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     hud.querySelectorAll<HTMLElement>('[data-sp]').forEach((b) => b.classList.toggle('on', Number(b.dataset.sp) === (src.paused ? 0 : src.speed)));
   };
   hud.querySelectorAll<HTMLElement>('[data-sp]').forEach((b) => (b.onclick = () => setSpeed(Number(b.dataset.sp))));
+  const SPEEDS = [1, 2, 4, 8];
+  const stepSpeed = (d: number) => { if (src.mode !== 'local') return; setSpeed(SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, Math.max(0, SPEEDS.indexOf(src.speed)) + d))]); toast(`Speed ${src.speed}×`); };
+  // menu (Esc / ☰): pauses a local battle; restart, quit, and the settings
+  const pm = $<HTMLElement>(hud, '#pm');
+  let pmWas = 1; // the speed to go back to (0: it was paused already)
+  function toggleMenu() {
+    const open = pm.style.display === 'none';
+    if (open && ended) return; // the result card has its own buttons
+    pm.style.display = open ? '' : 'none';
+    if (open) { pmWas = src.paused ? 0 : src.speed; setSpeed(0); settings($(pm, '.sets'), view, () => { edgeOn = pref('nic-edge', true); }); }
+    else setSpeed(pmWas);
+  }
+  $<HTMLElement>(hud, '#pmb').onclick = toggleMenu;
+  pm.querySelectorAll<HTMLElement>('[data-pm]').forEach((b) => (b.onclick = () => { const a = b.dataset.pm!; if (a === 'resume') toggleMenu(); else opts.onExit(a as Outcome); }));
   $<HTMLElement>(hud, '#mute').onclick = () => { $(hud, '#mute').textContent = toggleMute() ? '🔇' : '🔊'; };
   if (src.mode === 'remote') {
     hud.querySelectorAll<HTMLElement>('[data-sp]').forEach((b) => (b.style.display = 'none'));
@@ -506,6 +529,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     if (e.button === 2) { if (selection.length) src.cmd({ c: 'move', ids: selection, x, z, q: e.shiftKey }); }
     else view.flyTo(x, z, undefined, 600);
   };
+  const ghosts = new Map<number, { x: number; z: number; t: number }>(); // fog of war: where each enemy regiment was last seen
   function drawMini(st: any) {
     const W = mini.width, S = view.mapSize, k = W / S, c = mctx;
     const m = W / 170;
@@ -515,7 +539,15 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     c.lineWidth = 1;
     for (const w of scn.map.woods ?? []) { c.fillStyle = '#254a27'; c.beginPath(); c.arc((w.x + S / 2) * k, (w.z + S / 2) * k, w.r * k, 0, 6.3); c.fill(); }
     for (const z of st.zones) { c.strokeStyle = z.owner === 0 ? SIDE_COLOR[0] : z.owner === 1 ? SIDE_COLOR[1] : '#bbb'; c.beginPath(); c.arc((z.x + S / 2) * k, (z.z + S / 2) * k, z.r * k, 0, 6.3); c.stroke(); }
-    for (const u of st.units) { if (st.fog && u.side !== me && !st.seen?.[me]?.includes(u.id)) continue; c.fillStyle = u.routed ? '#999' : SIDE_COLOR[u.side]; c.fillRect(Math.round((u.x + S / 2) * k) - 1, Math.round((u.z + S / 2) * k) - 1, 2, 2); }
+    const dot = (x: number, z: number) => c.fillRect(Math.round((x + S / 2) * k) - 1, Math.round((z + S / 2) * k) - 1, 2, 2);
+    for (const u of st.units) {
+      if (st.fog && u.side !== me) {
+        const g = ghosts.get(u.id);
+        if (st.seen?.[me]?.includes(u.id)) ghosts.set(u.id, { x: u.x, z: u.z, t: st.t });
+        else { if (g && st.t - g.t < 30) { c.globalAlpha = 0.4 * (1 - (st.t - g.t) / 30); c.fillStyle = SIDE_COLOR[u.side]; dot(g.x, g.z); c.globalAlpha = 1; } continue; } // fog: a fading dot where it was last seen
+      }
+      c.fillStyle = u.routed ? '#999' : SIDE_COLOR[u.side]; dot(u.x, u.z);
+    }
     c.strokeStyle = '#fff'; c.strokeRect(Math.round((view.cam.x + S / 2) * k - 12 * m), Math.round((view.cam.z + S / 2) * k - 9 * m), Math.round(24 * m), Math.round(18 * m));
   }
 
@@ -529,7 +561,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
   }
   function playIntro() {
     const el = $<HTMLElement>(hud, '#intro');
-    $(el, 'small').textContent = scn.date; $(el, 'p').textContent = `${scn.hint ?? ''} Victory: hold more objectives when time runs out, or break the enemy army.`;
+    $(el, 'small').textContent = scn.date; $(el, 'p').textContent = `${me === 0 ? scn.hint ?? '' : 'You command the Coalition: hold the objectives and break the French attack.'} Victory: hold more objectives when time runs out, or break the enemy army.`;
     $(el, 'h1').innerHTML = [...scn.title].map((c: string) => `<span>${c === ' ' ? '&nbsp;' : c}</span>`).join('');
     view.cam.x = first.x; view.cam.z = first.z; view.cam.dist = 280; view.cam.yaw = 0.5;
     src.paused = true;
@@ -574,7 +606,10 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const r = st.result, won = r.winner === me, draw = r.winner < 0;
     const el = $<HTMLElement>(hud, '#result');
     const title = draw ? 'DRAW' : won ? (r.decisive ? 'DECISIVE VICTORY' : 'VICTORY') : r.decisive ? 'CRUSHING DEFEAT' : 'DEFEAT';
-    const next = opts.campaign ? `<button id="rcont">Continue the campaign</button>${won ? '' : '<button id="rretry" class="alt">Retry battle</button>'}` : '<button id="rmenu">Back to menu</button>';
+    const rep = '<button id="rrep" class="alt">Watch replay</button>';
+    const next = src.replay ? '<button id="rretry">Watch again</button><button id="rmenu" class="alt">Back</button>'
+      : opts.campaign ? `<button id="rcont">Continue the campaign</button>${won ? '' : '<button id="rretry" class="alt">Retry battle</button>'}${rep}`
+      : src.mode === 'local' ? `<button id="rretry">Play again</button>${rep}<button id="rmenu" class="alt">Back to menu</button>` : '<button id="rmenu">Back to menu</button>';
     el.innerHTML = `<div class="card ${draw ? 'draw' : won ? 'win' : 'loss'}"><h2>${title}</h2><p>${scn.title}, ${scn.date}</p>
       <table><tr><th></th><th>${SIDE_NAME[me]} (you)</th><th>${SIDE_NAME[1 - me]}</th></tr>
       <tr><td>Score</td><td class="n" data-v="${Number(r.score[me])}">0</td><td class="n" data-v="${Number(r.score[1 - me])}">0</td></tr>
@@ -595,16 +630,19 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     el.querySelector<HTMLElement>('#rcont')?.addEventListener('click', go('continue'));
     el.querySelector<HTMLElement>('#rretry')?.addEventListener('click', go('retry'));
     el.querySelector<HTMLElement>('#rmenu')?.addEventListener('click', go('menu'));
+    el.querySelector<HTMLElement>('#rrep')?.addEventListener('click', go('replay'));
     cue(won ? 'capture' : 'alert');
   }
 
   // ---------------------------------------------------------------- per-frame
   let last = performance.now(), hudAcc = 0, lastWx = '', lastClk = '', lastPool = '';
+  const wav = new Set<number>(); // regiments already reported wavering (until they steady again)
+  const warned = new Set([120, 30].filter((w) => scn.duration - state0.t <= w)); // time warnings already given (a resumed battle may be past them)
   function frame(now: number) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     const st = src.state;
-    if (st.t < prevT - 1) { lastLogT = st.t; ended = false; $<HTMLElement>(hud, '#result').style.display = 'none'; } // remote room restarted
+    if (st.t < prevT - 1) { lastLogT = st.t; ended = false; warned.clear(); $<HTMLElement>(hud, '#result').style.display = 'none'; } // remote room restarted
     prevT = st.t;
 
     // camera pan
@@ -665,7 +703,17 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       hudAcc = 0;
       renderSel();
       const sd = st.side[me];
-      tweenNumbers([st.side[0].score, st.side[1].score], sd.rp);
+      tweenNumbers(st, sd.rp);
+      for (const z of st.zones) { // capture progress: a bar under each objective's name
+        const el = $<HTMLElement>(pips, `[data-z="${z.id}"]`), f = String(Math.round(Math.abs(z.p ?? 0) * 20) / 20), key = f + (z.p > 0 ? '+' : '-');
+        if (el.dataset.f !== key) { el.dataset.f = key; el.style.setProperty('--f', f); el.style.setProperty('--fc', SIDE_COLOR[z.p > 0 ? 0 : 1]); }
+      }
+      for (const u of st.units) { // a regiment about to break: an alert while there is still time to pull it out
+        if (!mine(u)) continue;
+        const r = u.morale / u.maxMorale;
+        if (!u.routed && r < 0.3) { if (!wav.has(u.id)) { wav.add(u.id); toast(`${u.name} is wavering!`, u); } }
+        else if (u.routed || r > 0.45) wav.delete(u.id);
+      }
       const pl = `Replacements ${Math.floor(sd.pool ?? 0)}${sd.earned >= sd.cap ? ' · RP cap' : ''}`; if (pl !== lastPool) { $(hud, '#pool').textContent = pl; lastPool = pl; } // replacements left; "cap" = no more RP this battle
       const hr = parseInt(scn.clock.start) + (st.t / scn.duration) * scn.clock.hours;
       const clk = `${pad(hr)}:${pad((hr % 1) * 60)}`;
@@ -673,6 +721,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       if (st.weather !== lastWx) { $(hud, '#wx').textContent = TUNING.weather[st.weather].label; lastWx = st.weather; }
       const rem = Math.max(0, scn.duration - st.t);
       $(hud, '#left').textContent = `${Math.floor(rem / 60)}:${pad(rem % 60)} left`;
+      for (const w of [120, 30]) if (rem <= w && !warned.has(w) && !st.over) { warned.add(w); banner(w >= 60 ? `${w / 60} MINUTES LEFT` : `${w} SECONDS LEFT`, 'The objectives held at the end decide the day', '#e8c46a'); cue('alert'); }
       for (const a of abilities) {
         const b = $<HTMLElement>(hud, `[data-ab="${a}"]`), cd = sd.cd[a] ?? 0, ab = abCfg(a);
         b.style.setProperty('--p', String(cd / ab.cd));

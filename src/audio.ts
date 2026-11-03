@@ -1,20 +1,27 @@
 // Procedural WebAudio: no asset files. SFX fall off with distance from the camera and share a small reverb;
 // a drum-and-fife march plays during battles and the drums swell with the amount of shooting.
-import { pref, setPref } from './campaign.ts';
+import { pref, setPref, prefNum, setPrefNum } from './campaign.ts';
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let sfx: GainNode | null = null;
 let mus: GainNode | null = null;
 let noise: AudioBuffer | null = null;
 export let muted = pref('nic-mute', false);
+/** music and effects volume, 0..1 (settings) */
+export const vol = { mus: prefNum('nic-vol-mus', 1), sfx: prefNum('nic-vol-sfx', 1) };
+export function setVolume(k: 'mus' | 'sfx', v: number) {
+  vol[k] = v; setPrefNum(`nic-vol-${k}`, v);
+  if (k === 'mus' && mus) mus.gain.value = 0.6 * v;
+  if (k === 'sfx' && sfx) sfx.gain.value = v;
+}
 
 function init() {
   if (ctx) return ctx;
   try {
     ctx = new AudioContext();
     master = ctx.createGain(); master.gain.value = muted ? 0 : 0.5; master.connect(ctx.destination);
-    sfx = ctx.createGain(); sfx.connect(master);
-    mus = ctx.createGain(); mus.gain.value = 0.6; mus.connect(master);
+    sfx = ctx.createGain(); sfx.gain.value = vol.sfx; sfx.connect(master);
+    mus = ctx.createGain(); mus.gain.value = 0.6 * vol.mus; mus.connect(master);
     noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const d = noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
