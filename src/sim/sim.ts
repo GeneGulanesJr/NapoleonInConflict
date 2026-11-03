@@ -273,6 +273,20 @@ function gapBetween(a: any, b: any, tu: any): number {
   }
   return m;
 }
+/** Loose bodies (skirmishers, a general's staff) slip through their own side's ranks; everyone else must go round. */
+const slips = (u: any, o: any) => u.side === o.side && (u.type === 'skirmisher' || o.type === 'skirmisher' || u.type === 'commander' || o.type === 'commander');
+/** Formations are solid: the regiment u would run into by standing at (x, z) instead of where it is, or null. Stepping into contact is refused; once touching, only
+ *  steps that don't close on the other's centre are allowed (so a unit can always back off or slide along). Broken men and garrisons don't block. */
+function blocker(u: any, x: number, z: number, live: any[], tu: any, fr: Map<any, number>, friends = true): any {
+  const ox = u.x, oz = u.z, ru = fr.get(u)!;
+  for (const o of live) {
+    if (o === u || o.dead || o.routed || o.garrison != null || slips(u, o) || (!friends && o.side === u.side) || Math.hypot(o.x - x, o.z - z) > ru + fr.get(o)! + 1) continue; // bounding circles apart: can't touch
+    u.x = x; u.z = z; const g1 = gapBetween(u, o, tu); u.x = ox; u.z = oz;
+    if (g1 > 0) continue;
+    if (gapBetween(u, o, tu) > 0 || Math.hypot(o.x - x, o.z - z) < Math.hypot(o.x - ox, o.z - oz) - 1e-6) return o;
+  }
+  return null;
+}
 const isInf = (u: any) => u.type === 'line' || u.type === 'guard';
 /** eye height above the ground for sight lines (riders sit higher); targets are seen at 2 */
 const eye = (u: any, tu: any) => (tu.types[u.type].cav ? 3 : 2);
@@ -454,6 +468,8 @@ export function step(sim: Sim, dt: number) {
     s.seen = sn;
   }
   const seen: Set<number>[] = s.seen.map((a: number[]) => new Set(a));
+  const reaches = () => new Map<any, number>(live.map((u: any) => { const f = foot(u, tu); return [u, Math.max(Math.hypot(f[0], f[2]), Math.hypot(f[0], f[3]), Math.hypot(f[1], f[2]), Math.hypot(f[1], f[3]))]; })); // each formation's reach from its position, for cheap contact culling
+  let fr = reaches();
 
   for (const u of live) {
     const T = tu.types[u.type];
@@ -549,8 +565,25 @@ export function step(sim: Sim, dt: number) {
           const nx = u.x + (dx / d) * sp, nz = u.z + (dz / d) * sp;
           const slope = (heightAt(scn, nx, nz) - heightAt(scn, u.x, u.z)) / Math.max(sp, 0.01);
           const k = Math.min((d - stopAt + 0.01) / sp, 1 - Math.max(1 - tu.terrain.downhill, Math.min(0.5, slope * 1.5))); // uphill slows, downhill helps a little (never past the stop)
-          u.x += (nx - u.x) * k; u.z += (nz - u.z) * k;
-          u.mv = true;
+          let mx = u.x + (nx - u.x) * k, mz = u.z + (nz - u.z) * k;
+          const passing = (u.jam ?? 0) > tu.passLines.wait, b = blocker(u, mx, mz, live, tu, fr, !passing); // held up long enough: it files through friendly ranks (passage of lines)
+          if (b && b.side !== u.side) { mx = u.x; mz = u.z; } // the enemy's ranks stop it: it halts at contact and the melee decides
+          else if (b) { // a friendly regiment in the way: step round it, keeping to one side until clear, else try the other side
+            if (u.chase == null && d < 30) { u.tx = u.tz = null; const nxt = u.queue.shift(); if (nxt) { u.tx = nxt[0]; u.tz = nxt[1]; } } // its ground is taken: close enough
+            u.av ??= Math.sign(dx * (b.z - u.z) - dz * (b.x - u.x)) || (u.id & 1 ? 1 : -1);
+            const step = Math.hypot(mx - u.x, mz - u.z), h = Math.atan2(dx, dz);
+            let ok = false;
+            for (const sd of [u.av, -u.av]) {
+              for (const a of [0.7, 1.2, 1.6]) {
+                const tx = u.x + Math.sin(h + sd * a) * step, tz = u.z + Math.cos(h + sd * a) * step;
+                if (!blocker(u, tx, tz, live, tu, fr)) { mx = tx; mz = tz; ok = true; u.av = sd; break; }
+              }
+              if (ok) break;
+            }
+            if (!ok) { mx = u.x; mz = u.z; u.jam = (u.jam ?? 0) + dt; }
+          } else { u.av = null; if (u.jam && !(passing && blocker(u, mx, mz, live, tu, fr))) u.jam = 0; } // clear of friends again
+          u.mv = mx !== u.x || mz !== u.z; // a blocked regiment stands (and may fire)
+          u.x = mx; u.z = mz;
           u.fat = Math.min(1, u.fat + (run > 1 ? tu.fatigue.run : tu.fatigue.march[T.cav ? 'cavalry' : isInf(u) ? u.form : u.type] ?? 0) * dt);
         }
       }
@@ -560,13 +593,14 @@ export function step(sim: Sim, dt: number) {
   }
 
   // combat
+  fr = reaches(); // formations may have changed while moving
   for (const u of live) {
     if (u.dead || u.routed) continue;
     const T = tu.types[u.type];
 
     // melee: nearest enemy in contact
     let c: any = null, cd = 0.8;
-    for (const e of live) { if (e.dead || e.side === u.side || Math.hypot(e.x - u.x, e.z - u.z) > 70) continue; const g = gapBetween(u, e, tu); if (g < cd) { cd = g; c = e; } }
+    for (const e of live) { if (e.dead || e.side === u.side || Math.hypot(e.x - u.x, e.z - u.z) > fr.get(u)! + fr.get(e)! + cd) continue; const g = gapBetween(u, e, tu); if (g < cd) { cd = g; c = e; } } // bounding circles first: only close pairs pay for the exact edge test
     if (c) {
       // horse charging downhill hits harder, uphill weaker: ground fall across 16 units through the contact, scaled and clamped to +-30%
       const ex = c.x - u.x, ez = c.z - u.z, el = Math.hypot(ex, ez) || 1;

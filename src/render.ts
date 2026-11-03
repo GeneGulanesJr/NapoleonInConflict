@@ -52,8 +52,8 @@ export const upscale = (quality: number, H: number) => quality === 0 ? Math.max(
 const TILT = (35 * Math.PI) / 180, ISO = Math.PI / 4, CAM_D = 300, ZOOM_K = 0.36, STOPS = [28, 45, 64, 90, 130, 190, 280, 420];
 
 // flat-coloured geometry helpers (vertex colours, non-indexed so toon steps stay crisp)
-function paint(g: THREE.BufferGeometry, hex: number) {
-  if (g.index && g.type !== 'BoxGeometry') g = g.toNonIndexed(); // boxes keep their index (24 verts, flat normals already)
+function paint(g: THREE.BufferGeometry, hex: number, keep = false) {
+  if (g.index && !keep && g.type !== 'BoxGeometry') g = g.toNonIndexed(); // boxes keep their index (24 verts, flat normals already); keep = indexed for flatShading materials
   const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
   g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv'); g.computeVertexNormals();
@@ -62,6 +62,16 @@ function paint(g: THREE.BufferGeometry, hex: number) {
 const bx = (w: number, h: number, d: number, x: number, y: number, z: number, hex: number) => paint(new THREE.BoxGeometry(w, h, d).translate(x, y, z), hex);
 const cy = (r0: number, r1: number, h: number, seg: number, x: number, y: number, z: number, hex: number) => paint(new THREE.CylinderGeometry(r0, r1, h, seg).translate(x, y, z), hex);
 const merge = (l: THREE.BufferGeometry[]) => mergeGeometries(l.some(g => !g.index) ? l.map(g => g.index ? g.toNonIndexed() : g) : l)!; // mergeGeometries needs all-or-none indexed
+// turned parts for the tin figures: a tapered rod from a (radius r0) to b (r1), a squashed ball, a dome, an upright cylinder from y0 to y1 (sz flattens it front to back)
+const UP = new THREE.Vector3(0, 1, 0);
+const rod = (a: number[], b: number[], r0: number, r1: number, hex: number, seg = 6) => {
+  const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), g = new THREE.CylinderGeometry(r1, r0, d.length(), seg, 1, Math.max(r0, r1) < 0.04); // thin rods need no end caps
+  return paint(g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, d.normalize())).translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2), hex, true);
+};
+const ball = (r: number, x: number, y: number, z: number, hex: number, sx = 1, sy = 1, sz = 1) => paint(new THREE.SphereGeometry(r, r < 0.08 ? 4 : 6, r < 0.08 ? 3 : 4).scale(sx, sy, sz).translate(x, y, z), hex, true);
+const dome = (r: number, y: number, hex: number, sy = 1) => paint(new THREE.SphereGeometry(r, 8, 3, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, sy, 1).translate(0, y, 0), hex, true);
+const cyl = (r0: number, r1: number, y0: number, y1: number, hex: number, seg = 8, sz = 1) => paint(new THREE.CylinderGeometry(r1, r0, y1 - y0, seg).scale(1, 1, sz).translate(0, (y0 + y1) / 2, 0), hex, true);
+const mix = (a: number[], b: number[], t: number) => a.map((v, i) => v + (b[i] - v) * t);
 
 export function createView(host: HTMLElement) {
   // render quality: 0 Guide (strict 480x270 look, fixed zoom stops, 90-degree turns), 1 Fine (360 rows), 2 High (540+ rows), 3 Native (up to 1440 rows)
@@ -114,7 +124,11 @@ export function createView(host: HTMLElement) {
       #ifdef USE_INSTANCING
       flW = instanceMatrix * flW;
       #endif
-      vFlW = ( modelMatrix * flW ).xyz;`);
+      vFlW = ( modelMatrix * flW ).xyz;`).replace('#include <color_vertex>', THREE.ShaderChunk.color_vertex).replace('vColor.rgb *= instanceColor.rgb;', `#ifdef USE_COLOR
+      vColor.rgb *= mix( vec3( 1.0 ), instanceColor.rgb, step( 2.99, color.r + color.g + color.b ) ); // only pure-white paint takes the instance tint (coat, plume, horse coat)
+      #else
+      vColor.rgb *= instanceColor.rgb;
+      #endif`);
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\n${pars}\nuniform vec4 uFlP[16]; uniform vec3 uFlC[16];`).replace('#include <opaque_fragment>', `vec3 flash = vec3( 0.0 );
       for ( int i = 0; i < 16; i ++ ) { float t = clamp( 1.0 - length( uFlP[ i ].xyz - vFlW ) / uFlP[ i ].w, 0.0, 1.0 ); flash += uFlC[ i ] * ( floor( smoothstep( 0.0, 1.0, t ) * 3.0 + 0.5 ) / 3.0 ); }
       outgoingLight += diffuseColor.rgb * flash;
@@ -169,7 +183,7 @@ export function createView(host: HTMLElement) {
     if (guideOn()) {
       let i = STOPS.reduce((b, s, k) => (Math.abs(s - zoomTarget) < Math.abs(STOPS[b] - zoomTarget) ? k : b), 0);
       i = Math.max(0, Math.min(STOPS.length - 1, i + (factor > 1 ? 1 : -1))); zoomTarget = STOPS[i];
-    } else zoomTarget = Math.max(18, Math.min(760, zoomTarget * factor));
+    } else zoomTarget = Math.max(18, Math.min(760, (Math.abs(cam.dist - zoomTarget) > zoomTarget * 0.3 ? cam.dist : zoomTarget) * factor)); // re-base when something else (intro, fly-to) moved the camera
     camAnim = animate(cam, { dist: zoomTarget, duration: 260, ease: 'outQuad' });
   }
   let zoomTarget = cam.dist;
@@ -351,6 +365,7 @@ export function createView(host: HTMLElement) {
       const n = Math.round(v.r * 0.9);
       for (let i = 0; i < n; i++) { const a = hash(i + v.x * 3) * 6.28, r = Math.sqrt(hash(i * 5 + v.z)) * v.r * 0.85; houses.push([v.x + Math.cos(a) * r, v.z + Math.sin(a) * r]); }
     }
+    houseXZ = houses.flat(); // men walk round these
     if (houses.length) {
       const hg = merge([bx(3.4, 2.4, 3, 0, 1.2, 0, P.plaster), paint(new THREE.ConeGeometry(2.7, 1.6, 4).rotateY(Math.PI / 4).translate(0, 3.2, 0), P.tile)]);
       const hs = mkI(hg, houses.length, toon({ vertexColors: true }), [0, 1.8, 0]);
@@ -420,74 +435,89 @@ export function createView(host: HTMLElement) {
     setWeather(s.weather ?? 'clear', true);
   }
 
-  // --- units: blocky figures (coat takes the nation colour, kit is fixed colours) ----------------
-  // --- soldier: coat takes the nation colour (instance tint); everything else is fixed kit
-  const W = 0xffffff, DK = 0x1b1b1f;
-  const coatArms = merge([bx(0.56, 0.58, 0.34, 0, 0.93, 0, W), bx(0.5, 0.2, 0.3, 0, 0.62, 0, W), bx(0.13, 0.5, 0.15, 0.35, 0.9, 0.02, W), bx(0.13, 0.5, 0.15, -0.35, 0.9, 0.02, W)]);
-  const belt = (rot: number) => paint(new THREE.BoxGeometry(0.07, 0.62, 0.02).rotateZ(rot).translate(0, 0.95, 0.18), P.trim);
-  const kitG = merge([
-    belt(0.65), belt(-0.65), bx(0.32, 0.06, 0.04, 0, 0.67, 0.18, DK), bx(0.07, 0.07, 0.03, 0, 0.67, 0.2, P.brass), // cross-belts, waist belt, buckle
-    bx(0.14, 0.1, 0.16, 0.35, 0.62, 0.02, P.trim), bx(0.14, 0.1, 0.16, -0.35, 0.62, 0.02, P.trim), // cuffs
-    bx(0.11, 0.11, 0.12, 0.35, 0.54, 0.04, P.skin), bx(0.11, 0.11, 0.12, -0.35, 0.54, 0.04, P.skin), // hands
-    bx(0.32, 0.08, 0.22, 0, 1.23, 0, 0xc23a2e), // collar
-    bx(0.24, 0.26, 0.24, 0, 1.38, 0, P.skin), bx(0.04, 0.04, 0.02, 0.06, 1.41, 0.125, DK), bx(0.04, 0.04, 0.02, -0.06, 1.41, 0.125, DK), // head, eyes
-    bx(0.27, 0.32, 0.27, 0, 1.66, 0, DK), bx(0.3, 0.05, 0.3, 0, 1.84, 0, DK), bx(0.12, 0.12, 0.02, 0, 1.64, 0.14, P.brass), bx(0.26, 0.03, 0.1, 0, 1.52, 0.17, DK), // shako
-    bx(0.36, 0.32, 0.14, 0, 0.98, -0.24, 0x6a4a2e), bx(0.42, 0.1, 0.14, 0, 1.18, -0.25, 0x8a8576), // knapsack and bedroll
-    bx(0.05, 0.05, 1.05, 0.3, 1.0, 0.3, P.wood), bx(0.03, 0.03, 0.32, 0.3, 1.0, 0.92, P.steel), // musket and bayonet
-    bx(0.09, 0.42, 0.02, 0.15, 0.95, 0.172, P.trim), bx(0.09, 0.42, 0.02, -0.15, 0.95, 0.172, P.trim), // white lapels
-    bx(0.16, 0.05, 0.2, 0.3, 1.23, 0, P.trim), bx(0.16, 0.05, 0.2, -0.3, 1.23, 0, P.trim), // epaulettes
-    bx(0.2, 0.14, 0.1, -0.2, 0.68, -0.21, DK), bx(0.1, 0.16, 0.1, 0.24, 0.62, -0.19, 0x8a8576), // cartridge box, canteen
-    bx(0.22, 0.07, 0.1, 0, 1.5, -0.14, DK), bx(0.05, 0.06, 0.03, 0.08, 1.33, 0.13, 0x3a2a1a), bx(0.05, 0.06, 0.03, -0.08, 1.33, 0.13, 0x3a2a1a), // queue, side-whiskers
+  // --- units: painted tin miniatures ------------------------------------------------------------
+  // Turned, tapered parts on a green base, like a wargamer's figures. Built standing on y = 0 facing +z (right hand = -x), then moved to their pivot:
+  // root (feet) -> body at the hip (lean, sway) -> arms at the shoulder; legs hang from the hip. Pure white paint takes the instance tint.
+  const W = 0xffffff, DK = 0x1b1b1f, RED = 0xc23a2e, IRON = 0x4a4c52, BRONZE = 0x8f7a48, OLIVE = 0x5d6838, LEATHER = 0x6a4a2e, HAIR = 0x3a2a1a, BASE = 0x4b5f30;
+  const HIP = 0.62, SH = 1.18, HY = 1.05; // hip, shoulder, horse-body pivot heights
+  const atHip = (l: THREE.BufferGeometry[]) => merge(l).translate(0, -HIP, 0), atSh = (l: THREE.BufferGeometry[]) => merge(l).translate(0, -SH, 0);
+  const belt = (s: number) => [rod([0.17 * s, 1.14, 0.115], [0, 0.92, 0.165], 0.026, 0.026, P.trim, 4), rod([0, 0.92, 0.165], [-0.16 * s, 0.68, 0.075], 0.026, 0.026, P.trim, 4)]; // shoulder to hip, bent at the chest so it hugs the coat
+  const bodyG = atHip([
+    cyl(0.17, 0.235, 0.6, SH, W, 8, 0.72), cyl(0.215, 0.175, 0.47, 0.64, W, 8, 0.8), // chest, coat skirt
+    rod([0.07, 0.62, -0.12], [0.08, 0.38, -0.16], 0.05, 0.04, W, 4), rod([-0.07, 0.62, -0.12], [-0.08, 0.38, -0.16], 0.05, 0.04, W, 4), // coat-tails
+    ...belt(1), ...belt(-1), bx(0.07, 0.07, 0.03, 0, 0.92, 0.175, P.brass), // crossbelts and plate
+    ball(0.09, 0.23, 1.17, 0, RED, 1.2, 0.55), ball(0.09, -0.23, 1.17, 0, RED, 1.2, 0.55), cyl(0.12, 0.115, 1.16, 1.25, RED), cyl(0.07, 0.07, 1.24, 1.3, DK, 6), // epaulettes, collar, stock
+    ball(0.15, 0, 1.39, 0.015, P.skin, 1, 1.05), ball(0.145, 0, 1.41, -0.03, HAIR),
+    bx(0.04, 0.04, 0.02, 0.055, 1.41, 0.155, DK), bx(0.04, 0.04, 0.02, -0.055, 1.41, 0.155, DK), bx(0.11, 0.03, 0.03, 0, 1.335, 0.15, HAIR), // eyes, moustache
   ]);
-  // --- horse: white body parts take a coat tint per horse (bay, chestnut, black, grey); mane, tail and hooves stay dark
+  const packG = atHip([bx(0.34, 0.34, 0.14, 0, 0.98, -0.22, LEATHER), rod([-0.2, 1.21, -0.22], [0.2, 1.21, -0.22], 0.065, 0.065, 0x8a8576), bx(0.24, 0.13, 0.08, 0, 0.66, -0.2, DK)]); // foot only: knapsack, greatcoat roll, cartridge box
+  const legG = (x: number) => merge([rod([x, HIP, 0], [x, 0.3, 0.01], 0.1, 0.082, P.pants), rod([x, 0.32, 0.01], [x, 0.05, 0], 0.084, 0.072, DK), bx(0.11, 0.06, 0.21, x, 0.03, 0.04, DK)]).translate(0, -HIP, 0); // trousers, gaiters, shoe
+  const arm = (s: number[], e: number[], h: number[]) => [rod(s, e, 0.07, 0.064, W), rod(e, h, 0.064, 0.058, W), rod(mix(e, h, 0.72), h, 0.07, 0.068, RED), ball(0.058, h[0], h[1], h[2], P.skin)];
+  const musket = (b: number[], m: number[]) => [rod(b, mix(b, m, 0.32), 0.055, 0.032, P.wood, 5), rod(mix(b, m, 0.3), m, 0.022, 0.022, IRON, 4), rod(m, mix(b, m, 1.28), 0.013, 0.006, P.steel, 4)]; // stock, barrel, bayonet
+  // carry: musket upright against the left shoulder (a forest of bayonets above the shakos); aim: levelled from the right shoulder; ride: sabre at the shoulder, reins in the left hand
+  const armsCarryG = atSh([...arm([0.24, 1.17, 0], [0.28, 0.95, 0.06], [0.3, 0.74, 0.12]), ...arm([-0.24, 1.17, 0], [-0.28, 0.95, 0.02], [-0.29, 0.73, 0.05]), ...musket([0.32, 0.6, 0.15], [0.31, 1.92, 0.06])]);
+  const armsAimG = atSh([...arm([-0.24, 1.17, 0], [-0.32, 1.0, 0.1], [-0.15, 1.12, 0.36]), ...arm([0.24, 1.17, 0], [0.22, 1.02, 0.3], [-0.07, 1.17, 0.68]), ...musket([-0.13, 1.14, 0.08], [-0.09, 1.24, 1.4])]);
+  const HAND = [-0.2, 1.0, 0.33], BLADE = [-0.23, 1.95, 0.16];
+  const armsRideG = atSh([...arm([-0.24, 1.17, 0], [-0.29, 0.96, 0.12], HAND), ...arm([0.24, 1.17, 0], [0.27, 0.96, 0.12], [0.12, 0.93, 0.36]), bx(0.12, 0.03, 0.06, HAND[0], 1.05, HAND[2] + 0.01, P.brass), rod(HAND, BLADE, 0.024, 0.01, P.steel, 4)]);
+  // the lance lies along the sabre line, so it shares the arms' matrix and couches with them; white pennant takes the nation colour
+  const lanceG = atSh([rod(mix(HAND, BLADE, -0.95), mix(HAND, BLADE, 2.4), 0.03, 0.024, P.wood, 4), rod(mix(HAND, BLADE, 2.4), mix(HAND, BLADE, 2.62), 0.035, 0.004, P.steel, 4), bx(0.02, 0.18, 0.38, -0.27, 3.0, -0.27, W)]);
+  // headgear rides on the body's matrix
+  const peak = (r: number, y: number) => paint(new THREE.CylinderGeometry(r, r, 0.02, 8, 1, false, -Math.PI / 2, Math.PI).rotateX(0.25).translate(0, y, 0.02), DK, true);
+  const shakoG = atHip([cyl(0.138, 0.168, 1.47, 1.8, DK), peak(0.17, 1.49), bx(0.1, 0.12, 0.02, 0, 1.62, 0.158, P.brass), rod([0, 1.78, 0.11], [0, 2.07, 0.14], 0.045, 0.022, W, 5)]); // French bell-top + plume
+  const belgicG = atHip([cyl(0.138, 0.14, 1.47, 1.72, DK), bx(0.3, 0.38, 0.03, 0, 1.74, 0.13, DK), peak(0.17, 1.49), bx(0.11, 0.13, 0.02, 0, 1.62, 0.16, P.brass), rod([0.11, 1.74, 0.14], [0.12, 1.93, 0.15], 0.04, 0.03, W, 5)]); // British false-front shako
+  const bearG = atHip([cyl(0.15, 0.2, 1.46, 1.98, DK, 7), dome(0.2, 1.98, DK, 0.5), bx(0.13, 0.12, 0.02, 0, 1.58, 0.165, P.brass), rod([0.13, 1.62, 0.07], [0.16, 2.06, 0.07], 0.045, 0.03, RED, 5), bx(0.12, 0.12, 0.03, 0, 1.98, -0.19, RED)]);
+  const cuirG = atHip([cyl(0.182, 0.25, 0.62, SH - 0.02, P.steel, 8, 0.76), dome(0.16, 1.47, P.steel), cyl(0.15, 0.15, 1.44, 1.51, DK), peak(0.16, 1.47), bx(0.05, 0.13, 0.32, 0, 1.66, -0.02, P.brass),
+    rod([0, 1.68, -0.15], [0, 1.22, -0.3], 0.045, 0.075, DK, 5), rod([0.03, 1.7, 0.1], [0.05, 1.98, 0.08], 0.035, 0.025, RED, 5)]); // breastplate, helmet, fur turban, crest, horsehair tail, plume
+  const capG = atHip([cyl(0.138, 0.12, 1.47, 1.66, DK), paint(new THREE.BoxGeometry(0.3, 0.1, 0.3).rotateY(Math.PI / 4).translate(0, 1.72, 0), RED), peak(0.17, 1.49), bx(0.1, 0.1, 0.02, 0, 1.56, 0.145, P.brass), rod([0.1, 1.76, 0.08], [0.12, 2.0, 0.08], 0.04, 0.025, P.trim, 5)]); // lancer czapka
+  const bicG = atHip([cyl(0.152, 0.145, 1.46, 1.6, DK), paint(new THREE.CylinderGeometry(0.33, 0.33, 0.24, 10, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2).scale(1, 0.62, 1).translate(0, 1.5, 0), DK, true), ball(0.045, 0.12, 1.6, 0.13, 0xe9e4d6)]); // bicorne worn en bataille: crown, crescent, cockade
+  const skirG = atHip([ball(0.095, 0.23, 1.175, 0, 0x4a8a3a, 1.2, 0.6), ball(0.095, -0.23, 1.175, 0, 0x4a8a3a, 1.2, 0.6), bx(0.26, 0.035, 0.03, 0, 1.57, 0.165, 0xe8c030)]); // light-company epaulettes and shako cord
+  // horse: white parts take a coat per horse (bay, chestnut, black, grey); legs swing in pairs from shoulder and hip
   const HD = 0x2a2a2a;
-  const horseParts: THREE.BufferGeometry[] = [
-    bx(0.72, 0.68, 1.5, 0, 1.0, 0, W), bx(0.66, 0.74, 0.5, 0, 1.05, 0.8, W),
-    paint(new THREE.BoxGeometry(0.3, 0.75, 0.36).rotateX(-0.55).translate(0, 1.6, 1.15), W),
-    paint(new THREE.BoxGeometry(0.24, 0.26, 0.55).rotateX(0.4).translate(0, 1.88, 1.52), W),
-    bx(0.06, 0.14, 0.05, 0.08, 2.06, 1.36, HD), bx(0.06, 0.14, 0.05, -0.08, 2.06, 1.36, HD), bx(0.08, 0.5, 0.12, 0, 1.78, 1.0, HD), bx(0.12, 0.6, 0.14, 0, 0.95, -0.82, HD),
-    bx(0.76, 0.06, 0.62, 0, 1.36, -0.05, 0x6a2a2a), bx(0.5, 0.1, 0.4, 0, 1.42, -0.05, 0x3a2a1a),
-    bx(0.26, 0.04, 0.06, 0, 1.84, 1.64, 0x3a2a1a), bx(0.03, 0.04, 0.02, 0.11, 1.93, 1.6, HD), bx(0.03, 0.04, 0.02, -0.11, 1.93, 1.6, HD), bx(0.06, 0.12, 0.04, 0, 2.02, 1.46, HD), // bridle, eyes, forelock
-    bx(0.04, 0.22, 0.1, 0.42, 1.15, -0.05, P.steel), bx(0.04, 0.22, 0.1, -0.42, 1.15, -0.05, P.steel), // stirrups
-  ];
-  for (const [lx, lz] of [[0.24, 0.65], [-0.24, 0.65], [0.24, -0.6], [-0.24, -0.6]]) horseParts.push(bx(0.17, 0.42, 0.19, lx, 0.55, lz, W), bx(0.13, 0.3, 0.15, lx, 0.17, lz, W), bx(0.15, 0.08, 0.18, lx, 0.04, lz, HD));
-  const horseG = merge(horseParts);
-  // --- field gun: barrel with muzzle swell, cheeks, trail, spoked wheels
-  const gunParts: THREE.BufferGeometry[] = [
-    paint(new THREE.CylinderGeometry(0.2, 0.27, 2.3, 8).rotateX(Math.PI / 2).translate(0, 1.0, 0.55), 0x2a2a2e),
-    paint(new THREE.CylinderGeometry(0.3, 0.3, 0.16, 8).rotateX(Math.PI / 2).translate(0, 1.0, 1.75), 0x2a2a2e),
-    bx(0.12, 0.34, 1.5, 0.25, 0.85, 0.1, P.wood), bx(0.12, 0.34, 1.5, -0.25, 0.85, 0.1, P.wood), bx(0.2, 0.12, 1.5, 0, 0.6, -1.2, P.wood),
-  ];
-  for (const sx of [0.68, -0.68]) gunParts.push(paint(new THREE.TorusGeometry(0.78, 0.08, 4, 10).rotateY(Math.PI / 2).translate(sx, 0.8, 0), P.wood), bx(0.07, 1.5, 0.07, sx, 0.8, 0, P.wood), bx(0.07, 0.07, 1.5, sx, 0.8, 0, P.wood), bx(0.14, 0.2, 0.2, sx, 0.8, 0, 0x2a2a2e));
-  gunParts.push(bx(0.55, 0.4, 0.6, 0, 0.8, -2.0, 0x4a5a34), bx(0.05, 0.05, 1.7, 0.36, 1.32, 0.2, P.wood), bx(0.1, 0.1, 0.12, 0.36, 1.32, 1.1, 0x8a8576));
-  for (const [ax, az] of [[-0.9, -0.5], [-0.75, -0.3], [-1.05, -0.3], [-0.9, -0.1]]) gunParts.push(bx(0.2, 0.2, 0.2, ax, 0.12, az, 0x2a2a2e)); // shot pile
-  const gunG = merge(gunParts);
-  const foot = mkI(coatArms, 5000, toon({ color: 0xffffff }), [0, 0.85, 0], false);
-  foot.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(5000 * 3), 3);
-  const kit = mkI(kitG, 5000, toon({ vertexColors: true }), [0, 0.85, 0], false);
-  // legs hang from the hip so they can swing when the unit marches
-  const legG = (x: number) => merge([bx(0.19, 0.2, 0.25, x, -0.44, 0.02, DK), bx(0.18, 0.34, 0.22, x, -0.17, 0, P.pants)]);
-  const legL = mkI(legG(0.13), 5000, toon({ vertexColors: true }), [0, -0.27, 0], false);
-  const legR = mkI(legG(-0.13), 5000, toon({ vertexColors: true }), [0, -0.27, 0], false);
-  // one invisible box casts the whole soldier's shadow (4 meshes of 29+ boxes were too heavy); slightly inside the silhouette so it never darkens the figure
-  const shadowP = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 1.8, 0.28).translate(0, 0.9, 0), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), 5000);
-  shadowP.instanceMatrix = foot.instanceMatrix; shadowP.count = 0; shadowP.frustumCulled = false; shadowP.castShadow = true; shadowP.receiveShadow = false; scene.add(shadowP);
-  // Guard bearskins, and one standard per infantry regiment (pole + finial, waving banner in the nation's colour, gold eagle)
-  const bearM = mkI(merge([bx(0.34, 0.6, 0.32, 0, 1.98, 0, DK), bx(0.14, 0.14, 0.02, 0, 1.84, 0.17, P.brass), bx(0.1, 0.36, 0.1, 0.1, 2.42, 0, 0xd8453a)]), 1500, toon({ vertexColors: true }), null, false);
+  const horseG = merge([
+    rod([0, 1.04, -0.62], [0, 1.08, 0.56], 0.28, 0.3, W, 8), ball(0.3, 0, 1.06, 0.56, W, 0.95), ball(0.3, 0, 1.1, -0.6, W, 0.95, 1, 1.05), // barrel, chest, rump
+    rod([0, 1.18, 0.62], [0, 1.72, 0.98], 0.2, 0.12, W), rod([0, 1.8, 0.96], [0, 1.5, 1.38], 0.12, 0.075, W), // neck, head
+    rod([0.06, 1.84, 0.94], [0.08, 1.97, 0.9], 0.035, 0.01, W, 4), rod([-0.06, 1.84, 0.94], [-0.08, 1.97, 0.9], 0.035, 0.01, W, 4), bx(0.03, 0.04, 0.04, 0.085, 1.72, 1.12, HD), bx(0.03, 0.04, 0.04, -0.085, 1.72, 1.12, HD), // ears, eyes
+    rod([0, 1.29, 0.48], [0, 1.83, 0.86], 0.06, 0.05, HD, 4), rod([0, 1.15, -0.86], [0, 0.5, -1.02], 0.08, 0.035, HD, 5), // mane, tail
+    bx(0.56, 0.05, 0.86, 0, 1.39, -0.08, 0x7a2a2a), paint(new THREE.BoxGeometry(0.04, 0.34, 0.86).rotateZ(-0.25).translate(0.3, 1.22, -0.08), 0x7a2a2a), paint(new THREE.BoxGeometry(0.04, 0.34, 0.86).rotateZ(0.25).translate(-0.3, 1.22, -0.08), 0x7a2a2a), bx(0.36, 0.08, 0.42, 0, 1.42, 0, LEATHER), rod([-0.22, 1.45, -0.3], [0.22, 1.45, -0.3], 0.065, 0.065, 0x2a3a6a), rod([0, 1.6, 1.22], [0, 1.4, 0.4], 0.012, 0.012, DK, 3), // shabraque, saddle, valise, reins
+    rod([0.34, 1.3, 0.05], [0.36, 0.9, 0.08], 0.012, 0.012, DK, 3), rod([-0.34, 1.3, 0.05], [-0.36, 0.9, 0.08], 0.012, 0.012, DK, 3), // stirrup leathers
+  ]).translate(0, -HY, 0);
+  const hleg = (x: number, knee: number, r: number, a: number) => merge([rod([x, 0, 0], [x, -0.44, knee], r, 0.06, W, 5), rod([x, -0.44, knee], [x, -0.88, 0], 0.05, 0.045, W, 5), rod([x, -0.88, 0], [x, -0.98, 0.01], 0.06, 0.065, HD, 5)]).rotateX(a);
+  const legsFG = merge([hleg(0.16, 0.05, 0.085, 0.2), hleg(-0.16, 0.05, 0.085, -0.2)]), legsHG = merge([hleg(0.16, -0.12, 0.11, 0.2), hleg(-0.16, -0.12, 0.11, -0.2)]);
+  // field gun: bronze barrel on an olive Gribeauval carriage, spoked wheels, rammer and shot pile
+  const spokes = (sx: number) => [0, 1, 2, 3, 4, 5].map((k) => rod([sx, 0.78, 0], [sx, 0.78 + Math.cos(k * 1.047) * 0.72, Math.sin(k * 1.047) * 0.72], 0.025, 0.025, OLIVE, 3));
+  const gunG = merge([
+    rod([0, 0.98, -0.45], [0, 1.04, 1.6], 0.24, 0.16, BRONZE, 8), rod([0, 1.04, 1.5], [0, 1.045, 1.66], 0.2, 0.2, BRONZE, 8), ball(0.1, 0, 0.97, -0.55, BRONZE),
+    bx(0.09, 0.42, 1.5, 0.27, 0.82, 0.05, OLIVE), bx(0.09, 0.42, 1.5, -0.27, 0.82, 0.05, OLIVE), rod([0, 0.78, -0.5], [0, 0.12, -2.1], 0.14, 0.11, OLIVE, 4), rod([-0.72, 0.78, 0], [0.72, 0.78, 0], 0.07, 0.07, IRON),
+    ...[0.68, -0.68].flatMap((sx) => [paint(new THREE.TorusGeometry(0.76, 0.07, 4, 12).rotateY(Math.PI / 2).translate(sx, 0.78, 0), IRON, true), rod([sx - 0.08, 0.78, 0], [sx + 0.08, 0.78, 0], 0.13, 0.13, OLIVE, 8), ...spokes(sx)]),
+    rod([0.9, 0.05, -1.1], [0.9, 0.05, 0.7], 0.03, 0.03, P.wood, 4), rod([0.9, 0.05, 0.7], [0.9, 0.05, 0.92], 0.07, 0.07, 0x3a3a3a), // rammer and sponge
+    ...[[-0.9, 0.11, -0.5], [-0.72, 0.11, -0.3], [-1.08, 0.11, -0.3], [-0.9, 0.11, -0.1], [-0.9, 0.28, -0.3]].map(([x, y, z]) => ball(0.11, x, y, z, DK)),
+  ]);
+  // enamel paint: the scene's 3 toon steps plus a bright glint where a facet faces the sun (ramp stored /GL, colour scaled back up by GL)
+  const GL = 1.35, figRamp = new THREE.DataTexture(new Uint8Array([0.47, 0.47, 0.47, 0.47, 0.75, 0.75, 1, 1, GL, GL].map((v) => Math.round((v / GL) * 255))), 10, 1, THREE.RedFormat);
+  figRamp.minFilter = figRamp.magFilter = THREE.NearestFilter; figRamp.needsUpdate = true;
+  const fig = (g: THREE.BufferGeometry, n: number, center: [number, number, number] | null, shadow = false) => mkI(g, n, Object.assign(toon({ vertexColors: true, gradientMap: figRamp, color: new THREE.Color(GL, GL, GL) }), { flatShading: true }) /* faceted from indexed parts: ~half the vertices */, center, shadow);
+  const body = fig(bodyG, 5000, [0, 0.35, 0]), legL = fig(legG(0.095), 5000, [0, -0.3, 0]), legR = fig(legG(-0.095), 5000, [0, -0.3, 0]);
+  const armsCarry = fig(armsCarryG, 5000, [0, -0.2, 0.05]), armsAim = fig(armsAimG, 3000, [0, -0.05, 0.4]), armsRide = fig(armsRideG, 1600, [0, -0.1, 0.2]);
+  const packM = fig(packG, 5000, [0, 0.35, 0]), baseM = fig(cyl(0.31, 0.29, 0, 0.05, BASE, 10), 5000, [0, 0, 0]);
+  // one invisible box casts the whole soldier's shadow (cheaper than every part casting); slightly inside the silhouette so it never darkens the figure
+  const shadowP = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 1.8, 0.28).translate(0, 0.9 - HIP, 0), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), 5000);
+  shadowP.instanceMatrix = body.instanceMatrix; shadowP.count = 0; shadowP.frustumCulled = false; shadowP.castShadow = true; shadowP.receiveShadow = false; scene.add(shadowP);
+  const hat = [0, 1.05, 0] as [number, number, number];
+  const shakoM = fig(shakoG, 5000, hat), belgM = fig(belgicG, 3000, hat), bearM = fig(bearG, 1500, hat), cuirM = fig(cuirG, 1500, [0, 0.5, 0]), capM = fig(capG, 1500, hat), bicM = fig(bicG, 200, hat);
+  const skirM = fig(skirG, 2500, null), lanceM = fig(lanceG, 1500, null);
+  // one standard per infantry regiment (pole + finial, waving banner in the nation's colour, gold eagle)
   const flagM = mkI(merge([bx(0.07, 3.6, 0.07, 0, 1.8, 0, P.wood), bx(0.18, 0.2, 0.18, 0, 3.7, 0, P.brass)]), 400, toon({ vertexColors: true }), [0, 1.8, 0], false);
   const bannerM = mkI(paint(new THREE.BoxGeometry(1.0, 0.75, 0.05).translate(0.55, 3.1, 0), 0xffffff), 400, toon({ color: 0xffffff }), null, false);
   const eagleM = mkI(paint(new THREE.BoxGeometry(0.32, 0.32, 0.07).translate(0.55, 3.1, 0), P.brass), 400, toon({ vertexColors: true }), null, false);
-  const horses = mkI(horseG, 1500, toon({ vertexColors: true }), [0, 1.0, 0]);
+  const horses = fig(horseG, 1500, [0, 0.1, 0.2], true), legsF = fig(legsFG, 1500, [0, -0.5, 0]), legsH = fig(legsHG, 1500, [0, -0.5, 0]); // legs cast no shadow: the body's is enough
+  const hbaseM = fig(cyl(0.55, 0.53, 0, 0.05, BASE, 12, 1.9), 1500, [0, 0, 0]);
   const HORSE_COL = [0x7a5236, 0x9a6638, 0x34302c, 0xa8a49a].map((h) => new THREE.Color(h));
-  const guns = mkI(gunG, 300, toon({ vertexColors: true }), [0, 0.9, 0.3]);
-  // gear that rides on the figures: plumes (nation colour), cuirassier helmets + breastplates, lances + pennants
-  const plumeM = mkI(paint(new THREE.BoxGeometry(0.14, 0.28, 0.14).translate(0, 1.92, 0), 0xffffff), 5000, toon({ color: 0xffffff }), null, false);
-  const cuirM = mkI(merge([bx(0.64, 0.52, 0.42, 0, 0.88, 0, P.steel), bx(0.38, 0.5, 0.36, 0, 1.68, 0, P.steel), bx(0.08, 0.26, 0.42, 0, 2.02, -0.02, 0x1b1b1f), bx(0.04, 0.04, 1.2, -0.42, 1.0, 0.45, P.steel), bx(0.1, 0.06, 0.1, -0.42, 1.0, -0.12, P.brass)]), 1500, toon({ vertexColors: true }), null, false); // plus sabre
-  const capM = mkI(merge([bx(0.44, 0.1, 0.44, 0, 1.92, 0, 0xc23a2e), bx(0.3, 0.05, 0.3, 0, 1.62, 0, P.brass)]), 1500, toon({ vertexColors: true }), null, false); // uhlan czapka
-  const skirM = mkI(merge([bx(0.18, 0.08, 0.18, 0.31, 1.22, 0, 0x4a8a3a), bx(0.18, 0.08, 0.18, -0.31, 1.22, 0, 0x4a8a3a), bx(0.3, 0.05, 0.04, 0, 1.52, 0.15, 0xe8c030)]), 2500, toon({ vertexColors: true }), null, false); // light-company epaulettes and cord
-  const bicM = mkI(merge([bx(0.52, 0.12, 0.3, 0, 1.8, 0, DK), bx(0.1, 0.1, 0.03, 0.2, 1.84, 0.16, 0xd8453a), bx(0.5, 0.07, 0.04, 0, 1.66, 0.15, P.brass)]), 200, toon({ vertexColors: true }), null, false); // commander's bicorne
-  const lanceM = mkI(merge([bx(0.05, 2.7, 0.05, 0.42, 1.55, 0.25, P.wood), bx(0.07, 0.2, 0.07, 0.42, 2.95, 0.25, P.steel)]), 1500, toon({ vertexColors: true }), null, false);
-  const pennM = mkI(paint(new THREE.BoxGeometry(0.4, 0.22, 0.03).translate(0.64, 2.75, 0.25), 0xffffff), 1500, toon({ color: 0xffffff }), null, false);
+  const guns = fig(gunG, 300, [0, 0.8, 0], true);
+  // figure rig: rootAt places the feet; joint hangs a child (hip, shoulder, horse legs) off a parent matrix with its own pitch (+ = forward) and roll
+  const E = new THREE.Euler(0, 0, 0, 'YXZ'), Q = new THREE.Quaternion(), V = new THREE.Vector3(), SV = new THREE.Vector3();
+  const mRoot = new THREE.Matrix4(), mBody = new THREE.Matrix4(), mHorse = new THREE.Matrix4(), mPart = new THREE.Matrix4();
+  const rootAt = (m: THREE.Matrix4, x: number, y: number, z: number, yaw: number, sc: number) => m.compose(V.set(x, y, z), Q.setFromEuler(E.set(0, yaw, 0)), SV.setScalar(sc));
+  const joint = (out: THREE.Matrix4, parent: THREE.Matrix4, x: number, y: number, z: number, pitch: number, roll = 0) => out.compose(V.set(x, y, z), Q.setFromEuler(E.set(pitch, 0, roll)), SV.setScalar(1)).premultiply(parent);
 
   // 2D pixel effect sprites (rows: powder puff, muzzle flash, shell burst, dust kick), one instanced billboard draw
   const FRAMES = [6, 3, 6, 4];
@@ -542,7 +572,26 @@ export function createView(host: HTMLElement) {
   const fxs: Fx[] = [];
   const spawn = (row: number, x: number, y: number, z: number, life: number, size: number, vx = 0, vy = 0, vz = 0, delay = 0) => { if (fxs.length < FX_MAX - 300) fxs.push({ row, x, y, z, age: -delay, life, size, vx, vy, vz }); }; // delay: starts hidden, so a volley can ripple
 
-  type Vis = { x: number; z: number; f: number; off: Float32Array; form: string; n?: number };
+  // per regiment: smoothed centre and facing, its speed, and per man MS floats: x, z, facing, vx, vz, gait phase
+  const MS = 6;
+  type Vis = { x: number; z: number; f: number; m: Float32Array; form: string; rs: number; n?: number; side: number; kind: number };
+  // crowd: last frame's men (and the houses) in a flat grid, counting-sorted by cell, so each man only looks at his neighbours to shoulder them apart
+  const CG = 2.4, CMAX = 9000, cX = new Float32Array(CMAX), cZ = new Float32Array(CMAX), cR = new Float32Array(CMAX), cU = new Int32Array(CMAX), cI = new Int32Array(CMAX), cS = new Int8Array(CMAX), cCell = new Int32Array(CMAX), cOrd = new Int32Array(CMAX);
+  let cN = 0, cW = 1, cStart = new Int32Array(2), cFill = new Int32Array(1), houseXZ: number[] = [];
+  const cellOf = (x: number) => Math.max(0, Math.min(cW - 1, Math.floor((x + mapSize / 2) / CG) + 1));
+  const figR = (kind: number, i: number) => (kind === 2 ? (i & 1 ? 0.5 : 1.6) : kind === 1 ? 1 : 0.5) * FS; // man, horse, gun
+  function buildCrowd() {
+    cN = 0;
+    const add = (x: number, z: number, r: number, u: number, i: number, s: number) => { if (cN < CMAX) { cX[cN] = x; cZ[cN] = z; cR[cN] = r; cU[cN] = u; cI[cN] = i; cS[cN++] = s; } };
+    for (let h = 0; h < houseXZ.length; h += 2) add(houseXZ[h], houseXZ[h + 1], 1.7, -1, h, -1);
+    for (const [id, v] of vis) if (v.form !== '' && v.n) for (let i = 0; i < v.n; i++) { const o = i * MS; if (v.m[o] === v.m[o]) add(v.m[o], v.m[o + 1], figR(v.kind, i), id, i, v.side); }
+    cW = Math.ceil(mapSize / CG) + 2; const cells = cW * cW;
+    if (cStart.length < cells + 1) { cStart = new Int32Array(cells + 1); cFill = new Int32Array(cells); } else cStart.fill(0);
+    for (let k = 0; k < cN; k++) { cCell[k] = cellOf(cZ[k]) * cW + cellOf(cX[k]); cStart[cCell[k] + 1]++; }
+    for (let c = 0; c < cells; c++) cStart[c + 1] += cStart[c];
+    cFill.set(cStart.subarray(0, cells));
+    for (let k = 0; k < cN; k++) cOrd[cFill[cCell[k]]++] = k;
+  }
   const vis = new Map<number, Vis>();
   const dummy = new THREE.Object3D();
   dummy.rotation.order = 'YXZ';
@@ -595,10 +644,6 @@ export function createView(host: HTMLElement) {
     out[0] = (c - (cols - 1) / 2) * 1.3; out[1] = -r * 1.5;
   }
 
-  function putLeg(mesh: THREE.InstancedMesh, idx: number, x: number, y: number, z: number, yaw: number, swing: number, sc: number) {
-    dummy.position.set(x, y + 0.54 * sc, z); dummy.rotation.set(swing, yaw, 0); dummy.scale.setScalar(sc); dummy.updateMatrix();
-    mesh.setMatrixAt(idx, dummy.matrix); dummy.rotation.set(0, 0, 0);
-  }
   function put(mesh: THREE.InstancedMesh, idx: number, x: number, y: number, z: number, rot: number, sc = 1) {
     dummy.position.set(x, y, z); dummy.rotation.set(0, rot, 0); dummy.scale.setScalar(sc); dummy.updateMatrix();
     mesh.setMatrixAt(idx, dummy.matrix);
@@ -746,11 +791,12 @@ export function createView(host: HTMLElement) {
     }
 
     // units
-    let nf = 0, nh = 0, ng = 0, npl = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0;
+    let nf = 0, nh = 0, ng = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0, nbs = 0, nac = 0, naa = 0, nar = 0, nsh = 0, nbg = 0, npk = 0;
     const live = new Set<number>();
     const seenSet = state.fog ? new Set<number>(state.seen?.[viewer] ?? []) : null; // fog of war: enemies you cannot see are not drawn
     const k = 1 - Math.exp(-10 * dt);
-    const sl = [0, 0];
+    const sl = [0, 0], byId = new Map<number, any>(state.units.map((q: any) => [q.id, q]));
+    buildCrowd();
     // cull regiments that are clearly off-screen (no figures placed; smoothing and bookkeeping still run). Not on the first frame or after a camera jump.
     const still = camReady && Math.hypot(cam.x - lastCam.x, cam.z - lastCam.z) < 20 && Math.abs(cam.dist / lastCam.d - 1) < 0.2 && Math.abs(cam.yaw - lastCam.y) < 0.1 && Math.abs(tl.v - lastCam.t) < 0.1;
     if (still) frustum.setFromProjectionMatrix(fMat.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
@@ -760,67 +806,123 @@ export function createView(host: HTMLElement) {
       live.add(u.id);
       if (seenSet && u.side !== viewer && !seenSet.has(u.id)) { const hp = plateMap.get(u.id); if (hp) hp.el.style.display = 'none'; vis.delete(u.id); continue; }
       let v = vis.get(u.id);
-      if (!v) { v = { x: u.x, z: u.z, f: u.facing, off: new Float32Array(0), form: u.form }; vis.set(u.id, v); }
+      if (!v) { v = { x: u.x, z: u.z, f: u.facing, m: new Float32Array(0), form: '', rs: 0, side: u.side, kind: 0 }; vis.set(u.id, v); }
+      const px0 = v.x, pz0 = v.z;
       v.x += (u.x - v.x) * k; v.z += (u.z - v.z) * k;
+      v.rs += (Math.hypot(v.x - px0, v.z - pz0) / Math.max(dt, 1e-3) - v.rs) * Math.min(1, dt * 4); // how fast the regiment itself is going
       let df = u.facing - v.f; df = Math.atan2(Math.sin(df), Math.cos(df)); v.f += Math.max(-4 * dt, Math.min(4 * dt, df * (1 - Math.exp(-8 * dt)))); // never faster than 4 rad/s
       const T = tu.types[u.type];
       const isArt = u.type === 'artillery', isCav = T.cav;
       const nGun = isArt ? Math.max(1, Math.ceil(u.men / 54)) : 0;
       const n = isArt ? nGun * 2 : Math.max(1, Math.min(u.garrison != null ? 10 : 1e9, Math.ceil(u.men / T.perFig))); // a garrison shows a handful of men at the walls
       if (v.n && n < v.n) for (let q = 0; q < Math.min(3, v.n - n); q++) spawn(3, v.x + (Math.random() - 0.5) * 10, heightAt(scn, v.x, v.z) + 0.6, v.z + (Math.random() - 0.5) * 5, 0.5, 2.6); // men falling
-      v.n = n;
-      if (v.off.length < n * 2) { const o = new Float32Array(n * 2 + 40); o.set(v.off); v.off = o; v.form = ''; }
-      // footprint ~25*FS plus 15 for shadows thrown into view and the one-frame-old camera; stale slot offsets snap when it returns (form = '')
+      v.n = n; v.side = u.side; v.kind = isArt ? 2 : isCav ? 1 : 0;
+      if (v.m.length < n * MS) { const o = new Float32Array(n * MS + 40 * MS).fill(NaN); o.set(v.m); v.m = o; } // NaN = a new man, placed straight on his slot
+      // footprint ~25*FS plus 15 for shadows thrown into view and the one-frame-old camera; men snap back to their slots when it returns (form = '')
       const cull = still && !frustum.intersectsSphere(cullS.set(v3.set(v.x, heightAt(scn, v.x, v.z), v.z), 25 * FS + 15));
-      const sin = Math.sin(v.f), cos = Math.cos(v.f);
+      const tf = u.facing, st = Math.sin(tf), ct = Math.cos(tf); // slots follow the order's facing at once; the men take their time getting there
       tmpC.setHex(u.routed ? 0x8d8a82 : NAT[u.nat] ?? 0x888888);
       if (u.hurt < 0.18 && !u.routed) tmpC.lerp(WHITE, 0.6); // hit flash
       plumeC.setHex(u.type === 'skirmisher' ? 0x4a8a3a : PLUME[u.nat] ?? 0xe9e4d6);
-      const moving = u.mv ?? true;
-      const addFig = (x: number, y: number, z: number, sc0: number, fi: number, rider = false) => {
-        const sc = sc0 * (0.95 + hash(u.id * 13 + fi * 7) * 0.1), ry = v!.f + (hash(u.id * 5 + fi * 3) - 0.5) * 0.14; // no two soldiers identical
-        put(foot, nf, x, y, z, ry, sc); put(kit, nf, x, y, z, ry, sc);
-        tmpC2.copy(tmpC).multiplyScalar(0.94 + hash(u.id * 3 + fi * 11) * 0.12); foot.setColorAt(nf, tmpC2);
-        const sw = !rider && moving ? Math.sin(clock * (u.routed ? 13 : 8) + fi * 1.7) * 0.55 : 0; // marching stride
-        putLeg(legL, nf, x, y, z, ry, sw, sc); putLeg(legR, nf, x, y, z, ry, -sw, sc);
-        nf++;
-        if (u.type === 'cuirassier') put(cuirM, nc++, x, y, z, ry, sc);
-        else if (u.type === 'guard') put(bearM, nbr++, x, y, z, ry, sc);
-        else if (u.type === 'commander') put(bicM, ncm++, x, y, z, ry, sc);
-        else { put(plumeM, npl, x, y, z, ry, sc); plumeM.setColorAt(npl++, plumeC); }
-        if (u.type === 'lancer' && u.nat === 'pr') put(capM, ncp++, x, y, z, ry, sc);
-        if (u.type === 'skirmisher') put(skirM, nsk++, x, y, z, ry, sc);
-        if (u.type === 'lancer') { put(lanceM, nlc, x, y, z, ry, sc); put(pennM, nlc, x, y, z, ry, sc); pennM.setColorAt(nlc++, tmpC); }
+      const charging = u.chase != null || u.eng != null, inFight = u.fired < (T.reload || 6) * 1.5;
+      const foe = u.eng != null ? byId.get(u.eng) : null, foeA = foe ? Math.atan2(foe.x - v.x, foe.z - v.z) : 0; // melee: the ranks break into a scrum facing the enemy
+      // one tin figure, standing at (x, y, z) facing yaw, or sitting in a horse's saddle; mv = this man is on the move, s = his step (sin of his own gait phase)
+      const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number) => {
+        const h1 = hash(u.id * 13 + fi * 7), h2 = hash(u.id * 5 + fi * 3), h3 = hash(u.id * 3 + fi * 11), rider = mount != null, walk = mv && !rider;
+        if (mount) mRoot.compose(V.set(0, 1.44 - HY - HIP * 1.1, -0.02), Q.identity(), SV.setScalar(1.1)).premultiply(mount);
+        else { const sc = sc0 * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk && Math.abs(s) > 0.55 ? 0.1 * sc : 0), z, yaw, sc); baseM.setMatrixAt(nbs++, mRoot); } // toy hop on each step
+        const lf = u.fired - h3 * 0.2, kick = lf >= 0 && lf < 0.25 ? 1 - lf / 0.25 : 0; // the volley ripples down the line
+        const aim = !rider && !u.routed && u.type !== 'commander' && (charging || inFight && (u.type === 'skirmisher' ? (u.fired + h3 * 5) % 5 < 1.6 : u.fired < 0.8 || u.reload < 0.8));
+        const jab = foe ? Math.max(0, Math.sin(clock * 7 + h2 * 6.28)) : 0; // bayonet thrusts and sabre cuts in melee
+        const lean = rider ? 0 : u.routed ? 0.4 : walk ? (charging ? 0.24 : 0.08) : foe ? 0.12 + jab * 0.12 : 0;
+        joint(mBody, mRoot, 0, HIP, 0, lean - kick * 0.12, walk ? s * 0.07 : Math.sin(clock * 0.9 + h1 * 40) * 0.025); // marching sway, or a slow idle shift of weight
+        tmpC2.copy(tmpC).multiplyScalar(0.94 + h3 * 0.12); body.setMatrixAt(nf, mBody); body.setColorAt(nf, tmpC2);
+        if (!rider && u.type !== 'commander') packM.setMatrixAt(npk++, mBody);
+        const stride = walk ? s * (charging || u.routed ? 0.75 : 0.5) : 0;
+        joint(mPart, mRoot, 0, HIP, 0, rider ? -0.6 : stride, rider ? 0.5 : 0); legL.setMatrixAt(nf, mPart);
+        joint(mPart, mRoot, 0, HIP, 0, rider ? -0.6 : -stride, rider ? -0.5 : 0); legR.setMatrixAt(nf++, mPart);
+        // arms: sabre and reins for riders and generals, musket levelled when firing or charging, else shouldered (swinging on the march, thrown up in a rout)
+        const ride = rider || u.type === 'commander', am = ride ? armsRide : aim ? armsAim : armsCarry, ai = ride ? nar++ : aim ? naa++ : nac++;
+        const ap = ride ? (foe ? 0.4 + Math.sin(clock * 8 + h2 * 6.28) * 0.8 : charging && mv ? (u.type === 'lancer' ? 1.5 : 1.2) + s * 0.08 : 0)
+          : aim ? (charging ? 0.3 + jab * 0.3 : 0) - kick * 0.35 : u.routed ? -0.6 + s * 0.5 : walk ? s * 0.08 : 0;
+        joint(mPart, mBody, 0, SH - HIP, 0, ap); am.setMatrixAt(ai, mPart); am.setColorAt(ai, tmpC2);
+        if (u.type === 'lancer') { lanceM.setMatrixAt(nlc, mPart); lanceM.setColorAt(nlc++, tmpC); }
+        if (u.type === 'cuirassier') cuirM.setMatrixAt(nc++, mBody);
+        else if (u.type === 'guard') bearM.setMatrixAt(nbr++, mBody);
+        else if (u.type === 'commander') bicM.setMatrixAt(ncm++, mBody);
+        else if (u.type === 'lancer' && u.nat === 'pr') capM.setMatrixAt(ncp++, mBody);
+        else if (u.nat === 'gb') { belgM.setMatrixAt(nbg, mBody); belgM.setColorAt(nbg++, plumeC); }
+        else { shakoM.setMatrixAt(nsh, mBody); shakoM.setColorAt(nsh++, plumeC); }
+        if (u.type === 'skirmisher') skirM.setMatrixAt(nsk++, mBody);
       };
       const fb = [1e9, -1e9, 1e9, -1e9]; // the figures' footprint in the regiment's frame, for its base
+      const snapAll = v.form === '', top = v.rs * 1.2 + T.speed * 1.1, gait = (u.routed ? 13 : charging ? 11 : 8) / T.speed;
       for (let i = 0; i < (cull ? 0 : n); i++) {
         if (isArt) {
           const g = i >> 1, lx = (g - (nGun - 1) / 2) * 4.2 + (i & 1 ? 1.4 : -1.4), lz = i & 1 ? -2.4 : 0;
           sl[0] = lx; sl[1] = lz;
         } else slots(u, n, i, sl);
+        const hm = hash(u.id * 17 + i * 29);
+        if (u.type === 'skirmisher' && !u.routed) { sl[0] += Math.sin(clock * 0.25 + hm * 30) * 1.2; sl[1] += Math.cos(clock * 0.21 + hm * 17) * 0.8; } // skirmishers drift about their posts
         sl[0] *= FS; sl[1] *= FS; // everything is laid out FS times wider
-        const ox = v.off[i * 2], oz = v.off[i * 2 + 1];
-        const first = v.form === '';
-        const nx = first ? sl[0] : ox + (sl[0] - ox) * Math.min(1, 6 * dt), nz = first ? sl[1] : oz + (sl[1] - oz) * Math.min(1, 6 * dt);
-        v.off[i * 2] = nx; v.off[i * 2 + 1] = nz;
-        fb[0] = Math.min(fb[0], nx); fb[1] = Math.max(fb[1], nx); fb[2] = Math.min(fb[2], nz); fb[3] = Math.max(fb[3], nz);
-        const wx = v.x + nx * cos + nz * sin, wz = v.z - nx * sin + nz * cos;
-        // stepped hop instead of a smooth bob
-        const bob = u.routed || moving && (u.tx != null || u.chase != null) ? (Math.sin(clock * 9 + i) > 0 ? 0.14 : 0) : 0;
-        const y = heightAt(scn, wx, wz);
-        if ((u.routed || isCav && u.mv) && Math.random() < dt * (u.routed ? 0.12 : 0.05)) spawn(3, wx, y + 0.5, wz, 0.5, 2.4);
-        if (isArt) {
-          if (!(i & 1)) { put(guns, ng++, wx, y, wz, v.f, 1.3 * FS); }
-          else if (nf < 4990) addFig(wx, y + bob, wz, 1.7 * FS, i);
-        } else if (isCav) {
-          if (nh < 1490 && nf < 4990) {
-            put(horses, nh, wx, y + bob, wz, v.f, 1.4 * FS); horses.setColorAt(nh++, HORSE_COL[Math.floor(hash(u.id * 7 + i) * 4)]);
-            addFig(wx, y + 1.2 * FS + bob, wz, 1.55 * FS, i, true);
+        let tx = v.x + sl[0] * ct + sl[1] * st, tz = v.z - sl[0] * st + sl[1] * ct, face = tf;
+        if (foe) { // close up to the contact line (never past it), a little ragged along the front
+          const pull = Math.max(0, Math.min(1.6 * FS, Math.hypot(foe.x - u.x, foe.z - u.z) / 2 - 0.8 * FS)), lat = (hm - 0.5) * 1.2 * FS;
+          tx += Math.sin(foeA) * pull + Math.cos(foeA) * lat; tz += Math.cos(foeA) * pull - Math.sin(foeA) * lat; face = foeA + (hm - 0.5) * 0.6;
+        }
+        // each man walks to his slot: his own top speed and reaction, easing in on arrival, so wheels, formation changes and gaps in the ranks play out man by man
+        const m = v.m, o = i * MS;
+        if (snapAll || m[o] !== m[o] || Math.hypot(tx - m[o], tz - m[o + 1]) > 40 * FS) { m[o] = tx; m[o + 1] = tz; m[o + 2] = face; m[o + 3] = m[o + 4] = 0; m[o + 5] = hm * 6.28; }
+        else {
+          const dx = tx - m[o], dz = tz - m[o + 1], d = Math.hypot(dx, dz), want = d > 1e-3 ? Math.min(top * (0.85 + 0.3 * hm), d * 2.5) / d : 0, a = Math.min(1, dt * (2.5 + 3 * hm));
+          m[o + 3] += (dx * want - m[o + 3]) * a; m[o + 4] += (dz * want - m[o + 4]) * a;
+          m[o] += m[o + 3] * dt; m[o + 1] += m[o + 4] * dt;
+          // shoulder apart from other men (a bayonet's length from the enemy, so a melee forms a fighting line) and slide round houses
+          const rI = figR(v.kind, i), c0 = cellOf(m[o]), c1 = cellOf(m[o + 1]);
+          let qx = 0, qz = 0, ne = 1e9, nex = 0, nez = 0;
+          for (let r = Math.max(0, c1 - 1); r <= Math.min(cW - 1, c1 + 1); r++) for (let c = Math.max(0, c0 - 1); c <= Math.min(cW - 1, c0 + 1); c++) {
+            for (let e = cStart[r * cW + c], e1 = cStart[r * cW + c + 1]; e < e1; e++) {
+              const q = cOrd[e];
+              if (cU[q] === u.id && cI[q] === i) continue;
+              const ex = m[o] - cX[q], ez = m[o + 1] - cZ[q], foeQ = cS[q] >= 0 && cS[q] !== u.side, min = rI + cR[q] + (foeQ ? 0.5 * FS : 0), d2 = ex * ex + ez * ez;
+              if (foeQ && d2 < ne) { ne = d2; nex = -ex; nez = -ez; }
+              if (d2 >= min * min || d2 < 1e-8) continue;
+              const dd = Math.sqrt(d2), p = ((min - dd) * (cU[q] < 0 ? 1 : 0.5)) / dd; // houses don't give way; men share the shove
+              qx += ex * p; qz += ez * p;
+            }
           }
-        } else if (nf < 4990) addFig(wx, y + bob, wz, 1.7 * FS, i);
+          const kq = Math.min(1, dt * 10); m[o] += qx * kq; m[o + 1] += qz * kq;
+          if (foe) { const over = (m[o] - (u.x + foe.x) / 2) * Math.sin(foeA) + (m[o + 1] - (u.z + foe.z) / 2) * Math.cos(foeA) + 0.6 * FS; if (over > 0) { m[o] -= Math.sin(foeA) * over; m[o + 1] -= Math.cos(foeA) * over; } } // each side keeps to its own half of the melee
+          if (foe && ne < 9 * FS * FS) face = Math.atan2(nex, nez); // pair off with the nearest foe
+          const sp = Math.hypot(m[o + 3], m[o + 4]), head = d > 1.5 * FS && sp > 0.3 ? Math.atan2(m[o + 3], m[o + 4]) : face; // march where he's going; shuffle the last steps facing the front
+          let dh = head - m[o + 2]; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); m[o + 2] += Math.max(-6 * dt, Math.min(6 * dt, dh));
+          m[o + 5] += dt * gait * Math.max(0.6, Math.min(1.8, sp)); // his own gait phase, faster when he hurries
+        }
+        const wx = m[o], wz = m[o + 1], yaw = m[o + 2], mv = Math.hypot(m[o + 3], m[o + 4]) > 0.25, s = Math.sin(m[o + 5]);
+        const lx = (wx - v.x) * ct - (wz - v.z) * st, lz = (wx - v.x) * st + (wz - v.z) * ct;
+        fb[0] = Math.min(fb[0], lx); fb[1] = Math.max(fb[1], lx); fb[2] = Math.min(fb[2], lz); fb[3] = Math.max(fb[3], lz);
+        const y = heightAt(scn, wx, wz);
+        if ((u.routed || isCav && mv) && Math.random() < dt * (u.routed ? 0.12 : 0.05)) spawn(3, wx, y + 0.5, wz, 0.5, 2.4);
+        if (isArt) {
+          if (!(i & 1)) { // the gun leaps back when it fires, then is run up again
+            const back = u.fired < 0.08 ? u.fired / 0.08 : Math.max(0, 1 - (u.fired - 0.08) / 1.4);
+            rootAt(mRoot, wx, y, wz, yaw, 1.3 * FS); joint(mPart, mRoot, 0, 0, -0.7 * back, u.fired < 0.3 ? -0.08 * (1 - u.fired / 0.3) : 0); guns.setMatrixAt(ng++, mPart);
+          } else if (nf < 4990) addFig(i, wx, y, wz, yaw, 1.7 * FS, null, mv, s);
+        } else if (isCav) {
+          if (nh < 1490 && nf < 4990) { // gallop: the body rocks, front and hind legs reach and gather in turn
+            const hp = m[o + 5] * 1.4, hs = Math.sin(hp), gal = mv ? (charging ? 1 : 0.55) : 0;
+            rootAt(mRoot, wx, y, wz, yaw, 1.4 * FS); hbaseM.setMatrixAt(nh, mRoot);
+            joint(mHorse, mRoot, 0, HY + gal * Math.abs(Math.cos(hp)) * 0.14, 0, gal ? gal * hs * 0.12 : Math.sin(clock * 0.7 + i) * 0.02);
+            const hc = HORSE_COL[Math.floor(hash(u.id * 7 + i) * 4)];
+            horses.setMatrixAt(nh, mHorse); horses.setColorAt(nh, hc); legsF.setColorAt(nh, hc); legsH.setColorAt(nh, hc);
+            joint(mPart, mHorse, 0, 0.98 - HY, 0.55, -gal * hs * 0.6); legsF.setMatrixAt(nh, mPart);
+            joint(mPart, mHorse, 0, 1.0 - HY, -0.55, gal * Math.sin(hp + 2.2) * 0.55); legsH.setMatrixAt(nh++, mPart);
+            addFig(i, 0, 0, 0, 0, 0, mHorse, mv, hs);
+          }
+        } else if (nf < 4990) addFig(i, wx, y, wz, yaw, 1.7 * FS, null, mv, s);
       }
       v.form = cull ? '' : u.form;
-      if (fb[0] < 1e9) { const mg = (isCav ? 1.4 : 0.9) * FS; baseRing(v.x, v.z, sin, cos, [fb[0] - mg, fb[1] + mg, fb[2] - mg, fb[3] + mg], bTh, u.routed ? BASE_COL.routed : u.side === viewer ? BASE_COL.mine : BASE_COL.foe); }
+      if (fb[0] < 1e9) { const mg = (isCav ? 1.4 : 0.9) * FS; baseRing(v.x, v.z, st, ct, [fb[0] - mg, fb[1] + mg, fb[2] - mg, fb[3] + mg], bTh, u.routed ? BASE_COL.routed : u.side === viewer ? BASE_COL.mine : BASE_COL.foe); }
       if (!cull && (u.type === 'line' || u.type === 'guard') && !u.routed && nfl < 399) {
         const gy = heightAt(scn, v.x, v.z), sway = Math.sin(clock * 3 + u.id) * 0.35;
         put(flagM, nfl, v.x, gy, v.z, v.f, 1.3 * FS);
@@ -854,13 +956,13 @@ export function createView(host: HTMLElement) {
       const cls = `plate${full ? '' : ' pip'}${selected.has(u.id) ? ' sel' : ''}${u.routed ? ' routed' : u.morale < u.maxMorale * 0.3 ? ' waver' : ''}`;
       if (cls !== p.ls) { p.el.className = cls; p.ls = cls; }
     }
-    horses.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = pennM.count = nlc; capM.count = ncp; skirM.count = nsk;
-    foot.count = kit.count = legL.count = legR.count = nf; plumeM.count = npl; bearM.count = nbr; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
-    shadowP.count = nf;
+    horses.count = legsF.count = legsH.count = hbaseM.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; baseM.count = nbs; packM.count = npk;
+    body.count = legL.count = legR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; shakoM.count = nsh; belgM.count = nbg; bearM.count = nbr; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
+    const figs = [body, packM, legL, legR, armsCarry, armsAim, armsRide, baseM, shakoM, belgM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, hbaseM, guns];
     // upload only the live [0, count) slice; clear first so ranges never pile up across frames (hull twins share these attributes)
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
-    for (const m of [foot, kit, legL, legR, horses, guns, plumeM, cuirM, lanceM, pennM, capM, skirM, bearM, bicM, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
-    for (const m of [foot, plumeM, pennM, horses, bannerM]) if (m.instanceColor) upl(m.instanceColor, m.count, 3);
+    for (const m of [...figs, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
+    for (const m of [...figs, bannerM]) if (m.instanceColor) upl(m.instanceColor, m.count, 3);
     baseGeo.setDrawRange(0, nb * 6); upl(baseGeo.attributes.position as THREE.BufferAttribute, nb * 6, 3); upl(baseGeo.attributes.color as THREE.BufferAttribute, nb * 6, 3);
     for (const [id, p] of plateMap) if (!live.has(id)) { p.el.remove(); plateMap.delete(id); vis.delete(id); }
     for (const l of vlabels) {

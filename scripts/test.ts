@@ -24,13 +24,24 @@ function arena(setup: (fr: any[], co: any[]) => any[], map?: any) {
 }
 const run = (sim: any, secs: number, until = () => false, each = () => {}) => { for (let t = 0; t < secs && !until(); t += 0.05) { step(sim, 0.05); each(); } };
 
-test('friendly regiments march through each other without shoving', () => {
-  let a: any, b: any;
+test('a regiment marches round a friendly one in its way, without overlapping or shoving it', () => {
+  let a: any, b: any, worst = 0;
   const sim = arena((fr, co) => { [a, b] = fr.filter((u) => u.type === 'line'); return [Object.assign(a, { x: 0, z: -40, facing: 0, form: 'column' }), Object.assign(b, { x: 0, z: 0, facing: 0, form: 'line' }), Object.assign(co[0], { x: 170, z: 170 })]; });
   command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: 40 });
-  run(sim, 35);
+  run(sim, 60, () => false, () => { worst = Math.min(worst, distToFoot(b, sim.tu, a.x, a.z) > 0 ? 0 : -1); });
   assert.ok(Math.hypot(a.x, a.z - 40) < 2, `marcher arrived (at ${a.x.toFixed(1)}, ${a.z.toFixed(1)})`);
+  assert.equal(worst, 0, 'the marcher never stood inside the other formation');
   assert.ok(Math.hypot(b.x, b.z) < 0.5, 'the standing regiment kept its post');
+});
+
+test('a plain move order cannot march through the enemy: the line halts at contact and fights', () => {
+  let a: any, e: any;
+  const sim = arena((fr, co) => { a = fr.find((u) => u.type === 'line'); e = co.find((u) => u.type === 'line'); return [Object.assign(a, { x: 0, z: -30, facing: 0, form: 'column' }), Object.assign(e, { x: 0, z: 0, facing: Math.PI, form: 'line', stance: 'hold' })]; });
+  command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: 40 });
+  let met = false;
+  run(sim, 25, () => false, () => { met ||= a.eng === e.id; });
+  assert.ok(met, 'the two regiments came to blows');
+  assert.ok(a.z < e.z, `the marcher is still on its own side of the enemy (z ${a.z.toFixed(1)} vs ${e.z.toFixed(1)})`);
 });
 
 test('a square holds against equal cavalry but breaks when badly outnumbered', () => {
