@@ -236,8 +236,8 @@ export function layout(us: any[], c: { x: number; z: number; f?: number; w?: num
   dx /= d; dz /= d;
   if (c.f != null) { dx = Math.sin(c.f); dz = Math.cos(c.f); } // a dragged line: lay the group out across the chosen facing
   const ss = [...us].sort((a: any, b: any) => (a.x * -dz + a.z * dx) - (b.x * -dz + b.z * dx));
-  // side by side by real frontage (and never closer than the idle spacing rule), so a group arrives without piling up
-  const hw = ss.map((u: any) => { const f = foot(u, tu); return Math.max((f[1] - f[0]) / 2 + 2, 0.7 * rad(u) + 0.5); });
+  // side by side by real frontage plus tuning.groupGap a side (and never closer than the idle spacing rule), so a group arrives without piling up
+  const hw = ss.map((u: any) => { const f = foot(u, tu); return Math.max((f[1] - f[0]) / 2 + tu.groupGap, 0.7 * rad(u) + 0.5); });
   const sum = hw.reduce((a: number, b: number) => a + b, 0), extra = c.w && ss.length > 1 ? Math.max(0, c.w - 2 * sum) / (ss.length - 1) : 0;
   let acc = -sum - (extra * (ss.length - 1)) / 2;
   return ss.map((u: any, i: number) => { const off = acc + hw[i]; acc += 2 * hw[i] + extra; return { u, x: cl(c.x - dz * off), z: cl(c.z + dx * off), f: c.f ?? null }; });

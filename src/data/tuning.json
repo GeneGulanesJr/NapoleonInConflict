@@ -152,6 +152,7 @@
     "up": 2
   },
   "formChangeTime": 2.8,
+  "groupGap": 1,
   "passLines": { "_note": "seconds a regiment held up by friendly ranks (after trying to step round either side) waits before filing through them", "wait": 3 },
   "refillTime": 15,
   "refillOffCost": 2,

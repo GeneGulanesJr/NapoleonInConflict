@@ -7,7 +7,7 @@ import { applyResult, reinforce, recruit, fillCost, type CampaignState } from '.
 import { runner, parseReplay, replayFile, type Replay } from '../src/sim/replay.ts';
 import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
-import { createSim, step, command, manPrice, distToFoot, posted, steady } from '../src/sim/sim.ts';
+import { createSim, step, command, manPrice, distToFoot, posted, steady, foot } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
 import { heightAt, groundAt, los, deepAt } from '../src/sim/world.ts';
 import { route } from '../src/sim/path.ts';
@@ -384,6 +384,15 @@ test('deep water is impassable without a bridge, and a line crosses a bridge dry
   const none = cross([], 'column'), line = cross([[0, 0]], 'line');
   assert.ok(none.z < -4 && !none.wet, `held at the bank (z ${none.z.toFixed(1)})`);
   assert.ok(line.z > 38 && !line.wet, `a line crossed by the bridge without wading (z ${line.z.toFixed(1)})`);
+});
+
+test('a dragged group order packs regiments side by side, 2 units between their footprints, and the gap is tunable', () => {
+  const sim = arena((fr, co) => [...fr.filter((q) => q.type === 'line').slice(0, 3), co[0]]), us = sim.s.units.filter((u: any) => u.side === 0), gap = (tu: any) => {
+    const ps = layout(us, { x: 0, z: 0, f: 0 }, tu, 200), w = (u: any) => { const f = foot(u, tu); return f[1] - f[0]; };
+    return ps.slice(1).map((p, i) => Math.hypot(p.x - ps[i].x, p.z - ps[i].z) - (w(p.u) + w(ps[i].u)) / 2);
+  };
+  assert.ok(us.length === 3 && gap(sim.tu).every((g) => Math.abs(g - 2 * sim.tu.groupGap) < 0.01), `neighbours ${gap(sim.tu).map((g) => g.toFixed(2))} apart`);
+  assert.ok(gap({ ...sim.tu, groupGap: 3 })[0] > gap(sim.tu)[0] + 3, 'a wider gap in tuning spreads them');
 });
 
 test('a regiment walks round the end of a river that has no bridge, staying dry', () => {
