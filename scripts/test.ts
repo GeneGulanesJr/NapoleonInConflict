@@ -8,7 +8,7 @@ import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
 import { createSim, step, command, manPrice, distToFoot } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
-import { heightAt, groundAt } from '../src/sim/world.ts';
+import { heightAt, groundAt, riverAt } from '../src/sim/world.ts';
 
 // ---------------------------------------------------------------- unit-vs-unit rules
 const data = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.json`, import.meta.url), 'utf8'));
@@ -336,6 +336,55 @@ test('units wade a fordable river instead of detouring, but go round a deep one 
   const ford = cross(0.5), deep = cross();
   assert.ok(ford.there && ford.wide < 3, `waded straight over the ford (strayed ${ford.wide.toFixed(1)})`);
   assert.ok(deep.wide > 15, `went round by the bridge over deep water (strayed ${deep.wide.toFixed(1)})`);
+});
+
+test('deep water is impassable without a bridge, and a line crosses a bridge dry', () => {
+  const cross = (bridges: number[][], form: string) => {
+    let u: any, wet = false;
+    const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: -50, z: -30, facing: 0, form }), Object.assign(co[0], { x: 170, z: 170 })], { size: 400, rough: FLAT, rivers: [{ pts: [[-200, 0], [200, 0]], width: 8, bridges }] });
+    command(sim, 0, { c: 'move', ids: [u.id], x: 40, z: 40 });
+    run(sim, 150, undefined, () => { if (riverAt(sim.scn, u.x, u.z, true)) wet = true; });
+    return { z: u.z, wet };
+  };
+  const none = cross([], 'column'), line = cross([[0, 0]], 'line');
+  assert.ok(none.z < -4 && !none.wet, `held at the bank (z ${none.z.toFixed(1)})`);
+  assert.ok(line.z > 38 && !line.wet, `a line crossed by the bridge without wading (z ${line.z.toFixed(1)})`);
+});
+
+test('a regiment walks round the end of a river that has no bridge, staying dry', () => {
+  let u: any, wet = false;
+  const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: -50, z: -30, facing: 0, form: 'column' }), Object.assign(co[0], { x: 170, z: 170 })], { size: 400, rough: FLAT, rivers: [{ pts: [[-200, 0], [40, 0]], width: 8, bridges: [] }] });
+  command(sim, 0, { c: 'move', ids: [u.id], x: -50, z: 40 });
+  run(sim, 200, () => Math.hypot(u.x + 50, u.z - 40) < 3, () => { if (riverAt(sim.scn, u.x, u.z, true)) wet = true; });
+  assert.ok(Math.hypot(u.x + 50, u.z - 40) < 6 && !wet, `went round the river's end (at ${u.x.toFixed(0)}, ${u.z.toFixed(0)}, wet ${wet})`);
+});
+
+test('a regiment near its own general marches faster', () => {
+  const trial = (near: boolean) => {
+    let u: any, c: any;
+    const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: 0, z: 0, facing: 0, form: 'column' }), c = Object.assign(fr.find((q) => q.type === 'commander'), { x: near ? 10 : -150, z: 0 }), Object.assign(co[0], { x: 170, z: 170 })]);
+    command(sim, 0, { c: 'move', ids: [u.id], x: 0, z: 200 });
+    run(sim, 10);
+    return { aura: u.aura, went: u.z };
+  };
+  const near = trial(true), far = trial(false);
+  assert.ok(near.aura && !far.aura, 'the aura follows the general');
+  assert.ok(near.went > far.went * 1.03, `marched further under the general's eye (${near.went.toFixed(1)} vs ${far.went.toFixed(1)})`);
+});
+
+test('under its general a regiment shoots from further off and reloads faster', () => {
+  const trial = (near: boolean, dz: number) => {
+    let u: any, e: any;
+    const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: 0, z: 0, facing: 0, form: 'line' }), Object.assign(fr.find((q) => q.type === 'commander'), { x: near ? 10 : -150, z: 0 }), e = Object.assign(co.find((q) => q.type === 'line'), { x: 0, z: dz, facing: Math.PI, form: 'line', stance: 'hold' })]);
+    const m0 = e.men; run(sim, 8);
+    return { lost: m0 - e.men, reload: u.reload };
+  };
+  const R = data('tuning').types.line.range, ca = data('tuning').commanderAura;
+  assert.ok(Math.abs(ca.range * R - 17.25) < 1e-6 || ca.range > 1, 'aura lengthens the range');
+  let d = 14; while (trial(false, d).lost === 0 && d < 60) d += 0.5; // nearest the unaided regiment fails to reach...
+  let far = d; while (trial(false, far).lost > 0 && far < 60) far += 0.5; // ...farthest it still hits
+  assert.equal(trial(false, far).lost, 0);
+  assert.ok(trial(true, far).lost > 0, `the general's regiment still hits at a spacing (${far}) beyond the unaided reach`);
 });
 
 test('a cavalry charge downhill hits harder than one uphill', () => {

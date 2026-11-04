@@ -283,6 +283,7 @@ export function createView(host: HTMLElement) {
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position, colA = new Float32Array(pos.count * 3), kindA = new Float32Array(pos.count * 4);
     const A = new THREE.Color(P.grassA), B = new THREE.Color(P.grassB), W = new THREE.Color(P.wheat), W2 = new THREE.Color(P.wheatB), R = new THREE.Color(P.ridge), CL = new THREE.Color(P.cliff);
+    let low = -1; // lowest ground, so the soil plinth can sit under it
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), z = pos.getZ(i);
       let h = heightAt(s, x, z), kd = 0; // kd: detail channel 0 grass, 1 wheat, 2 plough, 3 lane/village/road cobbles, -1 none
@@ -305,6 +306,7 @@ export function createView(host: HTMLElement) {
       if (wet) { col.setHex(wet.ford ? P.ford : P.water); h -= wet.ford ? 0.3 : 0.6; kd = -1; } // fords: paler, shallower water
       if (kd >= 0) kindA[i * 4 + kd] = 1;
       pos.setY(i, Math.round(h / STEP) * STEP + (hash(Math.round(x * 3) * 17 + Math.round(z * 3) * 29) - 0.5) * 0.18); // faceted, low-poly ground
+      low = Math.min(low, pos.getY(i));
       colA.set([col.r, col.g, col.b], i * 3);
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colA, 3));
@@ -324,7 +326,7 @@ export function createView(host: HTMLElement) {
     add(terrainMesh);
     // soil plinth under the board
     const plinth = new THREE.Mesh(new THREE.BoxGeometry(mapSize, 10, mapSize), toon({ color: P.soil }));
-    plinth.position.y = -6.2; add(plinth);
+    plinth.position.y = low - 5.2; add(plinth); // top face 0.2 under the lowest ground (a fixed -1.2 poked through valleys as mud on Charleroi, Wavre, Ligny, Quatre Bras)
 
     // trees: two-tier pines
     const treeSpots: [number, number][] = [];
@@ -675,6 +677,9 @@ export function createView(host: HTMLElement) {
   const rangeGeo = new THREE.RingGeometry(0.985, 1, 72).rotateX(-Math.PI / 2), rangeRings: THREE.Mesh[] = [];
   for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(rangeGeo, new THREE.MeshBasicMaterial({ color: 0xe9e4d6, transparent: true, opacity: 0.35, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 4; scene.add(m); rangeRings.push(m); }
   let refillHint = false, dragLine: { ax: number; az: number; bx: number; bz: number; f: number } | null = null;
+  // aura ring for a selected commander: every regiment of his side inside it gets the damage/speed/morale bonus
+  const auraRings: THREE.Mesh[] = [];
+  for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(rangeGeo, new THREE.MeshBasicMaterial({ color: P.brass, transparent: true, opacity: 0.6, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 4; scene.add(m); auraRings.push(m); }
   let hoverId = -1, showAll = false; // full name plates only for these (plus selected / in trouble); everyone else gets a pip
 
   // coloured bases: a ribbon round each regiment's footprint on the ground, blue yours, red the enemy's (coats stay historical, and French and Prussian coats are both blue)
@@ -1009,12 +1014,18 @@ export function createView(host: HTMLElement) {
     for (let i = nr; i < selRings.length; i++) selRings[i].visible = false;
     let nrr = 0;
     for (const u of state.units) {
-      const range = tu.types[u.type]?.range ?? 0;
+      const range = (tu.types[u.type]?.range ?? 0) * (u.aura ? tu.commanderAura.range : 1);
       if (!selected.has(u.id) || range <= 0 || nrr >= rangeRings.length) continue;
       const v = vis.get(u.id); if (!v) continue;
       const r = rangeRings[nrr++]; r.visible = true; r.position.set(v.x, heightAt(scn, v.x, v.z) + 0.5, v.z); r.scale.setScalar(range + 3 * FS); // range counts edge to edge, so add about a formation's depth
     }
     for (let i = nrr; i < rangeRings.length; i++) rangeRings[i].visible = false;
+    let nau = 0;
+    for (const u of state.units) {
+      const v = u.type === 'commander' && selected.has(u.id) && nau < auraRings.length ? vis.get(u.id) : null; if (!v) continue;
+      const r = auraRings[nau++]; r.visible = true; r.position.set(v.x, heightAt(scn, v.x, v.z) + 0.5, v.z); r.scale.setScalar(tu.commanderAura.radius);
+    }
+    for (let i = nau; i < auraRings.length; i++) auraRings[i].visible = false;
     if (dragLine && nl < 58) { // right-drag preview: the line the group will form, plus a tick showing which way it will face
       const d = dragLine, mx = (d.ax + d.bx) / 2, mz = (d.az + d.bz) / 2;
       lp.setXYZ(nl * 2, d.ax, heightAt(scn, d.ax, d.az) + 1, d.az); lp.setXYZ(nl * 2 + 1, d.bx, heightAt(scn, d.bx, d.bz) + 1, d.bz); nl++;

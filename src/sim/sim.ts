@@ -1,5 +1,5 @@
 // Pure, deterministic battle simulation. No DOM, no Three.js: runs in the browser and on the Node server.
-import { detour, heightAt, featureAt, los } from './world.ts';
+import { detour, heightAt, featureAt, los, deepAt } from './world.ts';
 
 export type Sim = { s: any; scn: any; tu: any; tl: any[] };
 
@@ -354,6 +354,8 @@ export const posted = (u: any, tu: any) => (u.still ?? 0) >= tu.hold.after && !u
 /** Morale ceiling: a regiment that has lost men can't get back to its full spirit (tuning.morale.cap). */
 const mcap = (u: any, tu: any) => u.maxMorale * (1 - tu.morale.cap * (1 - Math.min(1, u.men / u.maxMen)));
 /** Wheel u toward angle a at its rate (tuning.turn); returns the angle still left to turn. */
+/** Weapon range of u: its type's, longer under its general's eye. */
+export const rng = (u: any, tu: any): number => tu.types[u.type].range * (u.aura ? tu.commanderAura.range : 1);
 function face(u: any, a: number, dt: number, tu: any): number {
   const r = tu.turn[tu.types[u.type].cav ? 'cavalry' : isInf(u) ? u.form : u.type] ?? 1, d = Math.atan2(Math.sin(a - u.facing), Math.cos(a - u.facing)), k = Math.max(-r * dt, Math.min(r * dt, d));
   u.facing += k;
@@ -405,20 +407,20 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
   const { s, scn, tu } = sim, T = tu.types[u.type], W = tu.weather[s.weather] ?? tu.weather.clear;
   // round shot falls short or wide more often the further it flies; canister at close range always tells
   const canister = u.spUntil > s.t && u.spKind === 'canister', volley = u.spUntil > s.t && u.spKind === 'volley', close = td < tu.canisterRange * (canister ? 2.2 : 1);
-  const miss = u.type === 'artillery' && !close && rand(s) > 1 - 0.65 * (td / T.range);
+  const miss = u.type === 'artillery' && !close && rand(s) > 1 - 0.65 * (td / rng(u, tu));
   const fm = u.type === 'skirmisher' || u.type === 'artillery' ? 1 : tu.formFire[u.form];
   const dmgForm = tu.types[tg.type].cav ? 0.8 : tg.type === 'skirmisher' ? 0.6 : (u.type === 'artillery' ? tu.artDmg : tu.formDmg)[tg.form]; // round shot ploughs through dense columns and squares
-  const rf = Math.max(tu.rangeFloor, 1 - 0.75 * (td / T.range));
+  const rf = Math.max(tu.rangeFloor, 1 - 0.75 * (td / rng(u, tu)));
   const elev = Math.max(0.8, Math.min(1.25, 1 + 0.02 * (heightAt(scn, u.x, u.z) - heightAt(scn, tg.x, tg.z))));
   const asp = aspect(u, tg);
   if (asp && s.t - tg.flankT > 6) { tg.flankT = s.t; ev(sim, { k: 'flank', x: tg.x, z: tg.z, side: tg.side, kind: asp }); chron(sim, 1 - tg.side, `${asp === 2 ? 'Rear' : 'Flank'} fire on ${tg.name}`); }
   let cas = u.men * T.power * rf * fm * dmgForm * (tg.garrison != null ? tu.garrison.cover : featureAt(scn, tg.x, tg.z).cover) * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.fire) * smokeFactor(sim, tg.x, tg.z) * W.fire * elev
-    * (0.5 + 0.5 * Math.max(0, u.morale) / u.maxMorale) * (1 - tu.fatigue.fire * u.fat) * (posted(tg, tu) ? tu.hold.fire : 1) * (0.8 + 0.4 * rand(s));
+    * (0.5 + 0.5 * Math.max(0, u.morale) / u.maxMorale) * (1 - tu.fatigue.fire * u.fat) * (posted(tg, tu) ? tu.hold.fire : 1) * (u.aura ? tu.commanderAura.dmg : 1) * (0.8 + 0.4 * rand(s));
   if (u.type === 'artillery' && close) cas *= tu.canisterMult * (canister ? 1.4 : 1);
   if (volley) { cas *= 2.2; u.spUntil = 0; }
   if (miss) ev(sim, { k: 'boom', x: tg.x + (rand(s) - 0.5) * 16, z: tg.z + (rand(s) - 0.5) * 16 }); // the ball ploughs up the ground nearby
   else damage(sim, tg, cas, tu.flank.morale[asp], u);
-  u.reload = T.reload * (0.9 + 0.2 * rand(s)) * (volley ? 1.6 : canister ? 0.6 : 1);
+  u.reload = T.reload * (0.9 + 0.2 * rand(s)) * (volley ? 1.6 : canister ? 0.6 : 1) * (u.aura ? tu.commanderAura.reload : 1);
   u.fired = 0;
   const fx = Math.sin(u.facing), fz = Math.cos(u.facing);
   s.smoke.push({ x: u.x + fx * 3, z: u.z + fz * 3, age: 0 });
@@ -526,7 +528,7 @@ export function step(sim: Sim, dt: number) {
       let ne: any = null, nd = 40;
       for (const e of live) {
         if (e.side === u.side || e.routed || !seen[u.side].has(e.id)) continue;
-        if (T.range > 0) { if (gapBetween(u, e, tu) < T.range && !masked(u, e, live, tu) && los(scn, u.x, u.z, eye(u, tu), e.x, e.z, 2)) { amHalt = true; break; } } // only halt for a foe we could actually hit (not one behind a crest)
+        if (T.range > 0) { if (gapBetween(u, e, tu) < rng(u, tu) && !masked(u, e, live, tu) && los(scn, u.x, u.z, eye(u, tu), e.x, e.z, 2)) { amHalt = true; break; } } // only halt for a foe we could actually hit (not one behind a crest)
         else if (u.type !== 'commander') { const d = Math.hypot(e.x - u.x, e.z - u.z); if (d < nd) { nd = d; ne = e; } }
       }
       if (ne) u.chase = ne.id;
@@ -539,7 +541,7 @@ export function step(sim: Sim, dt: number) {
       const t = byId.get(u.chase);
       if (!t || t.dead || (u.bay != null && t.routed)) u.chase = u.bay = null; // a bayonet charge halts on the ground it took once the foe breaks
       else {
-        gx = t.x; gz = t.z; const gp = gapBetween(u, t, tu), fire = u.bay == null && T.range > 0 && (gp > T.range || los(scn, u.x, u.z, eye(u, tu), t.x, t.z, 2)); stopAt = fire ? T.range * 0.98 : 1; touch = fire ? gp <= T.range * 0.98 : gp < 0.6; // ranged units halt at max range and shoot (once they can see the target over the ground); melee-only and chargers close in until the edges touch
+        gx = t.x; gz = t.z; const gp = gapBetween(u, t, tu), fire = u.bay == null && T.range > 0 && (gp > rng(u, tu) || los(scn, u.x, u.z, eye(u, tu), t.x, t.z, 2)); stopAt = fire ? rng(u, tu) * 0.98 : 1; touch = fire ? gp <= rng(u, tu) * 0.98 : gp < 0.6; // ranged units halt at max range and shoot (once they can see the target over the ground); melee-only and chargers close in until the edges touch
         if (u.bay != null) { dash ||= gp < tu.bayonet.runDist; if (!u.tested && gp < tu.bayonet.testDist && shock(sim, u, t) !== 'melee') continue; } // the last stretch at the run; the morale test as they close
       }
     }
@@ -561,11 +563,16 @@ export function step(sim: Sim, dt: number) {
         else {
           const fs = T.cav || u.type === 'artillery' || u.type === 'skirmisher' ? 1 : tu.formSpeed[u.form];
           const run = dash ? 1.7 : 1;
-          const sp = Math.min(d - stopAt + 0.01, T.speed * fs * terrainSpeed(u, f, tu) * W.move * run * tired * dt);
+          const sp = Math.min(d - stopAt + 0.01, T.speed * fs * terrainSpeed(u, f, tu) * W.move * run * tired * (u.aura ? tu.commanderAura.speed : 1) * dt);
           const nx = u.x + (dx / d) * sp, nz = u.z + (dz / d) * sp;
           const slope = (heightAt(scn, nx, nz) - heightAt(scn, u.x, u.z)) / Math.max(sp, 0.01);
           const k = Math.min((d - stopAt + 0.01) / sp, 1 - Math.max(1 - tu.terrain.downhill, Math.min(0.5, slope * 1.5))); // uphill slows, downhill helps a little (never past the stop)
           let mx = u.x + (nx - u.x) * k, mz = u.z + (nz - u.z) * k;
+          if (deepAt(scn, mx, mz) && !deepAt(scn, u.x, u.z)) { // deep water is impassable: only bridges and fords cross (already in the water: free to wade out). Slide along the bank, else stand.
+            const st = Math.hypot(mx - u.x, mz - u.z), hd = Math.atan2(dx, dz);
+            const a = [0.5, -0.5, 1, -1, 1.5, -1.5].find((r) => !deepAt(scn, u.x + Math.sin(hd + r) * st, u.z + Math.cos(hd + r) * st));
+            if (a == null) { mx = u.x; mz = u.z; u.via = null; } else { mx = u.x + Math.sin(hd + a) * st; mz = u.z + Math.cos(hd + a) * st; }
+          }
           const passing = (u.jam ?? 0) > tu.passLines.wait, b = blocker(u, mx, mz, live, tu, fr, !passing); // held up long enough: it files through friendly ranks (passage of lines)
           if (b && b.side !== u.side) { mx = u.x; mz = u.z; } // the enemy's ranks stop it: it halts at contact and the melee decides
           else if (b) { // a friendly regiment in the way: step round it, keeping to one side until clear, else try the other side
@@ -613,7 +620,7 @@ export function step(sim: Sim, dt: number) {
       }
       const asp = aspect(u, c), gm = c.garrison != null ? (T.cav ? tu.garrison.meleeCav : tu.garrison.meleeInf) : 1;
       if (asp && s.t - c.flankT > 6) { c.flankT = s.t; ev(sim, { k: 'flank', x: c.x, z: c.z, side: c.side, kind: asp }); chron(sim, 1 - c.side, `${asp === 2 ? 'Rear' : 'Flank'} attack on ${c.name}`); }
-      damage(sim, c, u.men * T.melee * meleeMult(u, c) * hc * gm * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.melee) * tu.meleeRate * (u.spUntil > s.t && u.spKind === 'charge' ? 1.6 : 1) * (u.bay === c.id ? tu.bayonet.melee : 1) * (1 - tu.fatigue.melee * u.fat) * dt,
+      damage(sim, c, u.men * T.melee * meleeMult(u, c) * hc * gm * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.melee) * tu.meleeRate * (u.spUntil > s.t && u.spKind === 'charge' ? 1.6 : 1) * (u.bay === c.id ? tu.bayonet.melee : 1) * (1 - tu.fatigue.melee * u.fat) * (u.aura ? tu.commanderAura.dmg : 1) * dt,
         tu.flank.morale[asp] * (T.cav || tu.types[c.type].cav ? 1 : tu.bayonet.grind), u); // foot against foot does not grind on for long: one side gives way
       u.fat = Math.min(1, u.fat + tu.fatigue.fight * dt);
       if (c.dead) u.eng = null;
@@ -627,7 +634,7 @@ export function step(sim: Sim, dt: number) {
     const hu = heightAt(scn, u.x, u.z);
     for (const e of live) {
       if (e.dead || e.side === u.side || !seen[u.side].has(e.id)) continue;
-      const d = Math.max(0, gapBetween(u, e, tu)), reach = T.range * (u.type === 'artillery' ? Math.max(1, Math.min(1.3, 1 + tu.terrain.gunReach * (hu - heightAt(scn, e.x, e.z)))) : 1); // guns on high ground reach further
+      const d = Math.max(0, gapBetween(u, e, tu)), reach = rng(u, tu) * (u.type === 'artillery' ? Math.max(1, Math.min(1.3, 1 + tu.terrain.gunReach * (hu - heightAt(scn, e.x, e.z)))) : 1); // guns on high ground reach further
       if (d < td && d < reach && !smokeBlocked(sim, u.x, u.z, e.x, e.z) && !masked(u, e, live, tu) && los(scn, u.x, u.z, eye(u, tu), e.x, e.z, 2)) { td = d; tg = e; } // range is measured to the nearest part of the target formation; no shooting over a crest
     }
     if (!tg) continue;
