@@ -75,7 +75,7 @@ function title() {
           ${saved ? `<button class="stag primary" id="cont">${saved.ended ? 'The campaign is over' : 'Continue Campaign'}<small>${saved.ended ? 'Read how it ended' : `Battle ${Math.min(saved.idx + 1, n)} of ${n} · ${next.title}${live ? ' · in progress' : ''}`}</small></button>` : ''}
           <button class="stag ${saved ? 'alt' : 'primary'}" id="new">New Campaign<small>${saved ? 'Starts over: your saved campaign is lost' : 'Five linked battles, Charleroi to Waterloo'}</small></button>
           <button class="stag alt" id="quick">Quick Battle<small>Any battle, either side, or a random skirmish</small></button>
-          <button class="stag alt" id="mp">Multiplayer<small>Team against team on one field</small></button>
+          <button class="stag alt" id="mp" disabled style="opacity:.5;cursor:not-allowed" title="Multiplayer is a work in progress">Multiplayer<small>Work in progress · coming later</small></button>
           <div class="homerow stag"><button class="alt" id="set">Settings</button><button class="alt" id="how">How to play</button></div>
         </nav>
         <aside class="homeside stag">
@@ -165,9 +165,9 @@ function campaignScreen(c: CampaignState) {
           ${Object.keys(CAMPAIGN.roster).map((t) => { const b = byType[t] ?? { n: 0, men: 0, max: 1 }; return `<div class="rrow buy"><span>${TUNING.types[t].label} ×${b.n}</span><i><s data-w="${(b.men / b.max) * 100}"></s></i>${shop(t)}</div>`; }).join('')}
           ${orders ? `<small>Marshal Grouchy: <b>${orders.label}</b>.${away.length ? ` Away with him at ${SCENARIOS[CAMPAIGN.grouchy.at].title}: ${away.join(', ')}.` : ''}</small>` : ''}
           <small>Losses carry over to the next battle; rest restores ${Math.round(CAMPAIGN.healFraction * 100)}% of the missing men. Each battle earns glory (win ${CAMPAIGN.glory.win}, draw ${CAMPAIGN.glory.draw}, loss ${CAMPAIGN.glory.loss}): spend it on replacements, or to raise a destroyed regiment again.${bs ? ' Finish the battle in progress to spend it.' : ''}</small></div>
-        <div class="btns row">${bs ? `<button id="resume" class="stag" title="Carry on from ${Math.floor(bs.s.t / 60)} min in">Resume battle</button><button id="go" class="stag alt">Restart battle</button>` : '<button id="go" class="stag">Begin battle</button>'}<button id="back" class="stag alt">Main menu</button></div>
       </div>
-    </div>`, (el) => {
+    </div>
+    <div class="btns row dock">${bs ? `<button id="resume" class="stag" title="Carry on from ${Math.floor(bs.s.t / 60)} min in">Resume battle</button><button id="go" class="stag alt">Restart battle</button>` : '<button id="go" class="stag">Begin battle</button>'}<button id="back" class="stag alt">Main menu</button></div>`, (el) => {
     el.querySelectorAll<HTMLElement>('.rrow s').forEach((s, i) => animate(s, { width: ['0%', `${s.dataset.w}%`], duration: 900, delay: 400 + i * 80, ease: 'outExpo' }));
     el.querySelector<HTMLElement>('#go')!.onclick = () => startCampaignBattle(c);
     el.querySelector<HTMLElement>('#resume')?.addEventListener('click', () => startCampaignBattle(c, bs!));
@@ -263,7 +263,7 @@ function mpScreen(msg = '') {
   const host = location.hostname || 'localhost';
   screen(`<h2 class="stag">Multiplayer</h2>
     <p class="sub stag">Team vs team on one battlefield. Run <code>npm run server</code> first. Players are split across the French and Coalition; an empty side is played by a bot.</p>
-    <div class="form stag"><label>Server <input id="url" value="ws://${host}:8080"></label>
+    <div class="form stag"><label>Server <input id="url" value="${location.protocol === 'https:' ? 'wss' : 'ws'}://${host}:8080"></label>
     <label>Battle <select id="sc">${CAMPAIGN.battles.map((b: string) => `<option value="${b}" ${b === 'waterloo' ? 'selected' : ''}>${SCENARIOS[b].title}</option>`).join('')}</select></label></div>
     <p class="err stag" id="err">${msg}</p>
     <div class="btns"><button id="join" class="stag">Join</button><button id="back" class="stag alt">Back</button></div>`, (el) => {

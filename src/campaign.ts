@@ -8,6 +8,7 @@ import genappe from './data/genappe.json';
 import waterloo from './data/waterloo.json';
 import hougoumont from './data/hougoumont.json';
 import wavre from './data/wavre.json';
+import { SIM_VERSION } from './sim/sim.ts';
 import { freshRoster as buildRoster, applyResult as applyBattle, reinforce as buyMen, recruit as buyRegiment, fillCost as menCost, recruitCost as regimentCost, type RosterUnit, type CampaignState } from './sim/roster.ts';
 import { grouchyOrders as orders, grouchyDue as due, fieldRoster as onField } from './sim/roster.ts';
 
@@ -35,11 +36,11 @@ export const fieldRoster = (c: CampaignState, id: string) => onField(c, CAMPAIGN
 
 /** A campaign battle in progress, saved every few seconds so closing the tab doesn't lose it: the battle, the campaign step it belongs to, and the sim state. */
 const BKEY = 'nic-battle-v1';
-export type BattleSave = { id: string; idx: number; s: any };
-export function loadBattle(c: CampaignState): BattleSave | null {
-  try { const b = JSON.parse(localStorage.getItem(BKEY) ?? 'null'); return b && b.idx === c.idx && b.id === CAMPAIGN.battles[c.idx] ? b : null; } catch { return null; }
+export type BattleSave = { id: string; idx: number; s: any; v?: number };
+export function loadBattle(c: CampaignState): BattleSave | null { // a save from another sim version would play on rules it was not made under: dropped
+  try { const b = JSON.parse(localStorage.getItem(BKEY) ?? 'null'); return b && b.v === SIM_VERSION && b.idx === c.idx && b.id === CAMPAIGN.battles[c.idx] ? b : null; } catch { return null; }
 }
-export function saveBattle(b: BattleSave) { try { localStorage.setItem(BKEY, JSON.stringify(b)); } catch { /* private mode or full: the battle just can't be resumed */ } }
+export function saveBattle(b: BattleSave) { try { localStorage.setItem(BKEY, JSON.stringify({ ...b, v: SIM_VERSION })); } catch { /* private mode or full: the battle just can't be resumed */ } }
 export function clearBattle() { try { localStorage.removeItem(BKEY); } catch { /* ignore */ } }
 
 export function load(): CampaignState | null {
