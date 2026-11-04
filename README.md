@@ -6,7 +6,9 @@ Five linked battles: **Charleroi → Quatre Bras → Ligny → Genappe → Water
 ## Modes
 - **Campaign** (French): losses and veterancy carry over. Each battle earns glory (win 90, draw 60, loss 40), spent between battles on replacements or on raising a destroyed regiment again. A battle in progress is saved every 15 s; quit and resume it from the campaign screen. The first battle (Charleroi) has a step-by-step tutorial (skip it with its button; Settings > Tutorial hints brings it back).
 - **Grouchy's orders**: after Ligny the campaign asks once what Marshal Grouchy does. *Pursue the Prussians* (history): six regiments miss Waterloo, and the Prussians come 40-60 min later and weaker. *Screen them lightly*: two regiments miss it, the Prussians are 20-30 min late. *March to the sound of the guns*: everyone fights, Gérard's corps arrives about 18:00, and the Prussians come on time.
-- **Quick Battle**: any of the seven battles or a random skirmish, as the French or the Coalition. Nothing is saved.
+- **Quick Battle**: any of the nine battles or a random skirmish, as the French or the Coalition. Nothing is saved.
+- **Hold the Bridge** (quick battle): a timed objective. The Coalition rearguard wins the moment it still holds Genappe Bridge when five minutes are up; the French (at 1.3x strength) win by taking it first. The HUD counts down to the deadline.
+- **Rearguard at Quatre Bras** (quick battle): the Coalition must keep 40% of everything it has fielded fighting when the clock runs out; the French win by grinding it below that. The bot rearguard falls back toward its own edge instead of holding ground.
 - **Multiplayer** (work in progress, disabled in the menu for now): team vs team on one battlefield; an empty side is played by the bot. The server and the screen are still in the code; to turn it back on, remove `disabled` from the `#mp` button in `src/main.ts`.
 - **Replays**: after a single-player battle, "Watch replay" plays it back from the recorded orders (the sim is deterministic). The replay bar has play/pause, 1-16×, a scrubber you can click or drag to jump, and a marker per turning point. "Save replay" downloads a .json file; Quick Battle → "Watch a replay file…" plays one (only the scenario id or skirmish seed is stored; the scenario is rebuilt from the game's own data, and files are checked before they play).
 - **Deployment**: local battles open paused. Place your regiments inside the blue zone around your starting positions (right-click or drag; they stand there at once, fronting the enemy), then Start battle / Enter.
@@ -18,6 +20,11 @@ Five linked battles: **Charleroi → Quatre Bras → Ligny → Genappe → Water
 - Orders the game cannot carry out (a shaken regiment reforming, a full farm, too few points for a draft) say so in a message. Restart and Quit (without saving) ask twice. Halt (H) leaves a garrison in its farm.
 - **Hold fire** (G): line, guard and guns wait until the enemy is close, then give a heavy first volley, which can make a charge falter.
 - Fire shakes what it hits in proportion to the losses (slower reload, weaker fire, no reforming); a cavalry charge stuns foot that is not in square (a square takes about 3 s to form, and one caught still forming is slaughtered; formed, it marches very slowly); night falls late in the long battles.
+- **Ammunition**: line, guard, skirmishers and guns carry a fixed number of volleys or rounds (30 / 36 / 40 / 40) and cannot fire when dry. Resting on an objective your side holds, with no casualties for a few seconds, they take on powder and shot (faster while replenishing). The unit card shows Ammo; the bot pulls dry regiments back to a depot.
+- **Army break point**: when the men still fighting fall under 30% of everything a side has fielded, "the army wavers": every regiment loses morale faster per casualty and recovers slower, more so the deeper under the line it is.
+- **Pursuit and leadership**: horse cut down routed men harder than the other arms do. A regiment under a general who stands within 40 units of the enemy fights and holds a little better, and the general is shot at.
+- **Difficulty** also changes how the bot plays: Hard thinks faster and uses tactical aid earlier, Easy the reverse.
+- The end screen shows objectives held beside points: the verdict weighs objectives 60% and points 40%, so a side can win with fewer points.
 - With regiments selected, the cursor shows what a right-click does: sword = attack, house = garrison, arrow = march. Icons beside a regiment's plate: shield posted, burst shaken, stars stunned, drop tired, crossed blades charging, red arrow wavering, white flag routed. Select one regiment for its full card.
 
 ## Run
@@ -39,7 +46,7 @@ Press **?** or **F10** in battle for the full list.
 - **Game**: Space pause · +/- speed (1-8×) · Enter start the battle (deployment) · Esc menu (restart, quit, settings) · J message log · M mute · R radio
 
 ## Tuning
-All gameplay numbers: `src/data/tuning.json`. Battles: `src/data/<battle>.json` (map, zones, forces, reinforcement timeline, weather).
+All gameplay numbers: `src/data/tuning.json`. Battles: `src/data/<battle>.json` (map, zones, forces, reinforcement timeline, weather). A battle can build on another with `"extends": "<id>"` (see `bridge.json`, `retreat.json`) and override only what differs; `hold: {zone, side, t}` is a timed objective and `survive: {side, share}` a rearguard's goal.
 Campaign order, roster, glory and Grouchy's orders: `src/data/campaign.json`. Waterloo's timeline events take `delayIfGrouchy`, `ifGrouchy` and `unlessGrouchy`.
 
 ## Layout

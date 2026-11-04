@@ -1,0 +1,18 @@
+{
+  "extends": "genappe",
+  "id": "bridge",
+  "title": "Hold the Bridge",
+  "date": "17 June 1815, evening",
+  "blurb": "The army is falling back on Mont-Saint-Jean and every minute the French are kept at the Dyle is a minute for the columns on the Brussels road. The rearguard must hold Genappe bridge for five minutes. Napoleon's lancers are already in the street. The Life Guards wait on the heights behind, and the rain is turning the fields to mud.",
+  "hint": "Coalition: hold Genappe Bridge until the five minutes are up and the day is yours. French: take the bridge before then, or the army gets away. Infantry clears the street, cavalry should not charge into it.",
+  "duration": 600,
+  "hold": {
+    "zone": "br",
+    "side": 1,
+    "t": 300
+  },
+  "strength": [
+    1.3,
+    1
+  ]
+}

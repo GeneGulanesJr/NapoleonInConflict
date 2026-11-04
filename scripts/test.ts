@@ -7,13 +7,14 @@ import { applyResult, reinforce, recruit, fillCost, type CampaignState } from '.
 import { runner, parseReplay, replayFile, type Replay } from '../src/sim/replay.ts';
 import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
-import { createSim, step, command, SIM_VERSION, manPrice, distToFoot, posted, steady, foot } from '../src/sim/sim.ts';
+import { createSim, step, command, SIM_VERSION, manPrice, distToFoot, posted, steady, foot, verdict } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
 import { heightAt, groundAt, los, deepAt } from '../src/sim/world.ts';
 import { route } from '../src/sim/path.ts';
+import { resolve } from '../src/sim/extend.ts';
 
 // ---------------------------------------------------------------- unit-vs-unit rules
-const data = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.json`, import.meta.url), 'utf8'));
+const raw = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.json`, import.meta.url), 'utf8')), data = (f: string) => resolve(raw(f), raw);
 /** a bare quatrebras sim on flat open ground with just these units (French a, Coalition b) plus a far-off foe so the battle doesn't end */
 function arena(setup: (fr: any[], co: any[]) => any[], map?: any) {
   const sim = createSim(data('quatrebras'), data('tuning'), { seed: 1 });
@@ -1128,7 +1129,7 @@ test('a battle continued from a snapshot plays on exactly, bot memory included',
 /** a recorded quatrebras battle with two orders, `steps` long */
 function recorded(steps: number, seed = 5) {
   const scn = { ...data('quatrebras'), strength: [1, 0.8] }, tu = data('tuning');
-  const rec: Replay = { scn, v: SIM_VERSION, ref: { id: 'quatrebras', strength: [1, 0.8] }, side: 0, start: JSON.stringify(createSim(scn, tu, { seed }).s), cmds: [] };
+  const rec: Replay = { scn, v: SIM_VERSION, ref: { id: 'quatrebras', strength: [1, 0.8], skill: 1 }, side: 0, start: JSON.stringify(createSim(scn, tu, { seed }).s), cmds: [] };
   const live = runner(tu, rec), ids = live.sim.s.units.filter((u: any) => u.side === 0).map((u: any) => u.id);
   for (let n = 0; n < steps; n++) { if (n === 100) live.cmd({ c: 'move', ids, x: 0, z: 0 }); if (n === 1500) live.cmd({ c: 'form', ids, f: 'column' }); live.tick(); }
   live.sim.s.events.length = 0;
@@ -1322,12 +1323,103 @@ test('a short order to the rear steps back facing the enemy only when one is nea
   assert.ok(!order([0, -35], [15, 0]).back, 'ahead of it is never a step back');
 });
 
+test('ammunition: a dry regiment cannot fire, a spent one counts its rounds, and a depot refills it', () => {
+  let a: any, e: any;
+  const sim = arena((fr, co) => { a = fr.find((u) => u.type === 'line'); e = co.find((u) => u.type === 'line'); return [Object.assign(a, { x: 0, z: -12, facing: 0 }), Object.assign(e, { x: 0, z: 0, facing: Math.PI }), Object.assign(co.find((u) => u !== e), { x: 170, z: 170 })]; });
+  a.ammo = 0; e.ammo = 5;
+  run(sim, 30);
+  assert.ok(a.fired > 20, `the dry regiment never fired (last shot ${a.fired.toFixed(0)} s ago)`);
+  assert.ok(e.ammo < 5 && e.fired < 10, 'its foe, with powder, kept firing and spent rounds');
+  const sim2 = arena((fr, co) => { a = fr.find((u) => u.type === 'line'); return [Object.assign(a, { x: 0, z: 0 }), Object.assign(co[0], { x: 170, z: 170 })]; });
+  Object.assign(sim2.s.zones[0], { x: 0, z: 0, r: 20, owner: 0, p: 1 }); a.ammo = 0;
+  run(sim2, 40);
+  assert.ok(a.ammo >= 3 && a.ammo <= 5, `resting on our objective it took on ~0.1 round a second (${a.ammo.toFixed(1)})`);
+});
+
+test('the army wavers once the men still fighting fall under the break point', () => {
+  let a: any, e: any;
+  const sim = arena((fr, co) => { a = fr.find((u) => u.type === 'line'); e = co.find((u) => u.type === 'line'); return [Object.assign(a, { x: 0, z: 0 }), Object.assign(e, { x: 170, z: 170 })]; });
+  run(sim, 1);
+  assert.equal(sim.s.side[0].broken, 0, 'a fresh army is steady');
+  sim.s.side[0].lost = 10 * a.men; // ten regiments' worth already gone
+  run(sim, 1);
+  assert.ok(sim.s.side[0].broken > 0.5, 'the army is far under the break point');
+  assert.ok(sim.s.log.some((l: any) => /army wavers/.test(l.msg)), 'it says so');
+});
+
+test('horse ride down broken men harder than they hit a formed line', () => {
+  const ride = (mult: number) => {
+    let cav: any, ln: any;
+    const sim = arena((fr, co) => { cav = fr.find((u) => u.type === 'lancer'); ln = co.find((u) => u.type === 'line'); return [Object.assign(cav, { x: 0, z: -10, facing: 0 }), Object.assign(ln, { x: 0, z: 0, facing: Math.PI, routed: true, morale: 0 }), Object.assign(co.find((u) => u !== ln), { x: 170, z: 170 })]; });
+    sim.tu.pursuit.mult = mult;
+    command(sim, 0, { c: 'attack', ids: [cav.id], target: ln.id });
+    run(sim, 12);
+    return ln.maxMen - ln.men;
+  };
+  assert.ok(ride(2.4) > ride(1.5) * 1.2, 'pursuit multiplies the cut-down');
+});
+
+test('a general up with the fighting lends his regiments an edge; one far behind the line does not', () => {
+  const lead = (cz: number) => {
+    let a: any, cmd: any;
+    const sim = arena((fr, co) => { a = fr.find((u) => u.type === 'line'); cmd = fr.find((u) => u.type === 'commander'); return [Object.assign(a, { x: 0, z: 0 }), Object.assign(cmd, { x: 0, z: cz }), Object.assign(co.find((u) => u.type === 'line'), { x: 0, z: 30, facing: Math.PI }), Object.assign(co.filter((u) => u.type !== 'commander')[1], { x: 170, z: 170 })]; });
+    run(sim, 0.2);
+    return a.lead;
+  };
+  assert.equal(lead(-5), true, 'the general stands close to the enemy');
+  assert.equal(lead(-120), false, 'the general is out of touch with the line');
+});
+
+test('a scenario can build on another: the derived JSON keeps the base map and zones and overrides only what it names', () => {
+  const b = data('bridge'), g = data('genappe');
+  assert.deepEqual(b.zones, g.zones, 'zones come from the base');
+  assert.equal(JSON.stringify(b.map), JSON.stringify(g.map), 'so does the map');
+  assert.equal(b.id, 'bridge');
+  assert.deepEqual(b.hold, { zone: 'br', side: 1, t: 300 });
+  assert.equal(b.extends, undefined, 'the link itself is not carried');
+});
+
+test('a timed objective: held at the deadline the day is won there and then; lost, the battle carries on', () => {
+  const play = (owned: boolean) => {
+    const sim = createSim(data('bridge'), data('tuning'), { seed: 1 }), z = sim.s.zones.find((q: any) => q.id === 'br');
+    Object.assign(z, owned ? { owner: 1, p: -1 } : { owner: 0, p: 1 });
+    sim.s.t = 298;
+    run(sim, 6);
+    return sim.s;
+  };
+  const won = play(true), lost = play(false);
+  assert.ok(won.over && won.result.winner === 1 && !won.result.decisive, 'the Coalition held the bridge and win');
+  assert.ok(!lost.over, 'the French took it: the clock runs on');
+  assert.ok(won.log.some((l: any) => /Hold Genappe Bridge/.test(l.msg)), 'the countdown was announced');
+});
+
+test('a rearguard wins by keeping its strength to the deadline, and loses by not', () => {
+  const play = (lost: number) => {
+    const sim = createSim(data('retreat'), data('tuning'), { seed: 1 });
+    sim.s.side[1].lost = lost; sim.s.t = sim.scn.duration - 1;
+    run(sim, 3);
+    return sim.s;
+  };
+  assert.equal(play(0).result.winner, 1, 'the Coalition kept all its men');
+  assert.equal(play(1e6).result.winner, 0, 'the Coalition was ground down');
+  const sim = createSim(data('retreat'), data('tuning'), { seed: 1 });
+  assert.ok(verdict(sim.s, sim.tu) < 0.5, 'the bar leans to the rearguard while it stands whole');
+});
+
+test('the bot in a retreat stance falls back toward its own edge instead of holding ground', () => {
+  const sim = createSim(data('retreat'), data('tuning'), { seed: 1 }), bots = [makeBot(sim, 0), makeBot(sim, 1)];
+  const mine = sim.s.units.filter((u: any) => u.side === 1 && u.type !== 'commander'), z0 = mine.reduce((a: number, u: any) => a + u.z, 0) / mine.length;
+  for (let i = 0; i < 1600; i++) { step(sim, 0.05); bots[0](0.05); bots[1](0.05); }
+  const alive = mine.filter((u: any) => !u.dead), z1 = alive.reduce((a: number, u: any) => a + u.z, 0) / Math.max(1, alive.length);
+  assert.ok(alive.length && z1 < z0 - 25, `the rearguard moved north (mean z ${z0.toFixed(0)} -> ${z1.toFixed(0)})`);
+});
+
 test('golden: the sim plays out as it did when SIM_VERSION was last bumped (saves and replay files are only valid within one version)', () => {
   const sim = createSim(data('ligny'), data('tuning'), { seed: 1 }), bots = [makeBot(sim, 0), makeBot(sim, 1)];
   for (let i = 0; i < 1200; i++) { step(sim, 0.05); bots[0](0.05); bots[1](0.05); }
   let h = 2166136261; // FNV-1a over every regiment's place and strength after a minute of bot against bot
   for (const ch of JSON.stringify(sim.s.units.map((u: any) => [u.id, Math.round(u.x * 10), Math.round(u.z * 10), Math.round(u.men)]))) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-  assert.equal(`${SIM_VERSION}:${h >>> 0}`, '1:4234174103', 'the sim changed: bump SIM_VERSION in src/sim/sim.ts, then put this value in the test');
+  assert.equal(`${SIM_VERSION}:${h >>> 0}`, '2:1564689981', 'the sim changed: bump SIM_VERSION in src/sim/sim.ts, then put this value in the test');
 });
 
 test('the server drops orders from a client that floods it, and still obeys one that keeps to a normal pace', async () => {

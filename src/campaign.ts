@@ -8,15 +8,18 @@ import genappe from './data/genappe.json';
 import waterloo from './data/waterloo.json';
 import hougoumont from './data/hougoumont.json';
 import wavre from './data/wavre.json';
+import bridgeJson from './data/bridge.json';
+import retreatJson from './data/retreat.json';
+import { extend } from './sim/extend.ts';
 import { SIM_VERSION } from './sim/sim.ts';
 import { freshRoster as buildRoster, applyResult as applyBattle, reinforce as buyMen, recruit as buyRegiment, fillCost as menCost, recruitCost as regimentCost, type RosterUnit, type CampaignState } from './sim/roster.ts';
 import { grouchyOrders as orders, grouchyDue as due, fieldRoster as onField } from './sim/roster.ts';
 
 export const TUNING: any = tuning;
 export const CAMPAIGN: any = camp;
-export const SCENARIOS: Record<string, any> = { charleroi, quatrebras, ligny, genappe, waterloo, hougoumont, wavre };
+export const SCENARIOS: Record<string, any> = { charleroi, quatrebras, ligny, genappe, waterloo, hougoumont, wavre, bridge: extend(genappe, bridgeJson), retreat: extend(quatrebras, retreatJson) };
 /** extra battles that are not part of the campaign: quick battle only */
-export const EXTRA_BATTLES = ['hougoumont', 'wavre'];
+export const EXTRA_BATTLES = ['hougoumont', 'wavre', 'bridge', 'retreat'];
 
 export type { RosterUnit, CampaignState } from './sim/roster.ts';
 const KEY = 'nic-campaign-v2';

@@ -5,7 +5,7 @@ import { route } from './path.ts';
 export type Sim = { s: any; scn: any; tu: any; tl: any[] };
 
 /** Bump whenever the sim's behaviour changes (code, tuning or scenario data). Saved battles and replay files carry it and are dropped on a mismatch; the golden-hash test in scripts/test.ts fails until you do. */
-export const SIM_VERSION = 1;
+export const SIM_VERSION = 2;
 
 export function rand(s: { seed: number }): number {
   s.seed = (s.seed + 0x6d2b79f5) | 0;
@@ -37,12 +37,12 @@ export function expandForces(groups: any[]): any[] {
  * opts.courier: orders reach distant regiments by courier (tuning.courier), for both sides.
  */
 export function createSim(scn: any, tu: any, opts: { seed?: number; roster?: any[]; won?: Record<string, boolean>; grouchy?: string; fog?: boolean; deploy?: boolean; courier?: boolean } = {}): Sim {
-  const mkSide = (i: number) => ({ rp: scn.rpStart?.[i] ?? 0, score: 0, lost: 0, cd: {} as Record<string, number>, reserves: { ...(scn.reserves?.[i] ?? {}) } });
+  const mkSide = (i: number) => ({ rp: scn.rpStart?.[i] ?? 0, score: 0, lost: 0, broken: 0, cd: {} as Record<string, number>, reserves: { ...(scn.reserves?.[i] ?? {}) } });
   const s: any = {
     t: 0, seed: opts.seed ?? 1, nextId: 1, units: [], smoke: [], fx: [], out: [], log: [], events: [],
     zones: scn.zones.map((z: any) => ({ ...z, owner: z.owner ?? null, p: z.owner === 0 ? 1 : z.owner === 1 ? -1 : 0 })),
     side: [mkSide(0), mkSide(1)], weather: scn.weather ?? 'clear', over: false, result: null, ti: 0, endCheck: 0,
-    fog: !!opts.fog, seen: [[], []], hist: [], chron: [], fallen: [], histT: 0,
+    hold: scn.hold ?? null, survive: scn.survive ?? null, fog: !!opts.fog, seen: [[], []], hist: [], chron: [], fallen: [], histT: 0,
     courier: !!opts.courier, orders: [], // orders: [{t, side, c}] still on the road, each for one regiment
   };
   const g = opts.grouchy, has = (x: any) => (!x.ifGrouchy || x.ifGrouchy === g) && (!x.unlessGrouchy || x.unlessGrouchy !== g);
@@ -101,7 +101,7 @@ export function spawn(sim: Sim, side: number, d: any) {
     rid: d.rid ?? null, dead: false, path: null as number[][] | null,
     spReady: 0, spUntil: 0, spKind: '', acc: 0, accT: 0,
     xp: d.xp ?? 0, vet: rankOf(sim.tu, d.xp ?? 0), stance: 'hold', queue: [] as number[][],
-    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false, march: false, draftFor: null as number | null, refilled: 0, still: 0,
+    garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false, march: false, draftFor: null as number | null, refilled: 0, still: 0, ammo: T.ammo ?? 0, lead: false,
     fat: 0, mcap: T.morale, bay: null as number | null, tested: false, limbered: false, limT: 0, stun: 0, shaken: 0, // stun: seconds left stunned by a cavalry charge; shaken: seconds left rattled by fire; fatigue 0..1, morale ceiling, bayonet-charge target, charge morale test done, guns hooked to their teams, seconds left limbering/unlimbering
   };
   sim.s.units.push(u);
@@ -412,8 +412,8 @@ function damage(sim: Sim, u: any, cas: number, moraleScale = 1, att?: any) {
   cas = Math.min(cas, u.men);
   u.men -= cas;
   s.side[u.side].lost += cas;
-  s.side[1 - u.side].score += cas * tu.casualtyScore;
-  u.morale -= (cas / u.maxMen) * tu.moraleLoss * moraleScale * (1 - u.vet * tu.veterancy.resist) * (u.aura ? tu.commanderAura.resist : 1) * (u.garrison != null ? tu.garrison.morale : 1) * (posted(u, tu) ? tu.hold.morale : 1);
+  s.side[1 - u.side].score += cas * tu.casualtyScore * (u.routed ? tu.pursuit.score : 1); // riding down broken men pays
+  u.morale -= (cas / u.maxMen) * tu.moraleLoss * moraleScale * (1 - u.vet * tu.veterancy.resist) * (u.aura ? tu.commanderAura.resist : 1) * (u.garrison != null ? tu.garrison.morale : 1) * (posted(u, tu) ? tu.hold.morale : 1) * (1 + tu.army.panic * (s.side[u.side].broken ?? 0)) * (u.lead ? tu.commanderAura.front.resist : 1);
   u.hurt = 0; u.acc += cas;
   if (att && !att.dead) { // inflicting casualties earns rank
     att.xp += cas;
@@ -463,7 +463,7 @@ export const solid = (sq: any, cav: any) => Math.min(1, sq.men / Math.max(1, cav
 /** a square that has finished forming: while it forms (busy) it is still open ranks */
 const formed = (u: any) => u.form === 'square' && !(u.busy > 0);
 function meleeMult(a: any, d: any, tu: any): number {
-  if (d.routed) return 1.5;
+  if (d.routed) return a.type === 'lancer' || a.type === 'cuirassier' ? tu.pursuit.mult : 1.5;
   const ac = a.type === 'lancer' || a.type === 'cuirassier';
   const dc = d.type === 'lancer' || d.type === 'cuirassier';
   if (ac) {
@@ -547,7 +547,7 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
   const asp = aspect(u, tg);
   if (asp && s.t - tg.flankT > 6) { tg.flankT = s.t; ev(sim, { k: 'flank', x: tg.x, z: tg.z, side: tg.side, kind: asp }); chron(sim, 1 - tg.side, `${asp === 2 ? 'Rear' : 'Flank'} fire on ${tg.name}`); }
   let cas = u.men * T.power * rf * fm * dmgForm * (tg.garrison != null ? tu.garrison.cover : featureAt(scn, tg.x, tg.z).cover) * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.fire) * smokeFactor(sim, tg.x, tg.z) * W.fire * (1 - dark(sim) * tu.night.fire) * elev
-    * (0.5 + 0.5 * Math.max(0, u.morale) / u.maxMorale) * (1 - tu.fatigue.fire * u.fat) * (posted(tg, tu) ? tu.hold.fire : 1) * (u.aura ? tu.commanderAura.dmg : 1) * (0.8 + 0.4 * rand(s))
+    * (0.5 + 0.5 * Math.max(0, u.morale) / u.maxMorale) * (1 - tu.fatigue.fire * u.fat) * (posted(tg, tu) ? tu.hold.fire : 1) * (u.aura ? tu.commanderAura.dmg : 1) * (u.lead ? tu.commanderAura.front.dmg : 1) * (0.8 + 0.4 * rand(s))
     * (u.shaken > 0 ? tu.shaken.fire : 1) * (u.type === 'skirmisher' && tg.type === 'artillery' ? tu.screen.guns : screened(sim, u, tg) ? tu.screen.fire : 1); // rattled men shoot worse; sharpshooters pick off gun crews; a skirmish screen soaks up fire
   if (u.type === 'artillery' && close) cas *= tu.canisterMult * (canister ? 1.4 : 1);
   if (volley) { cas *= 2.2; u.spUntil = 0; }
@@ -566,6 +566,7 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
   }
   u.reload = T.reload * (0.9 + 0.2 * rand(s)) * (volley ? 1.6 : canister ? 0.6 : 1) * (u.aura ? tu.commanderAura.reload : 1);
   u.fired = 0;
+  if (T.ammo && --u.ammo < 1) { log(sim, `${u.name} is out of ammunition!`); chron(sim, u.side, `${u.name} out of ammunition`); }
   const fx = Math.sin(u.facing), fz = Math.cos(u.facing);
   s.smoke.push({ x: u.x + fx * 3, z: u.z + fz * 3, age: 0 });
   if (s.smoke.length > tu.smoke.maxPuffs) s.smoke.shift();
@@ -606,6 +607,16 @@ export function step(sim: Sim, dt: number) {
   // commander aura
   const ca = tu.commanderAura, cmds = live.filter((u: any) => u.type === 'commander' && !u.routed);
   for (const u of live) u.aura = u.type !== 'commander' && cmds.some((c: any) => c.side === u.side && Math.hypot(c.x - u.x, c.z - u.z) < ca.radius);
+  const front = cmds.filter((c: any) => live.some((e: any) => e.side !== c.side && !e.routed && e.type !== 'commander' && Math.hypot(e.x - c.x, e.z - c.z) < ca.front.foe)); // generals up with the fighting
+  for (const u of live) u.lead = u.aura && front.some((c: any) => c.side === u.side && Math.hypot(c.x - u.x, c.z - u.z) < ca.radius);
+
+  // army break point: once the men still fighting fall under tuning.army.break of all the side has fielded, panic spreads (see damage and the morale recovery below)
+  for (let i = 0; i < 2; i++) {
+    const sd = s.side[i];
+    const b = Math.max(0, Math.min(1, (tu.army.break - standing(s, i)) / tu.army.break));
+    if (b > 0 && !(sd.broken > 0)) { log(sim, `The ${i === 0 ? 'French' : 'Coalition'} army wavers!`); chron(sim, i, 'The army wavers'); }
+    sd.broken = b;
+  }
 
   // fog of war: an enemy is seen when one of your units is within sight with a clear line (ground, woods, smoke), or it has just fired; re-checked 4x a second
   if (!s.fog || s.t >= (s.seenT ?? 0)) {
@@ -796,7 +807,7 @@ export function step(sim: Sim, dt: number) {
       const away = breakingOff(c, u, tu), asp = away ? 0 : aspect(u, c), gm = c.garrison != null ? (T.cav ? tu.garrison.meleeCav : tu.garrison.meleeInf) : 1; // horse getting clear takes a parting blow, not a rear attack, as it wheels away
       if (asp && s.t - c.flankT > 6) { c.flankT = s.t; ev(sim, { k: 'flank', x: c.x, z: c.z, side: c.side, kind: asp }); chron(sim, 1 - c.side, `${asp === 2 ? 'Rear' : 'Flank'} attack on ${c.name}`); }
       if (asp) c.shaken = Math.max(c.shaken ?? 0, tu.shaken.flank[asp]); // attacked on the flank or rear, its ranks cannot turn to face it in good order
-      damage(sim, c, u.men * T.melee * meleeMult(u, c, tu) * hc * gm * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.melee) * tu.meleeRate * cf(u, 'melee', tu) * cf(c, 'taken', tu) * (u.spUntil > s.t && u.spKind === 'charge' ? 1.6 : 1) * (u.bay === c.id && !faltered(u, s, tu) ? tu.bayonet.melee : 1) * (1 - tu.fatigue.melee * u.fat) * (away ? tu.breakoff.hit : 1) * (u.stun > 0 ? tu.stun.melee : 1) * (u.aura ? tu.commanderAura.dmg : 1) * dt,
+      damage(sim, c, u.men * T.melee * meleeMult(u, c, tu) * hc * gm * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.melee) * tu.meleeRate * cf(u, 'melee', tu) * cf(c, 'taken', tu) * (u.spUntil > s.t && u.spKind === 'charge' ? 1.6 : 1) * (u.bay === c.id && !faltered(u, s, tu) ? tu.bayonet.melee : 1) * (1 - tu.fatigue.melee * u.fat) * (away ? tu.breakoff.hit : 1) * (u.stun > 0 ? tu.stun.melee : 1) * (u.aura ? tu.commanderAura.dmg : 1) * (u.lead ? tu.commanderAura.front.dmg : 1) * dt,
         tu.flank.morale[asp] * (T.cav || tu.types[c.type].cav ? 1 : tu.bayonet.grind), u); // foot against foot does not grind on for long: one side gives way
       u.fat = Math.min(1, u.fat + tu.fatigue.fight * dt);
       if (c.dead) u.eng = null;
@@ -805,7 +816,7 @@ export function step(sim: Sim, dt: number) {
     u.eng = null; u.eF = null;
 
     // ranged fire (only when standing still, not changing formation, guns unlimbered)
-    if (T.range <= 0 || u.mv || u.busy > 0 || u.reload > 0 || u.limbered || u.limT > 0) continue;
+    if (T.range <= 0 || u.mv || u.busy > 0 || u.reload > 0 || u.limbered || u.limT > 0 || (T.ammo && u.ammo < 1)) continue; // out of powder and shot: it cannot fire
     let tg: any = null, td = 1e9, best = 1e9;
     const hu = heightAt(scn, u.x, u.z), hf = u.stance === 'holdfire' ? tu.holdFire.range : 1; // holding fire: only a foe close in (or the ordered target) draws a volley
     for (const e of live) {
@@ -866,7 +877,7 @@ export function step(sim: Sim, dt: number) {
     u.mcap = mcap(u, tu);
     if (u.routed) continue;
     if (!u.mv && u.eng == null) u.fat = Math.max(0, u.fat - tu.fatigue.rest * dt); // men catch their breath standing
-    const rg = (u.hurt > tu.morale.quiet ? tu.morale.regen : 0) + (u.aura ? tu.commanderAura.regen : 0); // spirits recover slowly out of fire, faster under the commander's eye
+    const rg = ((u.hurt > tu.morale.quiet ? tu.morale.regen : 0) + (u.aura ? tu.commanderAura.regen : 0)) * (1 - (1 - tu.army.regen) * (s.side[u.side].broken ?? 0)); // spirits recover slowly out of fire, faster under the commander's eye
     if (rg && u.morale > 0 && u.morale < u.mcap) u.morale = Math.min(u.mcap, u.morale + rg * (1 - tu.fatigue.regen * u.fat) * dt);
     if (u.morale <= 0) {
       u.routed = true; u.tx = u.tz = u.chase = null; u.eng = null; u.morale = 0; u.garrison = u.gTarget = null; u.queue = [];
@@ -891,6 +902,12 @@ export function step(sim: Sim, dt: number) {
     z.owner = z.p > 0.5 ? 0 : z.p < -0.5 ? 1 : null;
     if (z.owner !== prev && z.owner != null) { log(sim, `${z.name} is taken by the ${z.owner === 0 ? 'French' : 'Coalition'}!`); chron(sim, z.owner, `${z.name} captured`); }
     if (z.owner != null) s.side[z.owner].score += z.value * dt;
+  }
+
+  // ammunition: a regiment resting on a depot (an objective its side holds) takes on powder and shot
+  for (const u of live) {
+    const A = tu.types[u.type].ammo;
+    if (A && u.ammo < A && !u.routed && u.hurt >= tu.ammo.quiet && held(s, u)) u.ammo = Math.min(A, u.ammo + (tu.ammo.depot + (u.refill ? tu.ammo.refill : 0)) * dt);
   }
 
   // replenishing: fresh men march in while a regiment holds friendly objective ground out of the fight, paid in RP at the deploy rate
@@ -933,7 +950,10 @@ export function step(sim: Sim, dt: number) {
       s.gone[i] = has ? 0 : s.gone[i] + 1;
       return s.gone[i] < 12;
     });
+    const h = s.hold, hz = h && s.zones.find((z: any) => z.id === h.zone); // a timed objective: hold it until the clock reaches h.t and the day is won
+    if (h && hz) for (const w of [120, 60, 30]) if (s.t >= h.t - w && s.t < h.t && (s.holdWarn ?? 999) > w) { s.holdWarn = w; log(sim, `Hold ${hz.name} for ${w} more seconds and the ${h.side === 0 ? 'French' : 'Coalition'} win the day.`); }
     if (!alive[0] || !alive[1] || s.t >= scn.duration) finish(sim, alive);
+    else if (h && hz && s.t >= h.t && hz.owner === h.side) finish(sim, alive, h.side);
   }
 }
 
@@ -954,15 +974,26 @@ function runEvent(sim: Sim, e: any) {
   }
 }
 
+/** The share of everything side i has fielded (men alive, routed or lost) that is still fighting: the army's strength for the break point and a rearguard's survival */
+export function standing(s: any, i: number): number {
+  let all = 0, ok = 0;
+  for (const u of s.units) if (u.side === i && !u.dead && u.type !== 'commander' && u.draftFor == null) { all += u.men; if (!u.routed) ok += u.men; }
+  return ok / Math.max(1, all + s.side[i].lost);
+}
+
 /** The French share of the verdict if the battle ended now: objectives held count endHeldWeight, points banked the rest. Over 0.5 + drawBand the French win. */
 export function verdict(s: any, tu: any): number {
+  if (s.survive) { // a rearguard scenario: the bar is how far the survivor stands above (or below) the strength it must keep
+    const { side, share } = s.survive, k = (standing(s, side) - share) / (2 * share);
+    return Math.max(0, Math.min(1, 0.5 + (side === 0 ? k : -k)));
+  }
   const h = [0, 0], sc = [s.side[0].score, s.side[1].score];
   for (const z of s.zones) if (z.owner != null) h[z.owner] += z.value;
   const hr = h[0] + h[1] ? h[0] / (h[0] + h[1]) : 0.5;
   return tu.endHeldWeight * hr + (1 - tu.endHeldWeight) * (sc[0] / Math.max(1, sc[0] + sc[1]));
 }
 
-function finish(sim: Sim, alive: boolean[]) {
+function finish(sim: Sim, alive: boolean[], force?: number) {
   const s = sim.s, sc = [s.side[0].score, s.side[1].score];
   const ratio = verdict(s, sim.tu); // objectives held at the end count more than points banked along the way
   let winner = -1;
@@ -970,8 +1001,10 @@ function finish(sim: Sim, alive: boolean[]) {
   else if (alive[0] && !alive[1]) winner = 0;
   else if (alive[0] && alive[1]) {
     winner = ratio > 0.5 + sim.tu.drawBand ? 0 : ratio < 0.5 - sim.tu.drawBand ? 1 : -1;
+    if (s.survive) winner = standing(s, s.survive.side) >= s.survive.share ? s.survive.side : 1 - s.survive.side; // a rearguard: no draws, it kept its strength or it did not
   }
-  const decisive = !alive[0] || !alive[1] || Math.max(ratio, 1 - ratio) > sim.tu.decisiveRatio;
+  if (force != null) winner = force;
+  const decisive = force == null && (!alive[0] || !alive[1] || Math.max(ratio, 1 - ratio) > sim.tu.decisiveRatio);
   s.over = true;
   const top = (side: number) => s.units.filter((u: any) => u.side === side).sort((a: any, b: any) => b.xp - a.xp).slice(0, 3).map((u: any) => ({ name: u.name, xp: Math.round(u.xp), vet: u.vet, type: u.type }));
   s.result = { winner, decisive, score: sc.map(Math.round), lost: s.side.map((x: any) => Math.round(x.lost)), collapse: !alive[0] || !alive[1], stats: { hist: s.hist, chron: s.chron.slice(-14), top: [top(0), top(1)], fallen: s.fallen.slice(-8), t: Math.round(s.t) } };

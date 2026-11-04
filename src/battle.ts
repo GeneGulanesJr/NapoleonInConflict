@@ -702,7 +702,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const more = [u.garrison != null && `Garrison: ${esc(scn.map.villages?.[u.garrison]?.name ?? 'farm')}`, u.type === 'artillery' && (u.limT > 0 ? (u.limbered ? 'Unlimbering' : 'Limbering up') : u.limbered ? 'Limbered' : 'Unlimbered')].filter(Boolean);
     return `<div class="one"><p>${TUNING.types[u.type].label}${u.type === 'line' || u.type === 'guard' || isCav(u) ? ` · ${formName(u)}` : ''} · ${STANCE[u.stance] ?? esc(u.stance)}</p>`
       + `<p>Men ${Math.round(u.men)}/${u.maxMen} · Morale ${Math.max(0, Math.round((u.morale / u.maxMorale) * 100))}%</p>`
-      + `<p>Fatigue ${Math.round((u.fat ?? 0) * 100)}% · ${u.vet ? `${'*'.repeat(u.vet)} ${VET[u.vet]}` : 'Green'}</p>`
+      + `<p>Fatigue ${Math.round((u.fat ?? 0) * 100)}% · ${u.vet ? `${'*'.repeat(u.vet)} ${VET[u.vet]}` : 'Green'}${TUNING.types[u.type].ammo ? ` · Ammo ${Math.ceil(u.ammo)}/${TUNING.types[u.type].ammo}${u.ammo < 1 ? ' (dry)' : ''}` : ''}</p>`
       + `<p class="st">${unitStatus(u, src.state.t, TUNING).map((k) => `<span><img src="${pxUrl(k)}">${ST[k]}</span>`).join('')}${more.map((s) => `<span>${s}</span>`).join('')}</p></div>`;
   }
   // camera views: Ctrl+F5-F8 saves one, F5-F8 flies back to it
@@ -812,6 +812,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     ended = true;
     const r = st.result, won = r.winner === me, draw = r.winner < 0;
     const el = $<HTMLElement>(hud, '#result');
+    const held = [0, 0]; for (const z of st.zones) if (z.owner != null) held[z.owner] += z.value;
     const title = draw ? 'DRAW' : won ? (r.decisive ? 'DECISIVE VICTORY' : 'VICTORY') : r.decisive ? 'CRUSHING DEFEAT' : 'DEFEAT';
     const rep = '<button id="rrep" class="alt">Watch replay</button><button id="rsave" class="alt">Save replay</button>';
     const next = src.replay ? '<button id="rretry">Watch again</button><button id="rmenu" class="alt">Back</button>'
@@ -820,7 +821,9 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     el.innerHTML = `<div class="card ${draw ? 'draw' : won ? 'win' : 'loss'}"><h2>${title}</h2><p>${scn.title}, ${scn.date}</p>
       <table><tr><th></th><th>${SIDE_NAME[me]} (you)</th><th>${SIDE_NAME[1 - me]}</th></tr>
       <tr><td>Score</td><td class="n" data-v="${Number(r.score[me])}">0</td><td class="n" data-v="${Number(r.score[1 - me])}">0</td></tr>
-      <tr><td>Men lost</td><td class="n" data-v="${Number(r.lost[me])}">0</td><td class="n" data-v="${Number(r.lost[1 - me])}">0</td></tr></table>
+      <tr><td>Men lost</td><td class="n" data-v="${Number(r.lost[me])}">0</td><td class="n" data-v="${Number(r.lost[1 - me])}">0</td></tr>
+      <tr><td>Objectives held</td><td>${held[me]}</td><td>${held[1 - me]}</td></tr></table>
+      <p class="sub">The verdict weighs objectives held ${Math.round(TUNING.endHeldWeight * 100)}%, points ${Math.round((1 - TUNING.endHeldWeight) * 100)}%: a side can win with fewer points.</p>
       ${reportHtml(r)}
       <div class="rb">${next}</div></div>`;
     el.style.display = 'flex';
@@ -970,9 +973,9 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       const clk = clockAt(st.t);
       if (clk !== lastClk) { $(hud, '#clk').textContent = clk; lastClk = clk; }
       if (st.weather !== lastWx) { $(hud, '#wx').textContent = TUNING.weather[st.weather].label; lastWx = st.weather; }
-      const rem = Math.max(0, scn.duration - st.t);
-      $(hud, '#left').textContent = `${Math.floor(rem / 60)}:${pad(rem % 60)} left`;
-      for (const w of [120, 30]) if (rem <= w && !warned.has(w) && !st.over) { warned.add(w); banner(w >= 60 ? `${w / 60} MINUTES LEFT` : `${w} SECONDS LEFT`, 'The objectives held at the end decide the day', '#e8c46a'); cue('alert'); }
+      const timed = st.hold && st.t < st.hold.t, rem = Math.max(0, (timed ? st.hold.t : scn.duration) - st.t); // a timed objective counts down to its own deadline
+      $(hud, '#left').textContent = `${Math.floor(rem / 60)}:${pad(rem % 60)} ${timed ? 'to hold' : 'left'}`;
+      for (const w of [120, 30]) if (rem <= w && !warned.has(w) && !st.over) { warned.add(w); banner(w >= 60 ? `${w / 60} MINUTES LEFT` : `${w} SECONDS LEFT`, timed ? `Hold ${st.zones.find((z: any) => z.id === st.hold.zone)?.name ?? 'the objective'}: ${st.hold.side === me ? 'you win' : 'the foe wins'} if it stands` : st.survive ? 'The army still fighting at the end decides the day' : 'The objectives held at the end decide the day', '#e8c46a'); cue('alert'); }
       for (const a of abilities) {
         const b = $<HTMLElement>(hud, `[data-ab="${a}"]`), cd = sd.cd[a] ?? 0, ab = abCfg(a);
         b.style.setProperty('--p', String(cd / ab.cd));

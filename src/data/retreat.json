@@ -1,0 +1,194 @@
+{
+  "extends": "quatrebras",
+  "id": "retreat",
+  "title": "Rearguard at Quatre Bras",
+  "date": "17 June 1815, morning",
+  "blurb": "Blücher has been beaten at Ligny and Wellington must fall back on Mont-Saint-Jean. The crossroads is the rearguard's to hold while the army marches north, with Ney's corps and the Emperor's reserves coming up the Charleroi road behind. Do not be pinned: an army that is still fighting at midday is an army saved.",
+  "hint": "Coalition: keep at least 40% of all you have fielded fighting when the clock runs out, trade ground for time and break contact. French: grind the rearguard down before it escapes: its strength is what decides the day, not the ground it holds.",
+  "duration": 840,
+  "strength": [
+    1.25,
+    1
+  ],
+  "survive": {
+    "side": 1,
+    "share": 0.4
+  },
+  "timeline": [
+    {
+      "t": 20,
+      "type": "reinforce",
+      "side": 1,
+      "units": [
+        {
+          "type": "line",
+          "n": 2,
+          "x": 0,
+          "z": 0,
+          "names": [
+            "Picton: Kempt's Brigade",
+            "Picton: Pack's Brigade"
+          ],
+          "nat": "gb"
+        }
+      ],
+      "entry": {
+        "x": 2,
+        "z": -252
+      },
+      "go": {
+        "x": 45,
+        "z": -98
+      },
+      "spreadX": 1.6,
+      "msg": "Picton's 5th Division marches down the Brussels road and lines the Namur road!"
+    },
+    {
+      "t": 50,
+      "type": "reinforce",
+      "side": 1,
+      "units": [
+        {
+          "type": "line",
+          "n": 1,
+          "x": 0,
+          "z": 0,
+          "name": "Brunswick Black Corps",
+          "nat": "br"
+        },
+        {
+          "type": "cuirassier",
+          "n": 1,
+          "x": 0,
+          "z": 0,
+          "name": "Brunswick Hussars",
+          "nat": "br"
+        },
+        {
+          "type": "artillery",
+          "n": 1,
+          "x": 0,
+          "z": 0,
+          "name": "British Foot Battery",
+          "nat": "gb"
+        }
+      ],
+      "entry": {
+        "x": -6,
+        "z": -252
+      },
+      "go": {
+        "x": -40,
+        "z": -95
+      },
+      "spreadX": 1.6,
+      "msg": "The Duke of Brunswick's Black Corps arrives and fills the gap between the road and the wood."
+    },
+    {
+      "t": 80,
+      "type": "reinforce",
+      "side": 1,
+      "units": [
+        {
+          "type": "line",
+          "n": 3,
+          "x": 0,
+          "z": 0,
+          "names": [
+            "Cooke's Guards: Maitland",
+            "Cooke's Guards: Byng",
+            "Alten's Brigade"
+          ],
+          "nat": "gb"
+        }
+      ],
+      "entry": {
+        "x": -252,
+        "z": -228
+      },
+      "go": {
+        "x": -95,
+        "z": -110
+      },
+      "spreadX": 0,
+      "spreadZ": 1.6,
+      "msg": "British Guards come up the Nivelles road and push into the Bossu wood!"
+    },
+    {
+      "t": 200,
+      "type": "reinforce",
+      "side": 0,
+      "units": [
+        {
+          "type": "line",
+          "n": 2,
+          "x": 0,
+          "z": 0,
+          "names": [
+            "Reille: Girard's Division",
+            "Reille: Bachelu's Division"
+          ]
+        },
+        {
+          "type": "cuirassier",
+          "n": 1,
+          "x": 0,
+          "z": 0,
+          "names": [
+            "Kellermann's Reserve Cuirassiers"
+          ]
+        }
+      ],
+      "entry": {
+        "x": -20,
+        "z": 252
+      },
+      "go": {
+        "x": -30,
+        "z": 120
+      },
+      "spreadX": 1.6,
+      "spreadZ": 0,
+      "msg": "The Emperor's reserves come up the Charleroi road, and Ney is ordered to press the rearguard."
+    },
+    {
+      "t": 400,
+      "type": "reinforce",
+      "side": 0,
+      "units": [
+        {
+          "type": "line",
+          "n": 2,
+          "x": 0,
+          "z": 0,
+          "names": [
+            "Lobau: Simmer's Division",
+            "Lobau: Jeannin's Division"
+          ]
+        },
+        {
+          "type": "artillery",
+          "n": 1,
+          "x": 0,
+          "z": 0,
+          "name": "Reserve Battery"
+        }
+      ],
+      "entry": {
+        "x": -20,
+        "z": 252
+      },
+      "go": {
+        "x": -30,
+        "z": 120
+      },
+      "spreadX": 1.6,
+      "spreadZ": 0,
+      "msg": "Lobau's corps comes up. The rearguard has to go now."
+    }
+  ],
+  "bot": [
+    "attack",
+    "retreat"
+  ]
+}
