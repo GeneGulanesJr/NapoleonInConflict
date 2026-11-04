@@ -26,7 +26,7 @@ export function makeBot(sim: Sim, side: number) {
       const t = sim.s.units.find((q: any) => q.id === u.chase);
       if (t && firm(t, u, sim.tu)) { const d = dist(u, t) || 1; command(sim, side, { c: 'move', ids: [u.id], x: t.x + ((u.x - t.x) / d) * 50, z: t.z + ((u.z - t.z) / d) * 50 }); }
     }
-    if (b.acc < 2) return;
+    if (b.acc < [2.5, 2, 1.2][sim.scn.skill ?? 1]) return; // Easy / Normal / Hard: how often the bot thinks
     b.acc = 0;
     think(sim, side, mem);
   };
@@ -63,7 +63,7 @@ function think(sim: Sim, side: number, mem: any) {
 
   // tactical aid
   for (const name of scn.abilities?.[side] ?? []) {
-    if ((sd.cd[name] ?? 0) > 0 || !foes.length || s.t < 45) continue; // grace period so the player can react
+    if ((sd.cd[name] ?? 0) > 0 || !foes.length || s.t < [60, 45, 30][scn.skill ?? 1]) continue; // grace period so the player can react
     const ab = tu.abilities[name];
     if (name === 'cavalry') {
       if (s.t < 90) continue;
@@ -85,7 +85,8 @@ function think(sim: Sim, side: number, mem: any) {
   // zone assignment
   const mineZones = s.zones.filter((z: any) => z.owner === side);
   const goalZones = stance === 'attack' ? s.zones.filter((z: any) => z.owner !== side) : mineZones.length ? mineZones : s.zones;
-  const zones = goalZones.length ? goalZones : s.zones;
+  const en = scn.entry[side], retreat = stance === 'retreat'; // a rearguard falls back toward its own map edge, fighting whatever catches it, instead of holding ground
+  const zones = retreat ? [{ id: 'home', x: en.x * 0.84, z: en.z * 0.84, r: 45 }] : goalZones.length ? goalZones : s.zones;
   const load: Record<string, number> = {};
   for (const id in mem.assign) { const a = mem.assign[id]; load[a.zid] = (load[a.zid] ?? 0) + 1; }
 
@@ -120,7 +121,7 @@ function think(sim: Sim, side: number, mem: any) {
       a = mem.assign[u.id] = { zid: bz.id, ox: Math.cos(ang) * rr, oz: Math.sin(ang) * rr };
       load[bz.id] = (load[bz.id] ?? 0) + 1;
     }
-    const z = s.zones.find((q: any) => q.id === a.zid);
+    const z = (retreat ? zones : s.zones).find((q: any) => q.id === a.zid);
     const gx = z.x + a.ox, gz = z.z + a.oz;
     const goto = (x: number, zz: number) => {
       if (u.tx != null && Math.hypot(u.tx - x, u.tz - zz) < 4) return;
@@ -128,10 +129,11 @@ function think(sim: Sim, side: number, mem: any) {
     };
     const hold = () => { if (u.tx != null || u.chase != null) command(sim, side, { c: 'stop', ids: [u.id] }); };
     // worn down: fall back to the nearest quiet objective we hold, take on replacements there (the replenish rule above), then rejoin. Regiments defending one of our objectives stay put.
-    if (u.men < 0.4 * u.maxMen && sd.pool >= 1 && sd.rp > 10 && u.garrison == null && !s.zones.some((q: any) => q.owner === side && dist(u, q) < q.r)) mem.mend[u.id] = true;
+    const dry = T.ammo && u.ammo < 3, wet = !T.ammo || u.ammo >= 0.7 * T.ammo; // nearly out of ammunition: fall back to a depot to take more on
+    if ((dry || (u.men < 0.4 * u.maxMen && sd.pool >= 1 && sd.rp > 10)) && u.garrison == null && !s.zones.some((q: any) => q.owner === side && dist(u, q) < q.r)) mem.mend[u.id] = true;
     if (mem.mend[u.id]) {
       const dz = mineZones.filter((q: any) => !q.contested).sort((p: any, q: any) => dist(u, p) - dist(u, q))[0];
-      if (!dz || u.men >= 0.95 * u.maxMen || (dist(u, dz) < dz.r && !u.refill)) delete mem.mend[u.id]; // done, nowhere to go, or no money to refill: back to the fight
+      if (!dz || (u.men >= 0.95 * u.maxMen && wet) || (dist(u, dz) < dz.r && !u.refill && wet)) delete mem.mend[u.id]; // done, nowhere to go, or no money to refill: back to the fight
       else { if (dist(u, dz) > dz.r * 0.5) goto(dz.x, dz.z); else hold(); continue; }
     }
     if (stance === 'defend' && u.garrison == null && u.gTarget == null && (u.type === 'line' || u.type === 'guard' || u.type === 'skirmisher')) { // man the farm that sits on our objective
@@ -198,7 +200,7 @@ function think(sim: Sim, side: number, mem: any) {
         if (d > 95 || firm(e, u, tu)) continue;
         const fo = !tu.types[e.type].cav && e.type !== 'artillery' && e.type !== 'skirmisher';
         const w = fo && (e.shaken > 0 || e.stun > 0) && e.form !== 'square' ? 3 : e.type === 'artillery' ? 2.5 : e.type === 'skirmisher' ? 2
-          : e.routed || (fo && e.morale < 70) || e.form === 'column' || e.form === 'square' ? 1 : 0; // a square that is not firm is outnumbered
+          : e.routed ? 2.5 : (fo && e.morale < 70) || e.form === 'column' || e.form === 'square' ? 1 : 0; // a square that is not firm is outnumbered
         if (w / (d + 10) > pv) { pv = w / (d + 10); prey = e; }
       }
       const fit = u.morale > 45 && u.men > 0.3 * u.maxMen, ft = fit && !prey && !rsv ? flankTarget(u, 120) : null;

@@ -404,14 +404,15 @@ export function createView(host: HTMLElement) {
     }
     // bridges: plank deck + rails across the river
     const bgs: THREE.BufferGeometry[] = [];
-    for (const r of s.map.rivers ?? []) for (const [qx, qz] of r.bridges) {
+    for (const r of s.map.rivers ?? []) for (const [qx, qz, qw] of r.bridges) {
       let bd = 1e9, ang = 0;
       for (let k = 0; k + 1 < r.pts.length; k++) {
         const [ax, az] = r.pts[k], [cx, cz] = r.pts[k + 1], dx = cx - ax, dz = cz - az, tt = Math.max(0, Math.min(1, ((qx - ax) * dx + (qz - az) * dz) / (dx * dx + dz * dz)));
         const d = Math.hypot(qx - ax - tt * dx, qz - az - tt * dz); if (d < bd) { bd = d; ang = Math.atan2(dx, dz); }
       }
       const len = r.width + 5, y = heightAt(s, qx, qz) + 0.1;
-      for (const g of [bx(4.6, 0.35, len, 0, 0.2, 0, P.wood), bx(0.3, 0.8, len, 2.2, 0.7, 0, P.wood), bx(0.3, 0.8, len, -2.2, 0.7, 0, P.wood)]) bgs.push(g.rotateY(ang + Math.PI / 2).translate(qx, y, qz));
+      const wk = (qw ?? 7) / 7, dw = 4.6 * wk; // a wide bridge has a wider deck (the half-width is 7 by default)
+      for (const g of [bx(dw, 0.35, len, 0, 0.2, 0, P.wood), bx(0.3, 0.8, len, dw / 2 - 0.1, 0.7, 0, P.wood), bx(0.3, 0.8, len, -dw / 2 + 0.1, 0.7, 0, P.wood)]) bgs.push(g.rotateY(ang + Math.PI / 2).translate(qx, y, qz));
     }
     if (bgs.length) { const bm = new THREE.Mesh(merge(bgs), toon({ vertexColors: true })); bm.castShadow = bm.receiveShadow = true; add(bm); }
     // walled farms (outlined, one instance per farm)

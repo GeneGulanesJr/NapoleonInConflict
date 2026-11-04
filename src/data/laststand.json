@@ -1,0 +1,181 @@
+{
+  "extends": "waterloo",
+  "id": "laststand",
+  "title": "Last Stand of the Old Guard",
+  "date": "18 June 1815, evening",
+  "blurb": "The army has broken. Behind the rout the Emperor forms the Old Guard into squares on the Brussels road to cover the retreat. Wellington's line has advanced and Blücher's Prussians pour in from the east; they will not stop coming. There is no victory to be won, only the question of how long the Guard can stand while darkness falls.",
+  "hint": "You cannot win by killing: more arrive every half minute, a little stronger each time. Form square against horse, hold fire for the close volley, keep your powder dry and your general alive. Every minute you last lets more of the army escape.",
+  "clock": {
+    "start": "19:30",
+    "hours": 2.5
+  },
+  "weather": "clear",
+  "duration": 1500,
+  "strength": [
+    1,
+    1
+  ],
+  "bot": [
+    "defend",
+    "attack"
+  ],
+  "abilities": [
+    [
+      "barrage"
+    ],
+    []
+  ],
+  "rpStart": [
+    0,
+    0
+  ],
+  "reserves": [
+    {},
+    {}
+  ],
+  "replacements": [
+    0,
+    0
+  ],
+  "survive": {
+    "side": 0,
+    "share": 0.15
+  },
+  "zones": [
+    {
+      "id": "sq",
+      "name": "The Guard's Square",
+      "x": -30,
+      "z": 150,
+      "r": 30,
+      "value": 6,
+      "owner": 0
+    }
+  ],
+  "entry": [
+    {
+      "x": -30,
+      "z": 290
+    },
+    {
+      "x": -30,
+      "z": -290
+    }
+  ],
+  "forces": [
+    [
+      {
+        "type": "guard",
+        "n": 1,
+        "x": -55,
+        "z": 152,
+        "name": "1er Chasseurs, 1er bataillon (Old Guard)"
+      },
+      {
+        "type": "guard",
+        "n": 1,
+        "x": -5,
+        "z": 152,
+        "name": "1er Chasseurs, 2e bataillon (Old Guard)"
+      },
+      {
+        "type": "guard",
+        "n": 1,
+        "x": -30,
+        "z": 178,
+        "name": "2e Chasseurs (Old Guard)"
+      },
+      {
+        "type": "artillery",
+        "n": 1,
+        "x": -30,
+        "z": 128,
+        "name": "Guard Foot Battery"
+      },
+      {
+        "type": "commander",
+        "n": 1,
+        "x": -30,
+        "z": 196,
+        "name": "Napoleon"
+      }
+    ],
+    []
+  ],
+  "timeline": [
+    {
+      "t": 1,
+      "type": "msg",
+      "msg": "La Garde recule... no. The Guard forms square on the Brussels road."
+    }
+  ],
+  "waves": {
+    "side": 1,
+    "t": 20,
+    "every": 30,
+    "max": 26,
+    "go": {
+      "x": -30,
+      "z": 150
+    },
+    "entries": [
+      {
+        "x": -30,
+        "z": -290,
+        "nat": "gb",
+        "name": "Allied",
+        "from": "north"
+      },
+      {
+        "x": 290,
+        "z": 150,
+        "nat": "pr",
+        "name": "Prussian",
+        "from": "east"
+      },
+      {
+        "x": -290,
+        "z": -60,
+        "nat": "gb",
+        "name": "British",
+        "from": "north-west"
+      },
+      {
+        "x": 290,
+        "z": -60,
+        "nat": "pr",
+        "name": "Prussian",
+        "from": "north-east"
+      }
+    ],
+    "kinds": [
+      {
+        "type": "line",
+        "label": "Line",
+        "base": 1,
+        "per": 0.4
+      },
+      {
+        "type": "skirmisher",
+        "label": "Skirmishers",
+        "base": 0,
+        "per": 0.3,
+        "from": 2
+      },
+      {
+        "type": "cuirassier",
+        "label": "Cavalry",
+        "base": 0,
+        "per": 0.15,
+        "from": 5
+      },
+      {
+        "type": "artillery",
+        "label": "Battery",
+        "base": 0,
+        "per": 0.1,
+        "from": 8
+      }
+    ]
+  }
+}

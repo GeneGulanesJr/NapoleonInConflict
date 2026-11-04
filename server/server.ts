@@ -5,10 +5,11 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { createSim, step, command, type Cmd, type Sim } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
 import { freshRoster } from '../src/sim/roster.ts';
+import { resolve } from '../src/sim/extend.ts';
 
 const j = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.json`, import.meta.url), 'utf8'));
 const tu = j('tuning'), camp = j('campaign');
-const scenarios: Record<string, any> = Object.fromEntries(camp.battles.map((id: string) => [id, j(id)]));
+const scenarios: Record<string, any> = Object.fromEntries(camp.battles.map((id: string) => [id, resolve(j(id), j)]));
 
 type Room = { id: string; sim: Sim; bots: (((dt: number) => void) | null)[]; clients: Map<WebSocket, number>; restartAt: number };
 const rooms = new Map<string, Room>();

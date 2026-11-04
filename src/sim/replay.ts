@@ -7,7 +7,7 @@ import { makeSkirmish } from './skirmish.ts';
 /** keys: [step, state] every KEY steps and at the end, to seek from; end: the last step; chron: the final chronicle (turning points); ref: the scenario to rebuild for a replay file */
 export type Replay = {
   scn: any; v?: number; won?: Record<string, boolean>; grouchy?: string; side: number; start: string; cmds: [number, Cmd][];
-  keys?: [number, string][]; end?: number; chron?: any[]; ref?: { id: string; seed?: number; strength: number[] };
+  keys?: [number, string][]; end?: number; chron?: any[]; ref?: { id: string; seed?: number; strength: number[]; skill?: number };
 };
 export const DT = 0.05, KEY = 1200; // a keyframe every 60 sim-seconds
 
@@ -83,6 +83,6 @@ export function parseReplay(text: string, scenarios: Record<string, any>, orders
   if (!nat(f.end) || !Array.isArray(f.cmds) || !f.cmds.every(order)) throw new Error('bad orders');
   if (!Array.isArray(f.keys) || !f.keys.every((k: any) => Array.isArray(k) && k.length === 2 && nat(k[0]) && state(k[1]))) throw new Error('bad keyframes');
   if (!Array.isArray(f.chron) || !f.chron.every((c: any) => c && num(c.t) && (c.side === 0 || c.side === 1) && typeof c.text === 'string')) throw new Error('bad turning points');
-  const strength = [...ref.strength];
-  return { scn: { ...base, strength }, v: f.v, ref: { id: ref.id, seed: ref.seed, strength }, won: f.won ?? undefined, grouchy: f.grouchy ?? undefined, side: f.side, start: f.start, cmds: f.cmds, keys: f.keys, end: f.end, chron: f.chron };
+  const strength = [...ref.strength], skill = ref.skill === 0 || ref.skill === 2 ? ref.skill : 1; // the bot's difficulty (Easy / Normal / Hard) shapes its play
+  return { scn: { ...base, strength, skill }, v: f.v, ref: { id: ref.id, seed: ref.seed, strength, skill }, won: f.won ?? undefined, grouchy: f.grouchy ?? undefined, side: f.side, start: f.start, cmds: f.cmds, keys: f.keys, end: f.end, chron: f.chron };
 }

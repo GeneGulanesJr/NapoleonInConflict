@@ -5,6 +5,10 @@
   "stun": { "_note": "Foot or guns (not in square or a farm) hit by a cavalry charge are stunned for `time` s x the slope factor x (horse men / foot men, clamped to `size`) x `charge` with the Charge special: they cannot fire, move or change formation, and fight at `melee` x their usual rate", "time": 4, "size": [0.5, 1.5], "charge": 1.5, "melee": 0.6 },
   "shaken": { "_note": "Fire rattles what it hits: `k` s per 100% of the regiment lost in one blow (so ~4 s for a 10% bite), + flank[aspect] s on a flank or rear hit, + up to `routers` s when broken men run through; capped at `max`. Shaken: reload takes `reload` x as long, fire does `fire` x, no formation changes (it can still move)", "k": 40, "max": 8, "flank": [0, 1.5, 3], "routers": 3, "reload": 1.5, "fire": 0.7 },
   "falter": { "_note": "A charging regiment (horse on an attack, or a bayonet charge) that loses `share` or more of its men to one volley or round loses its momentum: the charge bonus ends, a bayonet charge stalls into a firefight, and for `time` s its impact shocks and stuns at `impact` x", "share": 0.1, "impact": 0.5, "time": 4 },
+  "ammo": { "_note": "Foot and guns carry `types.<arm>.ammo` volleys or rounds and cannot fire when they run dry. Standing on an objective their side holds, with no casualties for `quiet` s, they take on `depot` per s (+ `refill` while replenishing, N)", "quiet": 4, "depot": 0.1, "refill": 0.5 },
+  "army": { "_note": "Army break point: when the men still fighting fall under `break` x all it has fielded (alive, routed or lost), every regiment loses morale `panic` x faster per casualty, and recovers `regen` x slower, scaled by how far under the line the army is", "break": 0.3, "panic": 0.8, "regen": 0.7 },
+  "pursuit": { "_note": "Horse riding down routed men hit them `mult` x as hard (other arms 1.5), and the points for those casualties count `score` x (1 = no bonus)", "mult": 2, "score": 1 },
+  "gunnery": { "_note": "Round shot at range: the chance a ball falls short or wide is `miss` x (distance / range)^`curve`, so guns are poor at long range. A battery that keeps firing at one target ranges in: after `shots` rounds its miss chance is cut by `ranging` (it starts again on a new target or after moving)", "miss": 0.9, "curve": 1.4, "ranging": 0.45, "shots": 4 },
   "screen": { "_note": "Fire at a regiment through its own skirmishers' screen does `fire` x damage; skirmishers firing at a battery do `guns` x (they pick off the crews)", "fire": 0.7, "guns": 2 },
   "plough": { "_note": "Round shot that hits carries on up to `reach` units behind its target and strikes the next regiment of that side in its path for `carry` x the casualties", "reach": 30, "carry": 0.4 },
   "breakoff": { "_note": "Horse ordered away from its foe in a melee strikes no blows while it gets clear; the foe hits it at `hit` x the usual rate, with no flank or rear bonus", "hit": 0.5 },
@@ -25,20 +29,23 @@
       "power": 0.13,
       "melee": 0.6,
       "morale": 100,
+      "ammo": 30,
       "cost": 30,
       "perFig": 12,
       "cav": false
     },
     "guard": {
       "label": "Imperial Guard",
-      "men": 450,
+      "men": 500,
       "speed": 2.4,
       "range": 15,
       "reload": 6,
-      "power": 0.16,
-      "melee": 1,
-      "morale": 150,
-      "cost": 55,
+      "power": 0.26,
+      "melee": 1.6,
+      "morale": 200,
+      "ammo": 60,
+      "tough": 0.4,
+      "cost": 70,
       "perFig": 12,
       "cav": false
     },
@@ -51,6 +58,7 @@
       "power": 0.12,
       "melee": 0.4,
       "morale": 95,
+      "ammo": 40,
       "cost": 20,
       "perFig": 9,
       "cav": false
@@ -90,6 +98,7 @@
       "power": 0.5,
       "melee": 0.1,
       "morale": 90,
+      "ammo": 40,
       "cost": 45,
       "perFig": 45,
       "cav": false
@@ -267,12 +276,12 @@
     "barrage": {
       "label": "Artillery Barrage",
       "key": "F1",
-      "cd": 90,
-      "delay": 5,
-      "dur": 10,
-      "r": 20,
-      "dps": 0.02,
-      "mdps": 4,
+      "cd": 120,
+      "delay": 6,
+      "dur": 8,
+      "r": 16,
+      "dps": 0.012,
+      "mdps": 2.5,
       "booms": 3
     },
     "rockets": {
@@ -376,7 +385,8 @@
     "range": 1.15,
     "reload": 0.85,
     "rallyRadius": 55,
-    "fallPenalty": 20
+    "fallPenalty": 20,
+    "front": { "_note": "a regiment under the eye of a general who stands within `foe` of an enemy fights `dmg` x and loses morale `resist` x as fast on top of the aura: leading from the front pays, and the general is shot at", "foe": 40, "dmg": 1.1, "resist": 0.9 }
   },
   "sight": {
     "line": 90,

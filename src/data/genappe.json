@@ -1,5 +1,6 @@
 {
   "id": "genappe",
+  "scale": 1.25,
   "title": "Genappe Rearguard",
   "date": "17 June 1815",
   "blurb": "Wellington is retreating north to Mont-Saint-Jean in a downpour. The Brussels road drops into the Dyle valley, crosses a single narrow bridge at Genappe and climbs a long, cramped street out of the town. Lord Uxbridge's cavalry waits on the rising ground beyond. Hurl your lancers through the defile before the storm turns the fields to mud.",
@@ -302,8 +303,7 @@
           ],
           [
             146,
-            13
-          ]
+            13, 11]
         ]
       },
       {
@@ -705,8 +705,7 @@
       "x": -70,
       "z": 52,
       "r": 14,
-      "value": 0.5,
-      "owner": 1
+      "value": 0.5
     },
     {
       "id": "wy",
@@ -714,8 +713,7 @@
       "x": 146,
       "z": 0,
       "r": 14,
-      "value": 0.5,
-      "owner": 1
+      "value": 0.5
     }
   ],
   "entry": [

@@ -54,10 +54,10 @@ function drive(tu: any, r: Replay, play: boolean): Source {
 export function localSource(scn: any, opts: { roster?: any[]; won?: Record<string, boolean>; grouchy?: string; seed?: number; side?: number; resume?: any; deploy?: boolean }): Source {
   const side = opts.side ?? 0, strength = [...(scn.strength ?? [1, 1])];
   strength[1 - side] *= TUNING.difficulty.enemyStrength[difficulty()];
-  const s2 = { ...scn, strength };
+  const skill = difficulty(), s2 = { ...scn, strength, skill };
   warm(s2, TUNING); // the route grid, baked at load (keyed by the map, which s2 shares with scn)
   const s0 = opts.resume ?? createSim(s2, TUNING, { roster: opts.roster, won: opts.won, grouchy: opts.grouchy, fog: fogOn(), courier: pref('nic-courier', false), seed: opts.seed ?? (Date.now() & 0x7fffffff), deploy: opts.deploy }).s;
-  return drive(TUNING, { scn: s2, v: SIM_VERSION, ref: { id: scn.id, seed: scn.seed, strength }, won: opts.won, grouchy: opts.grouchy, side, start: JSON.stringify(s0), cmds: [] }, false);
+  return drive(TUNING, { scn: s2, v: SIM_VERSION, ref: { id: scn.id, seed: scn.seed, strength, skill }, won: opts.won, grouchy: opts.grouchy, side, start: JSON.stringify(s0), cmds: [] }, false);
 }
 
 /** Watch a recorded battle again, from its start state. */

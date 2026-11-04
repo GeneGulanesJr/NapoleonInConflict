@@ -1,5 +1,6 @@
 {
   "id": "quatrebras",
+  "scale": 1.25,
   "title": "Quatre Bras",
   "date": "16 June 1815, afternoon",
   "blurb": "Marshal Ney is ordered to seize the crossroads of Quatre Bras, where the Brussels–Charleroi chaussée meets the Nivelles–Namur road, and cut Wellington off from Blücher. The Prince of Orange's Dutch-Belgians hold it thinly: Gemioncourt farm on the chaussée, Pierrepont farm and the dense Bossu wood on the west, the marshy Materne pond to the east. Wellington's divisions are marching in down the Brussels and Nivelles roads, hour by hour. Strike fast, before the crossroads fills.",
@@ -484,8 +485,7 @@
       "x": -12,
       "z": -127,
       "r": 18,
-      "value": 4,
-      "owner": 1
+      "value": 4
     },
     {
       "id": "ge",
@@ -493,8 +493,7 @@
       "x": -6,
       "z": -18,
       "r": 15,
-      "value": 2,
-      "owner": 1
+      "value": 2
     },
     {
       "id": "bw",
@@ -502,8 +501,7 @@
       "x": -100,
       "z": -62,
       "r": 22,
-      "value": 2,
-      "owner": 1
+      "value": 2
     },
     {
       "id": "pp",
@@ -511,8 +509,7 @@
       "x": -108,
       "z": 78,
       "r": 14,
-      "value": 1.5,
-      "owner": 1
+      "value": 1.5
     },
     {
       "id": "pi",
