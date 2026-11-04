@@ -99,7 +99,7 @@ i.m s { background: #6fc46f; } i.o s { background: #e8c46a; }
 .plate.far .pn { display: none; }
 .plate .bar { height: 4px; background: rgba(0,0,0,.65); margin-top: 1px; } .plate .bar i { display: block; height: 100%; width: 100%; }
 .plate .men i { background: #6fc46f; } .plate .mor i { background: #e8c46a; }
-.plate.sel .pn { color: var(--gold); font-weight: 700; } .plate.routed .pn { color: #ff8a7a; } .plate.routed .pn::after { content: ' ROUTED'; }
+.plate.sel .pn { color: var(--gold); font-weight: 700; } .plate.routed .pn { color: #ff8a7a; }
 
 /* ---------- pixel-diorama skin (flat, square, pixel font) ---------- */
 :root { --panel: rgba(20, 17, 13, 0.9); --edge: #5a4128; --gold: #d3a64e; --fr: #6f9bff; --co: #ff6a5c; --pf: 'Silkscreen', 'Courier New', monospace; }
@@ -149,7 +149,7 @@ button.alt { background: #1b1510; }
 .hud button { font: 8px/8px var(--pf); letter-spacing: 0; padding: 2px 4px; border-width: 1px; box-shadow: 0 0 0 1px #000; }
 .hud kbd { font: 8px/8px var(--pf); padding: 0 1px; margin-left: 2px; background: none; }
 .hud .panel { padding: 3px 4px; border-width: 1px; }
-.hud .topbar { padding: 3px 6px; gap: 8px; background: rgba(20, 17, 13, .72); }
+.hud .topbar { padding: 3px 166px 3px var(--tp, 166px); gap: 8px; /* right room keeps the scores clear of the speed buttons; render.ts drops the left room on narrow grids */ background: rgba(20, 17, 13, .72); }
 .hud .score { gap: 3px; font-size: 8px; } .hud .score b { font-size: 16px; line-height: 16px; min-width: 40px; }
 .hud .center { min-width: 220px; }
 .hud .ttl { font-size: 8px; letter-spacing: 0; } .hud .ttl small { font-size: 8px; }
@@ -170,10 +170,10 @@ button.alt { background: #1b1510; }
 .hud i.b { height: 3px; border-width: 0; }
 .hud .forms { gap: 2px; margin-top: 3px; } .hud .forms button { padding: 1px 3px; font-size: 8px; }
 .hud .bc { bottom: 6px; gap: 4px; }
-.hud .ab { width: 40px; height: 38px; padding: 2px; gap: 0; }
+.hud .ab { width: 40px; height: 46px; padding: 10px 2px 2px; gap: 0; } /* top strip holds the key label, the 36px icon sits below it */
 .hud .ab .nm { display: none; } .hud .ab kbd { top: 1px; left: 1px; } .hud .ab .cd { top: 12px; font-size: 12px; text-shadow: 1px 1px 0 #000; }
 .hud .br { right: 6px; bottom: 6px; gap: 3px; }
-.hud #mini { width: 64px; height: 64px; border-width: 1px; image-rendering: pixelated; }
+.hud #mini { width: 96px; height: 96px; border-width: 1px; image-rendering: pixelated; }
 .hud #res { width: 112px; } .hud #res b { font-size: 8px; margin: 0 1px; }
 .hud .rbtns { gap: 2px; } .hud .rbtns button { gap: 4px; padding: 1px 3px; font-size: 8px; }
 .hud .intro h1 { font-size: 26px; line-height: 30px; letter-spacing: 1px; margin: 2px 0; text-shadow: 2px 2px 0 #000; }
@@ -229,3 +229,84 @@ button.alt { background: #1b1510; }
 
 /* war chest: replacement men left (and RP cap reached) on its own line under the reserves header */
 .hud #pool { display: block; color: #b8b2a0; margin-top: 2px; }
+
+/* ---------- menus on the HUD's pixel grid: --u = one HUD pixel (set in render.ts resize), Silkscreen on its 8px grid ---------- */
+#menu { --u: 2px; font: calc(var(--u) * 8) / calc(var(--u) * 12) var(--pf); letter-spacing: 0; -webkit-font-smoothing: none; text-rendering: optimizeSpeed; }
+#menu .logo { font-size: calc(var(--u) * 24); line-height: 1.1; letter-spacing: calc(var(--u) * 2); text-shadow: calc(var(--u) * 2) calc(var(--u) * 2) 0 #000; }
+#menu .logo em { font-size: calc(var(--u) * 16); letter-spacing: calc(var(--u) * 4); }
+#menu .screen h2 { font-size: calc(var(--u) * 16); letter-spacing: 0; }
+#menu .sub { font-style: normal; margin: calc(var(--u) * 3) 0 calc(var(--u) * 8); }
+#menu .btns { gap: calc(var(--u) * 4); }
+#menu .btns button { font-size: calc(var(--u) * 8); min-width: calc(var(--u) * 120); padding: calc(var(--u) * 4) calc(var(--u) * 8); }
+#menu .btns.row button { min-width: calc(var(--u) * 70); }
+#menu .btns small { font-size: calc(var(--u) * 8); margin-left: calc(var(--u) * 3); }
+#menu .help { font-size: calc(var(--u) * 8); line-height: calc(var(--u) * 12); max-width: calc(var(--u) * 360); }
+#menu .intro-text, #menu .brief p, #menu .hint { font-style: normal; }
+#menu .brief h3 { font-size: calc(var(--u) * 12); } #menu .brief small { font-size: calc(var(--u) * 8); }
+#menu .bcard b { font-size: calc(var(--u) * 12); } #menu .bcard { grid-template-columns: calc(var(--u) * 16) 1fr; }
+#menu .rrow { grid-template-columns: calc(var(--u) * 80) 1fr; }
+#menu .form input, #menu .form select { font: inherit; }
+#menu .btns button { min-width: 0; width: calc(var(--u) * 240); }
+#menu .btns.row button { width: calc(var(--u) * 100); }
+#menu .screen { max-width: calc(var(--u) * 560); padding: calc(var(--u) * 10) calc(var(--u) * 12); }
+#menu .intro-text { max-width: calc(var(--u) * 400); margin-bottom: calc(var(--u) * 8); }
+#menu .rrow { grid-template-columns: calc(var(--u) * 100) 1fr; }
+#menu .cols { gap: calc(var(--u) * 10); }
+#menu .roster h4 small { display: inline; margin: 0; } #menu .cmap { height: calc(var(--u) * 80); margin-bottom: 0; }
+.hud .score .lbl { display: var(--lbl, inline); } /* render.ts hides the side names when the HUD grid is too narrow for them beside the speed buttons */
+#menu code { font: inherit; }
+
+/* score bar = the verdict if the battle ended now; the two marks bound the draw band */
+.tug { position: relative; } .tug b { position: absolute; top: 0; bottom: 0; width: 1px; background: #000; }
+/* objective tags stay on one row, shrinking (names ellipsised) rather than wrapping under the score bar */
+.hud .pips { flex-wrap: nowrap; } .hud .pip { min-width: 0; flex: 1 1 0; text-align: center; } /* equal shares, so a short name like Ligny stays whole */
+/* capture progress: a bar under each objective's name, in the colour of the side taking hold */
+.hud .pip { background: linear-gradient(var(--fc, #888), var(--fc, #888)) no-repeat left bottom / calc(var(--f, 0) * 100%) 2px, rgba(0,0,0,.5); }
+/* army bar: room for the control group number before the marks */
+.hud .ac { grid-template-columns: 7px 1fr 15px; }
+/* fog of war: an enemy plate lingers where it was last seen */
+.plates .plate.ghost { border-top-style: dashed; } .plates .plate.ghost .bar { display: none; } .plates .plate.ghost::after { content: '?'; color: var(--foe); }
+/* stunned by a cavalry charge, shaken by fire (the status icons beside the plate say which) */
+.plate.stun .pn { color: #ffd36a; }
+.plate.shaken .pn { color: #e9c99a; }
+/* in-battle menu (Esc) */
+.hud #pm { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 200px; z-index: 4; text-align: center; }
+.hud #pm .hd small { display: block; color: #8e8a7a; margin-top: 1px; }
+.hud .pmb, .hud #pm .sets { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+.hud #pm .sets b, #menu .sets b { font-weight: 400; color: var(--gold); }
+/* campaign: buying men and regiments with glory */
+#menu .rrow.buy { grid-template-columns: calc(var(--u) * 100) 1fr calc(var(--u) * 46) calc(var(--u) * 50); }
+#menu .rrow.buy button { padding: calc(var(--u) * 1) calc(var(--u) * 2); font-size: calc(var(--u) * 8); }
+#menu .glory { color: var(--gold); font-weight: 400; }
+/* deployment phase and first-battle tutorial */
+.hud #dep, .hud #tut { position: absolute; left: 0; right: 0; margin: 0 auto; width: 210px; text-align: center; }
+.hud #dep { top: 50px; } .hud #tut { bottom: 58px; }
+.hud #dep p, .hud #tut p { margin: 0 0 3px; line-height: 9px; }
+.hud #dep .hd, .hud #tut .hd { color: var(--gold); }
+.hud.deploying [data-sp] { opacity: .35; pointer-events: none; } /* the clock waits for the start */
+
+/* ---------- WS4a: Grouchy's orders after Ligny: wide buttons, the consequences on their own line ---------- */
+#menu .orders button { width: calc(var(--u) * 340); text-align: left; }
+#menu .orders small { display: block; margin: calc(var(--u) * 2) 0 0; }
+
+/* ---------- UI/UX: plate status icons, single-regiment card, message log (J), big minimap (Tab) ---------- */
+.plates .plate .st { position: absolute; left: 100%; top: -2px; display: flex; gap: 1px; margin-left: 1px; }
+.plates .plate.pip .st { display: none; }
+.plates .plate .st img, .hud #sel .one img { display: block; width: 7px; height: 7px; image-rendering: pixelated; }
+.hud #sel .one { margin-top: 2px; line-height: 9px; color: #d4ccb4; } .hud #sel .one p { margin: 0; }
+.hud #sel .one .st { display: flex; flex-wrap: wrap; gap: 0 4px; color: var(--ink); } .hud #sel .one .st span { display: flex; gap: 1px; align-items: center; }
+.hud #log { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 260px; max-width: calc(100% - 12px); max-height: calc(100% - 90px); overflow-y: auto; z-index: 4; }
+.hud #log .hd small { color: #8e8a7a; margin-left: 4px; } .hud #log p { margin: 0; line-height: 9px; }
+.hud #log p.go { cursor: pointer; color: var(--gold); } .hud #log p.go:hover { background: #3d2e20; }
+.hud #mini.big { position: absolute; right: 0; bottom: 0; z-index: 2; width: min(288px, calc(var(--bh, 360) * 1px - 64px)); height: min(288px, calc(var(--bh, 360) * 1px - 64px)); }
+
+/* replay bar: play/pause, speeds, scrubber with turning-point markers */
+.hud .rbar { position: absolute; left: 50%; width: 220px; margin-left: -110px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; z-index: 4; }
+.hud .rbar span { margin-left: auto; color: #b8b2a0; }
+.hud .rbar .on { border-color: var(--gold); color: var(--gold); }
+.hud .rbar .track { position: relative; flex: 1 0 100%; height: 6px; margin-top: 2px; background: #000; border: 1px solid var(--edge); cursor: pointer; touch-action: none; }
+.hud .rbar .track i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gold); opacity: .6; pointer-events: none; }
+.hud .rbar .track b { position: absolute; top: -2px; width: 2px; height: 8px; margin-left: -1px; }
+.hud .rbar .track b:hover { outline: 1px solid #fff; }
+.hud.replay .result { align-items: flex-end; padding-bottom: 6px; } /* the result card sits clear of the bar, which stays usable over it */
+.hud.replay #banner { top: 92px; }

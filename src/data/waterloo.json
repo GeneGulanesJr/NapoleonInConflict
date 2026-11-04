@@ -1629,20 +1629,34 @@
       "delayIfWon": {
         "ligny": 200
       },
+      "delayIfGrouchy": {
+        "pursue": 120,
+        "screen": 60
+      },
       "units": [
         {
           "type": "line",
-          "n": 5,
+          "n": 4,
           "x": 0,
           "z": 0,
           "names": [
             "Bülow: Hiller's Brigade",
             "Bülow: Hacke's Brigade",
             "Bülow: Ryssel's Brigade",
-            "Bülow: Losthin's Brigade",
-            "Pirch I: Tippelskirch's Brigade"
+            "Bülow: Losthin's Brigade"
           ],
           "nat": "pr"
+        },
+        {
+          "type": "line",
+          "n": 1,
+          "x": 0,
+          "z": 0,
+          "names": [
+            "Pirch I: Tippelskirch's Brigade"
+          ],
+          "nat": "pr",
+          "unlessGrouchy": "pursue"
         },
         {
           "type": "cuirassier",
@@ -1666,7 +1680,8 @@
           "x": 0,
           "z": 0,
           "nat": "pr",
-          "name": "Prussian Uhlans"
+          "name": "Prussian Uhlans",
+          "unlessGrouchy": "pursue"
         }
       ],
       "entry": {
@@ -1687,6 +1702,10 @@
       "side": 1,
       "delayIfWon": {
         "ligny": 150
+      },
+      "delayIfGrouchy": {
+        "pursue": 180,
+        "screen": 90
       },
       "units": [
         {
@@ -1749,6 +1768,42 @@
       },
       "spreadX": 1.6,
       "msg": "Lobau's VI Corps holds Plancenoit against the Prussians."
+    },
+    {
+      "t": 1260,
+      "type": "reinforce",
+      "side": 0,
+      "ifGrouchy": "march",
+      "units": [
+        {
+          "type": "line",
+          "n": 2,
+          "x": 0,
+          "z": 0,
+          "names": [
+            "Gérard: Vichery",
+            "Gérard: Hulot"
+          ]
+        },
+        {
+          "type": "cuirassier",
+          "n": 1,
+          "x": 0,
+          "z": 0,
+          "name": "Exelmans' Dragoons"
+        }
+      ],
+      "entry": {
+        "x": 298,
+        "z": 230
+      },
+      "go": {
+        "x": 150,
+        "z": 165
+      },
+      "spreadX": 0,
+      "spreadZ": 1.6,
+      "msg": "Grouchy has marched to the sound of the guns! Gérard's IV Corps and Exelmans' dragoons come in from the east onto the Prussian flank."
     },
     {
       "t": 1180,

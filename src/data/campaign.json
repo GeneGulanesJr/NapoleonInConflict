@@ -4,6 +4,21 @@
   "intro": "Napoleon has escaped Elba and retaken France. Two armies stand between him and Brussels: Wellington's Anglo-Allied army and Blücher's Prussians. His plan is to strike between them, defeat each in turn, and end the war before Austria and Russia arrive. Every regiment you lose now will be missing at Waterloo.",
   "battles": ["charleroi", "quatrebras", "ligny", "genappe", "waterloo"],
   "healFraction": 0.4,
+  "_glory": "glory earned per battle result, spent between battles on replacements (a regiment's worth of men costs its deploy price) or on raising a destroyed regiment again (recruitCost x deploy price)",
+  "glory": { "win": 90, "draw": 60, "loss": 40 },
+  "recruitCost": 1.5,
+  "_grouchy": "asked once after battle `after`. detach: roster regiments away with Grouchy at battle `at` (not lost). What his orders do to the Prussians, and his own arrival, are events in that battle's timeline (delayIfGrouchy, ifGrouchy, unlessGrouchy)",
+  "grouchy": {
+    "after": "ligny",
+    "at": "waterloo",
+    "title": "Marshal Grouchy",
+    "text": "Morning, 17 June. Blücher's beaten army slipped away in the night and nobody saw which road it took. The Emperor turns on Wellington and gives the right wing to Marshal Grouchy. What are his orders?",
+    "options": [
+      { "id": "pursue", "label": "Pursue the Prussians", "text": "As history. Grouchy follows Blücher to Wavre with III and IV Corps: Habert, Lefol, Berthezène, Pécheux, the 12e tirailleurs and the 1er Lanciers miss Waterloo. The Prussians reach the field 40-60 minutes later, without Pirch I's brigade and their uhlans.", "brief": "Grouchy is pursuing the Prussians: they will come late and weaker, but his regiments are not here.", "detach": ["Habert", "Lefol", "Berthezène", "Pécheux", "Tirailleurs, 12e", "1er Lanciers"] },
+      { "id": "screen", "label": "Screen them lightly", "text": "A division and the light horse keep contact: Pécheux and the 1er Lanciers miss Waterloo. The Prussians are slowed by 20-30 minutes.", "brief": "Grouchy is screening the Prussians with a light force: they will be slowed a little.", "detach": ["Pécheux", "1er Lanciers"] },
+      { "id": "march", "label": "March to the sound of the guns", "text": "Every regiment fights at Waterloo, and Gérard's IV Corps follows the cannon fire to arrive about six in the evening. Nothing holds the Prussians back.", "brief": "Grouchy is marching to the sound of the guns: Gérard's corps should arrive about six. The Prussians come on time.", "detach": [] }
+    ]
+  },
   "roster": {
     "line": ["Donzelot", "Marcognet", "Durutte", "Quiot", "Bachelu", "Foy", "Jérôme", "Girard", "Habert", "Lefol", "Berthezène", "Pécheux"],
     "guard": ["1er Grenadiers (Old Guard)", "2e Grenadiers (Old Guard)", "3e Chasseurs (Middle Guard)"],

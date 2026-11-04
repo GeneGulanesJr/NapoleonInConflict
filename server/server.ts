@@ -39,7 +39,9 @@ const known = (table: object, k: unknown): k is string => typeof k === 'string' 
 function clean(c: any): Cmd | null {
   if (!c || typeof c !== 'object') return null;
   switch (c.c) {
-    case 'move': return ids(c.ids) && num(c.x) && num(c.z) && (c.f == null || num(c.f)) && (c.w == null || (num(c.w) && c.w >= 0 && c.w < 1000)) && (c.am == null || typeof c.am === 'boolean') ? { c: 'move', ids: c.ids, x: c.x, z: c.z, q: c.q === true, f: c.f ?? undefined, w: c.w ?? undefined, am: c.am === true } : null;
+    case 'move': return ids(c.ids) && num(c.x) && num(c.z) && (c.f == null || num(c.f)) && (c.w == null || (num(c.w) && c.w >= 0 && c.w < 1000)) && [c.am, c.col, c.keep, c.run].every((b) => b == null || typeof b === 'boolean')
+      ? { c: 'move', ids: c.ids, x: c.x, z: c.z, q: c.q === true, f: c.f ?? undefined, w: c.w ?? undefined, am: c.am === true, col: c.col === true, keep: c.keep === true, run: c.run === true } : null; // never pace: that is the sim's own
+    case 'face': return ids(c.ids) && num(c.x) && num(c.z) ? { c: 'face', ids: c.ids, x: c.x, z: c.z } : null;
     case 'attack': case 'bayonet': return ids(c.ids) && num(c.target) ? { c: c.c, ids: c.ids, target: c.target } : null;
     case 'form': return ids(c.ids) && known(tu.formFire, c.f) ? { c: 'form', ids: c.ids, f: c.f } : null;
     case 'stance': return ids(c.ids) && typeof c.s === 'string' ? { c: 'stance', ids: c.ids, s: c.s } : null;
@@ -105,7 +107,7 @@ setInterval(() => {
         for (const [ws, side] of r.clients) ws.send(JSON.stringify({ t: 'hello', side, scenario: r.id }));
       }
       if (tick % 2 === 0) {
-        const msg = JSON.stringify({ t: 'state', s: { ...r.sim.s, out: undefined, seed: undefined } }, round);
+        const msg = JSON.stringify({ t: 'state', s: { ...r.sim.s, out: undefined, seed: undefined, bots: undefined } }, round);
         r.sim.s.events.length = 0;
         // skip clients that cannot keep up instead of buffering without limit
         for (const ws of r.clients.keys()) if (ws.readyState === 1 && ws.bufferedAmount < 1_000_000) ws.send(msg);

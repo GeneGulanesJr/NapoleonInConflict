@@ -1,7 +1,8 @@
 // A "source" gives the UI a battle state and a way to send commands, locally or over a WebSocket.
-import { createSim, step, command, type Cmd, type Sim } from './sim/sim.ts';
-import { makeBot } from './sim/bot.ts';
-import { TUNING, fogOn } from './campaign.ts';
+import { createSim, type Cmd } from './sim/sim.ts';
+import { runner, DT, type Replay } from './sim/replay.ts';
+import { warm } from './sim/path.ts';
+import { TUNING, fogOn, difficulty, pref } from './campaign.ts';
 
 export interface Source {
   mode: 'local' | 'remote';
@@ -9,30 +10,58 @@ export interface Source {
   state: any;
   speed: number;
   paused: boolean;
+  /** local battles: the recording so far (start state + commands), to watch back */
+  rec?: Replay;
+  /** this source plays a recording back: orders are ignored */
+  replay?: boolean;
   cmd(c: Cmd): void;
+  /** replays: jump to this step (from the nearest keyframe, fast-forwarding over the next frames) */
+  seek?(step: number): void;
+  /** the last update fast-forwarded a seek: what happened in it is not news */
+  seeking?: boolean;
   update(dt: number): void;
   drainEvents(): any[];
   close(): void;
 }
 
-export function localSource(scn: any, opts: { roster?: any[]; won?: Record<string, boolean>; seed?: number }): Source {
-  const sim: Sim = createSim(scn, TUNING, { ...opts, fog: fogOn(), seed: opts.seed ?? (Date.now() & 0x7fffffff) });
-  const bot = makeBot(sim, 1);
-  let acc = 0;
+/** Fixed-step driver shared by live battles and replays. */
+function drive(tu: any, r: Replay, play: boolean): Source {
+  const run = runner(tu, r, play);
+  let acc = 0, goal = -1, ff = false;
   const src: Source = {
-    mode: 'local', side: 0, speed: 1, paused: false,
-    get state() { return sim.s; },
-    cmd: (c) => command(sim, 0, c),
+    mode: 'local', side: r.side, speed: 1, paused: false, rec: r, replay: play,
+    get state() { return run.sim.s; },
+    get seeking() { return ff; },
+    cmd: (c) => run.cmd(c),
+    seek: (m) => { goal = m; acc = 0; },
     update(dt) {
-      if (src.paused || sim.s.over) return;
+      // a seek fast-forwards ~10 ms a frame (a minute of Waterloo takes ~1.5 s to run), so the page never freezes
+      if ((ff = goal >= 0)) { if (run.seek(goal, performance.now() + 10)) goal = -1; return; }
+      if (src.paused || run.sim.s.over) return;
       acc = Math.min(acc + dt * src.speed, 1);
-      while (acc >= 0.05) { step(sim, 0.05); bot(0.05); acc -= 0.05; }
+      while (acc >= DT && !run.sim.s.over) { run.tick(); acc -= DT; }
     },
-    drainEvents() { const e = sim.s.events.slice(); sim.s.events.length = 0; return e; },
+    drainEvents() { const e = run.sim.s.events.slice(); run.sim.s.events.length = 0; return e; },
     close() { /* nothing to release */ },
   };
   return src;
 }
+
+/**
+ * A battle against the bot. side: which army you command (the bot gets the other, at the chosen difficulty's strength).
+ * resume: a saved sim state to carry on from. The campaign roster only fills the French side.
+ */
+export function localSource(scn: any, opts: { roster?: any[]; won?: Record<string, boolean>; grouchy?: string; seed?: number; side?: number; resume?: any; deploy?: boolean }): Source {
+  const side = opts.side ?? 0, strength = [...(scn.strength ?? [1, 1])];
+  strength[1 - side] *= TUNING.difficulty.enemyStrength[difficulty()];
+  const s2 = { ...scn, strength };
+  warm(s2, TUNING); // the route grid, baked at load (keyed by the map, which s2 shares with scn)
+  const s0 = opts.resume ?? createSim(s2, TUNING, { roster: opts.roster, won: opts.won, grouchy: opts.grouchy, fog: fogOn(), courier: pref('nic-courier', false), seed: opts.seed ?? (Date.now() & 0x7fffffff), deploy: opts.deploy }).s;
+  return drive(TUNING, { scn: s2, ref: { id: scn.id, seed: scn.seed, strength }, won: opts.won, grouchy: opts.grouchy, side, start: JSON.stringify(s0), cmds: [] }, false);
+}
+
+/** Watch a recorded battle again, from its start state. */
+export const replaySource = (r: Replay): Source => drive(TUNING, r, true);
 
 /** Connects, joins `scenario`, and resolves once the first snapshot arrives. */
 export function remoteSource(url: string, scenario: string): Promise<Source> {
