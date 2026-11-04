@@ -74,7 +74,7 @@ export function route(scn: any, tu: any, k: string, speed: (f: any) => number, a
   };
   g[s0] = 0; par[s0] = -1; seen[s0] = gen; push(s0, h(s0));
   let found = false;
-  for (let it = 0; hn.length && it < CAP && hf[0] < 0.95 * S; it++) { // past 0.95 x the straight line's cost no route can be clearly quicker
+  for (let it = 0, cap = S < Infinity ? CAP : CAP * 8; hn.length && it < cap && hf[0] < 0.95 * S; it++) { // a straight line blocked by deep water has no shorter fallback than the long way round, so it may search the whole map // past 0.95 x the straight line's cost no route can be clearly quicker
     const cur = pop();
     if (cur === t) { found = true; break; }
     if (done[cur] === gen) continue; // a stale heap entry
@@ -95,7 +95,7 @@ export function route(scn: any, tu: any, k: string, speed: (f: any) => number, a
   const p: number[] = [];
   for (let i = t; i >= 0; i = par[i]) p.push(i);
   p.reverse();
-  const X = (j: number) => (j === 0 ? ax : j === p.length - 1 ? bx : o + ((p[j] % n) + 0.5) * CELL), Z = (j: number) => (j === 0 ? az : j === p.length - 1 ? bz : o + (((p[j] / n) | 0) + 0.5) * CELL);
+  const E = scn.map.size / 2 - 3, X = (j: number) => (j === 0 ? ax : j === p.length - 1 ? bx : Math.max(-E, Math.min(E, o + ((p[j] % n) + 0.5) * CELL))), Z = (j: number) => (j === 0 ? az : j === p.length - 1 ? bz : Math.max(-E, Math.min(E, o + (((p[j] / n) | 0) + 0.5) * CELL))); // corners stay inside the edge units are held to (size/2 - 2), or they would push at a point they cannot reach
   const out: number[][] = [];
   for (let a = 0, b = 1; b < p.length - 1; a = b++) {
     while (b + 1 < p.length && line(X(a), Z(a), X(b + 1), Z(b + 1)) <= g[p[b + 1]] - g[p[a]] + 1e-6) b++;

@@ -1,5 +1,5 @@
 // Pure, deterministic battle simulation. No DOM, no Three.js: runs in the browser and on the Node server.
-import { heightAt, featureAt, los } from './world.ts';
+import { heightAt, featureAt, los, deepAt } from './world.ts';
 import { route } from './path.ts';
 
 export type Sim = { s: any; scn: any; tu: any; tl: any[] };
@@ -107,7 +107,7 @@ export function spawn(sim: Sim, side: number, d: any) {
 
 // ---------------------------------------------------------------- commands
 export type Cmd =
-  | { c: 'move'; ids: number[]; x: number; z: number; q?: boolean; f?: number; w?: number; am?: boolean; col?: boolean; keep?: boolean; run?: boolean; pace?: number | null } // f: facing on arrival (radians), w: frontage to spread the group over, am: attack-move (fight what is met on the way), col: march in column, keep: move as a block, run: double time; pace is the sim's own (a courier carries the group's pace), never sent
+  | { c: 'move'; ids: number[]; x: number; z: number; q?: boolean; f?: number; w?: number; am?: boolean; col?: boolean; keep?: boolean; run?: boolean; pace?: number | null; form?: string } // f: facing on arrival (radians), w: frontage to spread the group over, am: attack-move (fight what is met on the way), col: march in column, keep: move as a block, run: double time; pace is the sim's own (a courier carries the group's pace), never sent
   | { c: 'face'; ids: number[]; x: number; z: number } // wheel in place toward the point
   | { c: 'stance'; ids: number[]; s: string }
   | { c: 'auto'; ids: number[] }
@@ -134,7 +134,7 @@ export function command(sim: Sim, side: number, c: Cmd, now = false) {
   if (s.courier && !now && s.phase !== 'deploy' && 'ids' in c && c.c !== 'auto' && c.c !== 'replenish') { // (while deploying the clock is stopped and the army stands ready: orders are instant) // courier orders: each regiment gets its own copy, resolved now (a move's place in the group, its pace) and delivered when the rider arrives
     const us = mine(c.ids), ps: any[] = c.c === 'move' ? layout(us, c, sim.tu, half) : us.map((u: any) => ({ u })), pace = c.c === 'move' ? c.pace ?? groupPace(ps, c, sim.tu) : null;
     for (const p of ps) {
-      const one: any = c.c === 'move' ? { ...c, ids: [p.u.id], x: p.x, z: p.z, f: p.f ?? undefined, w: undefined, keep: false, pace } : { ...c, ids: [p.u.id] };
+      const one: any = c.c === 'move' ? { ...c, ids: [p.u.id], x: p.x, z: p.z, f: p.f ?? undefined, w: undefined, keep: false, pace, form: p.form } : { ...c, ids: [p.u.id] };
       if (!(c as any).q) s.orders = s.orders.filter((o: any) => o.c.ids[0] !== p.u.id || (o.c.c !== c.c && !(GO.includes(o.c.c) && GO.includes(c.c)))); // a new order countermands the one still on the road
       const t = courierDelay(sim, p.u);
       if (t > 0) s.orders.push({ t: s.t + t, side, c: one }); else command(sim, side, one, true);
@@ -145,14 +145,16 @@ export function command(sim: Sim, side: number, c: Cmd, now = false) {
     const us = mine(c.ids);
     if (!us.length) return;
     const ps = layout(us, c, sim.tu, half), pace = c.pace ?? groupPace(ps, c, sim.tu), tu = sim.tu;
-    for (const { u, x: tx, z: tz, f } of ps) {
+    for (const { u, x: tx, z: tz, f, form } of ps) {
       u.tf = f;
       if (c.q && u.tx != null && u.chase == null) { if (u.queue.length < 6) u.queue.push([tx, tz]); } // shift-click: add a waypoint
       else {
         u.tx = tx; u.tz = tz; u.queue = []; u.chase = null; u.garrison = u.gTarget = null; u.am = !!c.am; u.pace = pace; u.run = !!c.run;
         const d = Math.hypot(tx - u.x, tz - u.z) || 1;
         u.back = u.type !== 'artillery' && !(tu.types[u.type].cav && u.eng != null) && d < tu.fallback.dist && ((tx - u.x) * Math.sin(u.facing) + (tz - u.z) * Math.cos(u.facing)) / d < -0.5; // a short step to the rear: fall back facing the enemy (horse in a melee breaks off instead)
-        if (inColumn(u, c, d, tu)) { u.dep = u.form; u.form = 'column'; u.busy = tu.formChangeTime; } // deploys again on arrival (see step)
+        const want = form ?? c.form; // the formation a dragged front fits the regiment to (line or column), as the order is given
+        if (want && isInf(u) && u.form !== want && u.form !== 'square' && !(u.stun > 0) && !(u.shaken > 0)) { u.form = want; u.busy = Math.max(u.busy, tu.formChangeTime); u.dep = null; }
+        if (inColumn(u, c, d, tu)) { u.dep = u.form; u.form = 'column'; u.busy = Math.max(u.busy, tu.formChangeTime); } // deploys again on arrival (see step)
       }
     }
   } else if (c.c === 'attack') {
@@ -225,7 +227,7 @@ export function command(sim: Sim, side: number, c: Cmd, now = false) {
 
 /** Where each regiment of a move order stands and faces (f null: no ordered facing). Side by side across the order's facing by real frontage, a wider drag spreading them out;
  *  keep: the group moves as a block, each keeping its offset from the centre and its facing, the whole block turned onto a dragged facing. Pure, so the UI can preview it. */
-export function layout(us: any[], c: { x: number; z: number; f?: number; w?: number; keep?: boolean }, tu: any, half: number): { u: any; x: number; z: number; f: number | null }[] {
+export function layout(us: any[], c: { x: number; z: number; f?: number; w?: number; keep?: boolean }, tu: any, half: number): { u: any; x: number; z: number; f: number | null; form?: string }[] {
   const cx = us.reduce((a: number, u: any) => a + u.x, 0) / us.length, cz = us.reduce((a: number, u: any) => a + u.z, 0) / us.length, cl = (v: number) => Math.max(-half, Math.min(half, v));
   if (c.keep) {
     const r = c.f == null ? 0 : c.f - Math.atan2(us.reduce((a: number, u: any) => a + Math.sin(u.facing), 0), us.reduce((a: number, u: any) => a + Math.cos(u.facing), 0)), sn = Math.sin(r), cs = Math.cos(r);
@@ -236,8 +238,16 @@ export function layout(us: any[], c: { x: number; z: number; f?: number; w?: num
   dx /= d; dz /= d;
   if (c.f != null) { dx = Math.sin(c.f); dz = Math.cos(c.f); } // a dragged line: lay the group out across the chosen facing
   const ss = [...us].sort((a: any, b: any) => (a.x * -dz + a.z * dx) - (b.x * -dz + b.z * dx));
-  // side by side by real frontage (and never closer than the idle spacing rule), so a group arrives without piling up
-  const hw = ss.map((u: any) => { const f = foot(u, tu); return Math.max((f[1] - f[0]) / 2 + 2, 0.7 * rad(u) + 0.5); });
+  const gap = tu.groupGap, W = c.w != null && c.w > 8 ? c.w : 0;
+  if (W) { // a dragged front, as in Total War: the drag is the width the group fills, edge to edge. Wider spreads the regiments; narrower packs them, then they form column to fit (never narrower than side by side at the minimum gap)
+    const dims = (form: string) => ss.map((u: any) => { const f = foot(isInf(u) ? { ...u, form } : u, tu); return f[1] - f[0]; }), sum = (D: number[]) => D.reduce((t: number, w: number) => t + w, 0), n = ss.length;
+    const L = dims('line'), form = sum(L) + (n - 1) * 2 * gap <= W ? 'line' : 'column', D = form === 'line' ? L : dims('column');
+    const between = n > 1 ? Math.max(form === 'line' ? 2 * gap : 4 * gap + 4, (W - sum(D)) / (n - 1)) : 0; // spare width becomes the space between regiments (columns marching side by side need elbow room)
+    let x0 = -(sum(D) + (n - 1) * between) / 2;
+    return ss.map((u: any, i: number) => { const off = x0 + D[i] / 2; x0 += D[i] + between; return { u, x: cl(c.x - dz * off), z: cl(c.z + dx * off), f: c.f ?? null, ...(isInf(u) && u.form !== 'square' ? { form } : {}) }; });
+  }
+  // side by side by real frontage plus tuning.groupGap a side (and never closer than the idle spacing rule), so a group arrives without piling up
+  const hw = ss.map((u: any) => { const f = foot(u, tu); return Math.max((f[1] - f[0]) / 2 + tu.groupGap, 0.7 * rad(u) + 0.5); });
   const sum = hw.reduce((a: number, b: number) => a + b, 0), extra = c.w && ss.length > 1 ? Math.max(0, c.w - 2 * sum) / (ss.length - 1) : 0;
   let acc = -sum - (extra * (ss.length - 1)) / 2;
   return ss.map((u: any, i: number) => { const off = acc + hw[i]; acc += 2 * hw[i] + extra; return { u, x: cl(c.x - dz * off), z: cl(c.z + dx * off), f: c.f ?? null }; });
@@ -439,6 +449,8 @@ const mcap = (u: any, tu: any) => u.maxMorale * (1 - tu.morale.cap * (1 - Math.m
 const faltered = (u: any, s: any, tu: any) => s.t - (u.falter ?? -99) < tu.falter.time;
 /** Horse ordered away from foe f while in contact with it (a move order pointing away, no attack order): it is breaking off. */
 const breakingOff = (q: any, f: any, tu: any) => tu.types[q.type].cav && q.tx != null && q.chase == null && (q.tx - q.x) * (f.x - q.x) + (q.tz - q.z) * (f.z - q.z) < 0;
+/** Weapon range of u: its type's, longer under its general's eye. */
+export const rng = (u: any, tu: any): number => tu.types[u.type].range * (u.aura ? tu.commanderAura.range : 1);
 /** Wheel u toward angle a at its rate (tuning.turn); returns the angle still left to turn. */
 function face(u: any, a: number, dt: number, tu: any, rate?: number): number {
   const r = rate ?? tu.turn[tu.types[u.type].cav ? 'cavalry' : isInf(u) ? u.form : u.type] ?? 1, d = Math.atan2(Math.sin(a - u.facing), Math.cos(a - u.facing)), k = Math.max(-r * dt, Math.min(r * dt, d));
@@ -492,15 +504,15 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
   // round shot falls short or wide more often the further it flies; canister at close range always tells
   const canister = u.spUntil > s.t && u.spKind === 'canister', volley = u.spUntil > s.t && u.spKind === 'volley', close = td < tu.canisterRange * (canister ? 2.2 : 1);
   const first = u.stance === 'holdfire' && u.fired >= tu.holdFire.loaded; // a fresh, carefully loaded first volley after holding fire
-  const miss = u.type === 'artillery' && !close && rand(s) > 1 - 0.65 * (td / T.range);
+  const miss = u.type === 'artillery' && !close && rand(s) > 1 - 0.65 * (td / rng(u, tu));
   const fm = u.type === 'skirmisher' || u.type === 'artillery' ? 1 : tu.formFire[u.form];
   const dmgForm = tu.types[tg.type].cav ? 0.8 : tg.type === 'skirmisher' ? 0.6 : (u.type === 'artillery' ? tu.artDmg : tu.formDmg)[tg.form]; // round shot ploughs through dense columns and squares
-  const rf = Math.max(tu.rangeFloor, 1 - 0.75 * (td / T.range));
+  const rf = Math.max(tu.rangeFloor, 1 - 0.75 * (td / rng(u, tu)));
   const elev = Math.max(0.8, Math.min(1.25, 1 + 0.02 * (heightAt(scn, u.x, u.z) - heightAt(scn, tg.x, tg.z))));
   const asp = aspect(u, tg);
   if (asp && s.t - tg.flankT > 6) { tg.flankT = s.t; ev(sim, { k: 'flank', x: tg.x, z: tg.z, side: tg.side, kind: asp }); chron(sim, 1 - tg.side, `${asp === 2 ? 'Rear' : 'Flank'} fire on ${tg.name}`); }
   let cas = u.men * T.power * rf * fm * dmgForm * (tg.garrison != null ? tu.garrison.cover : featureAt(scn, tg.x, tg.z).cover) * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.fire) * smokeFactor(sim, tg.x, tg.z) * W.fire * (1 - dark(sim) * tu.night.fire) * elev
-    * (0.5 + 0.5 * Math.max(0, u.morale) / u.maxMorale) * (1 - tu.fatigue.fire * u.fat) * (posted(tg, tu) ? tu.hold.fire : 1) * (0.8 + 0.4 * rand(s))
+    * (0.5 + 0.5 * Math.max(0, u.morale) / u.maxMorale) * (1 - tu.fatigue.fire * u.fat) * (posted(tg, tu) ? tu.hold.fire : 1) * (u.aura ? tu.commanderAura.dmg : 1) * (0.8 + 0.4 * rand(s))
     * (u.shaken > 0 ? tu.shaken.fire : 1) * (u.type === 'skirmisher' && tg.type === 'artillery' ? tu.screen.guns : screened(sim, u, tg) ? tu.screen.fire : 1); // rattled men shoot worse; sharpshooters pick off gun crews; a skirmish screen soaks up fire
   if (u.type === 'artillery' && close) cas *= tu.canisterMult * (canister ? 1.4 : 1);
   if (volley) { cas *= 2.2; u.spUntil = 0; }
@@ -517,7 +529,7 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
       if (q) hit(sim, q, cas * tu.plough.carry, 1, u, 0);
     }
   }
-  u.reload = T.reload * (0.9 + 0.2 * rand(s)) * (volley ? 1.6 : canister ? 0.6 : 1);
+  u.reload = T.reload * (0.9 + 0.2 * rand(s)) * (volley ? 1.6 : canister ? 0.6 : 1) * (u.aura ? tu.commanderAura.reload : 1);
   u.fired = 0;
   const fx = Math.sin(u.facing), fz = Math.cos(u.facing);
   s.smoke.push({ x: u.x + fx * 3, z: u.z + fz * 3, age: 0 });
@@ -639,7 +651,7 @@ export function step(sim: Sim, dt: number) {
       let ne: any = null, nd = 40;
       for (const e of live) {
         if (e.side === u.side || e.routed || !seen[u.side].has(e.id)) continue;
-        if (T.range > 0) { if (gapBetween(u, e, tu) < T.range && !masked(u, e, live, tu) && los(scn, u.x, u.z, eye(u, tu), e.x, e.z, 2)) { amHalt = true; break; } } // only halt for a foe we could actually hit (not one behind a crest)
+        if (T.range > 0) { if (gapBetween(u, e, tu) < rng(u, tu) && !masked(u, e, live, tu) && los(scn, u.x, u.z, eye(u, tu), e.x, e.z, 2)) { amHalt = true; break; } } // only halt for a foe we could actually hit (not one behind a crest)
         else if (u.type !== 'commander') { const d = Math.hypot(e.x - u.x, e.z - u.z); if (d < nd) { nd = d; ne = e; } }
       }
       if (ne) u.chase = ne.id;
@@ -652,7 +664,7 @@ export function step(sim: Sim, dt: number) {
       const t = byId.get(u.chase);
       if (!t || t.dead || (u.bay != null && t.routed)) u.chase = u.bay = null; // a bayonet charge halts on the ground it took once the foe breaks
       else {
-        gx = t.x; gz = t.z; const gp = gapBetween(u, t, tu), fire = u.bay == null && T.range > 0 && (gp > T.range || los(scn, u.x, u.z, eye(u, tu), t.x, t.z, 2)); stopAt = fire ? T.range * 0.98 : 1; touch = fire ? gp <= T.range * 0.98 : gp < 0.6; // ranged units halt at max range and shoot (once they can see the target over the ground); melee-only and chargers close in until the edges touch
+        gx = t.x; gz = t.z; const gp = gapBetween(u, t, tu), fire = u.bay == null && T.range > 0 && (gp > rng(u, tu) || los(scn, u.x, u.z, eye(u, tu), t.x, t.z, 2)); stopAt = fire ? rng(u, tu) * 0.98 : 1; touch = fire ? gp <= rng(u, tu) * 0.98 : gp < 0.6; // ranged units halt at max range and shoot (once they can see the target over the ground); melee-only and chargers close in until the edges touch
         if (u.bay != null) { dash ||= gp < tu.bayonet.runDist; if (!u.tested && gp < tu.bayonet.testDist && shock(sim, u, t) !== 'melee') continue; } // the last stretch at the run; the morale test as they close
       }
     }
@@ -679,11 +691,16 @@ export function step(sim: Sim, dt: number) {
         else if (!back && face(u, Math.atan2(dx, dz), dt, tu, T.cav && u.eng != null ? tu.turn.breakaway : undefined) > tu.turn.slack) u.mv = true; // horse locked in melee wheels away fast (breakaway), not at its parade rate with its back to the foe // wheel onto the new heading before stepping off
         else {
           const run = dash ? 1.7 : u.run ? tu.doubleTime.speed : 1;
-          const sp = Math.min(d - stopAt + 0.01, Math.min(marchSpeed(u, u.form, tu), u.pace ?? 1e9) * terrainSpeed(u, f, tu) * W.move * run * (back ? tu.fallback.speed : 1) * tired * dt); // a group keeps to its slowest member's pace
+          const sp = Math.min(d - stopAt + 0.01, Math.min(marchSpeed(u, u.form, tu), u.pace ?? 1e9) * terrainSpeed(u, f, tu) * W.move * run * (back ? tu.fallback.speed : 1) * tired * (u.aura ? tu.commanderAura.speed : 1) * dt); // a group keeps to its slowest member's pace
           const nx = u.x + (dx / d) * sp, nz = u.z + (dz / d) * sp;
           const slope = (heightAt(scn, nx, nz) - heightAt(scn, u.x, u.z)) / Math.max(sp, 0.01);
           const k = Math.min((d - stopAt + 0.01) / sp, 1 - Math.max(1 - tu.terrain.downhill, Math.min(0.5, slope * 1.5))); // uphill slows, downhill helps a little (never past the stop)
           let mx = u.x + (nx - u.x) * k, mz = u.z + (nz - u.z) * k;
+          if (deepAt(scn, mx, mz) && !deepAt(scn, u.x, u.z)) { // deep water is impassable: only bridges and fords cross (already in the water: free to wade out). Slide along the bank, else stand.
+            const st = Math.hypot(mx - u.x, mz - u.z), hd = Math.atan2(dx, dz);
+            const a = [0.5, -0.5, 1, -1, 1.5, -1.5].find((r) => !deepAt(scn, u.x + Math.sin(hd + r) * st, u.z + Math.cos(hd + r) * st));
+            if (a == null) { mx = u.x; mz = u.z; u.path = null; } else { mx = u.x + Math.sin(hd + a) * st; mz = u.z + Math.cos(hd + a) * st; }
+          }
           const passing = (u.jam ?? 0) > tu.passLines.wait, b = blocker(u, mx, mz, live, tu, fr, !passing); // held up long enough: it files through friendly ranks (passage of lines)
           if (b && b.side !== u.side) { mx = u.x; mz = u.z; } // the enemy's ranks stop it: it halts at contact and the melee decides
           else if (b) { // a friendly regiment in the way: step round it, keeping to one side until clear, else try the other side
@@ -743,7 +760,7 @@ export function step(sim: Sim, dt: number) {
       const away = breakingOff(c, u, tu), asp = away ? 0 : aspect(u, c), gm = c.garrison != null ? (T.cav ? tu.garrison.meleeCav : tu.garrison.meleeInf) : 1; // horse getting clear takes a parting blow, not a rear attack, as it wheels away
       if (asp && s.t - c.flankT > 6) { c.flankT = s.t; ev(sim, { k: 'flank', x: c.x, z: c.z, side: c.side, kind: asp }); chron(sim, 1 - c.side, `${asp === 2 ? 'Rear' : 'Flank'} attack on ${c.name}`); }
       if (asp) c.shaken = Math.max(c.shaken ?? 0, tu.shaken.flank[asp]); // attacked on the flank or rear, its ranks cannot turn to face it in good order
-      damage(sim, c, u.men * T.melee * meleeMult(u, c) * hc * gm * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.melee) * tu.meleeRate * (u.spUntil > s.t && u.spKind === 'charge' ? 1.6 : 1) * (u.bay === c.id && !faltered(u, s, tu) ? tu.bayonet.melee : 1) * (1 - tu.fatigue.melee * u.fat) * (away ? tu.breakoff.hit : 1) * (u.stun > 0 ? tu.stun.melee : 1) * dt,
+      damage(sim, c, u.men * T.melee * meleeMult(u, c) * hc * gm * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.melee) * tu.meleeRate * (u.spUntil > s.t && u.spKind === 'charge' ? 1.6 : 1) * (u.bay === c.id && !faltered(u, s, tu) ? tu.bayonet.melee : 1) * (1 - tu.fatigue.melee * u.fat) * (away ? tu.breakoff.hit : 1) * (u.stun > 0 ? tu.stun.melee : 1) * (u.aura ? tu.commanderAura.dmg : 1) * dt,
         tu.flank.morale[asp] * (T.cav || tu.types[c.type].cav ? 1 : tu.bayonet.grind), u); // foot against foot does not grind on for long: one side gives way
       u.fat = Math.min(1, u.fat + tu.fatigue.fight * dt);
       if (c.dead) u.eng = null;
@@ -757,7 +774,7 @@ export function step(sim: Sim, dt: number) {
     const hu = heightAt(scn, u.x, u.z), hf = u.stance === 'holdfire' ? tu.holdFire.range : 1; // holding fire: only a foe close in (or the ordered target) draws a volley
     for (const e of live) {
       if (e.dead || e.side === u.side || !seen[u.side].has(e.id)) continue;
-      const d = Math.max(0, gapBetween(u, e, tu)), reach = T.range * (u.type === 'artillery' ? Math.max(1, Math.min(1.3, 1 + tu.terrain.gunReach * (hu - heightAt(scn, e.x, e.z)))) : 1); // guns on high ground reach further
+      const d = Math.max(0, gapBetween(u, e, tu)), reach = rng(u, tu) * (u.type === 'artillery' ? Math.max(1, Math.min(1.3, 1 + tu.terrain.gunReach * (hu - heightAt(scn, e.x, e.z)))) : 1); // guns on high ground reach further
       const k = e.id === u.chase ? -1 : d; // the ordered target comes first whenever it can be hit, else the nearest
       if (k < best && d < reach * (k < 0 ? 1 : hf) && !smokeBlocked(sim, u.x, u.z, e.x, e.z) && !masked(u, e, live, tu) && los(scn, u.x, u.z, eye(u, tu), e.x, e.z, 2)) { best = k; td = d; tg = e; } // range is measured to the nearest part of the target formation; no shooting over a crest
     }

@@ -77,6 +77,30 @@ export function riverAt(scn: any, x: number, z: number): any {
   return null;
 }
 
+const nearGrids = new WeakMap<object, Uint8Array>();
+/** The deep (unfordable) river whose water is here, off its bridges, with an O(1) early-out: a 4-unit grid, baked once per map, marks the cells within reach of deep water. */
+export function deepAt(scn: any, x: number, z: number): any {
+  const m = scn.map, half = m.size / 2 + 6, n = Math.ceil((2 * half) / 4);
+  let G = nearGrids.get(m);
+  if (!G) {
+    G = new Uint8Array(n * n);
+    for (const r of m.rivers ?? []) if (!r.ford) for (let i = 0; i + 1 < r.pts.length; i++) {
+      const [ax, az] = r.pts[i], [bx, bz] = r.pts[i + 1], reach = r.width / 2 + 4 * 0.71 + 1.5; // half the water + a cell's half-diagonal + margin
+      for (let cz = Math.max(0, Math.floor((Math.min(az, bz) - reach + half) / 4)); cz <= Math.min(n - 1, Math.floor((Math.max(az, bz) + reach + half) / 4)); cz++)
+        for (let cx = Math.max(0, Math.floor((Math.min(ax, bx) - reach + half) / 4)); cx <= Math.min(n - 1, Math.floor((Math.max(ax, bx) + reach + half) / 4)); cx++)
+          if (segDist(-half + (cx + 0.5) * 4, -half + (cz + 0.5) * 4, ax, az, bx, bz) < reach) G[cz * n + cx] = 1;
+    }
+    nearGrids.set(m, G);
+  }
+  const X = Math.floor((x + half) / 4), Z = Math.floor((z + half) / 4);
+  if (X >= 0 && Z >= 0 && X < n && Z < n && !G[Z * n + X]) return null;
+  for (const r of m.rivers ?? []) {
+    if (r.ford || r.bridges.some(([bx, bz]: number[]) => Math.hypot(x - bx, z - bz) < 7)) continue;
+    for (let i = 0; i + 1 < r.pts.length; i++) if (segDist(x, z, r.pts[i][0], r.pts[i][1], r.pts[i + 1][0], r.pts[i + 1][1]) < r.width / 2) return r;
+  }
+  return null;
+}
+
 /** cover = damage multiplier for a unit standing here; wood (0, 1, 2 = dense), village, road, river (the river being waded, or null) drive movement (tuning.terrain). */
 export function featureAt(scn: any, x: number, z: number) {
   let cover = 1, kind = 'open', wood = 0, village = false, road = false;
@@ -89,3 +113,4 @@ export function featureAt(scn: any, x: number, z: number) {
   for (const hd of scn.map.hedges ?? []) if (lineDist(hd.pts, x, z) < 2.2) cover = Math.min(cover, 0.85);
   return { cover, kind, wood, village, road, river };
 }
+

@@ -7,9 +7,9 @@ import { applyResult, reinforce, recruit, fillCost, type CampaignState } from '.
 import { runner, parseReplay, replayFile, type Replay } from '../src/sim/replay.ts';
 import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
-import { createSim, step, command, manPrice, distToFoot, posted, steady } from '../src/sim/sim.ts';
+import { createSim, step, command, manPrice, distToFoot, posted, steady, foot } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
-import { heightAt, groundAt, los } from '../src/sim/world.ts';
+import { heightAt, groundAt, los, deepAt } from '../src/sim/world.ts';
 import { route } from '../src/sim/path.ts';
 
 // ---------------------------------------------------------------- unit-vs-unit rules
@@ -371,6 +371,83 @@ test('units wade a fordable river instead of detouring, but go round a deep one 
   const ford = cross(0.5), deep = cross();
   assert.ok(ford.there && ford.wide < 3, `waded straight over the ford (strayed ${ford.wide.toFixed(1)})`);
   assert.ok(deep.wide > 15, `went round by the bridge over deep water (strayed ${deep.wide.toFixed(1)})`);
+});
+
+test('deep water is impassable without a bridge, and a line crosses a bridge dry', () => {
+  const cross = (bridges: number[][], form: string) => {
+    let u: any, wet = false;
+    const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: -50, z: -30, facing: 0, form }), Object.assign(co[0], { x: 170, z: 170 })], { size: 400, rough: FLAT, rivers: [{ pts: [[-200, 0], [200, 0]], width: 8, bridges }] });
+    command(sim, 0, { c: 'move', ids: [u.id], x: 40, z: 40 });
+    run(sim, 150, undefined, () => { if (deepAt(sim.scn, u.x, u.z)) wet = true; });
+    return { z: u.z, wet };
+  };
+  const none = cross([], 'column'), line = cross([[0, 0]], 'line');
+  assert.ok(none.z < -4 && !none.wet, `held at the bank (z ${none.z.toFixed(1)})`);
+  assert.ok(line.z > 38 && !line.wet, `a line crossed by the bridge without wading (z ${line.z.toFixed(1)})`);
+});
+
+test('a dragged group order packs regiments side by side, 2 units between their footprints, and the gap is tunable', () => {
+  const sim = arena((fr, co) => [...fr.filter((q) => q.type === 'line').slice(0, 3), co[0]]), us = sim.s.units.filter((u: any) => u.side === 0), gap = (tu: any) => {
+    const ps = layout(us, { x: 0, z: 0, f: 0 }, tu, 200), w = (u: any) => { const f = foot(u, tu); return f[1] - f[0]; };
+    return ps.slice(1).map((p, i) => Math.hypot(p.x - ps[i].x, p.z - ps[i].z) - (w(p.u) + w(ps[i].u)) / 2);
+  };
+  assert.ok(us.length === 3 && gap(sim.tu).every((g) => Math.abs(g - 2 * sim.tu.groupGap) < 0.01), `neighbours ${gap(sim.tu).map((g) => g.toFixed(2))} apart`);
+  assert.ok(gap({ ...sim.tu, groupGap: 3 })[0] > gap(sim.tu)[0] + 3, 'a wider gap in tuning spreads them');
+});
+
+test('a dragged front fills the drag: wider spreads the regiments, narrower packs them, then they form column to fit', () => {
+  const sim = arena((fr, co) => [...fr.filter((q) => q.type === 'line').slice(0, 4).map((q, i) => Object.assign(q, { x: -60 + i * 25, z: -80, facing: 0, form: 'line' })), co[0]]), us = sim.s.units.filter((u: any) => u.side === 0);
+  const at = (w: number) => { const ps = layout(us, { x: 0, z: 0, f: 0, w }, sim.tu, 198), xs = ps.map((p) => p.x).sort((a, b) => a - b); return { form: ps[0].form, span: xs[xs.length - 1] - xs[0], step: (xs[xs.length - 1] - xs[0]) / (xs.length - 1) }; };
+  const wide = at(300), mid = at(160), tight = at(110), narrow = at(60), tiny = at(15);
+  assert.equal(us.length, 4);
+  assert.ok(wide.form === 'line' && wide.step > mid.step + 20 && mid.step > tight.step + 5, `wider drag, wider spacing (${wide.step.toFixed(0)} > ${mid.step.toFixed(0)} > ${tight.step.toFixed(0)})`);
+  assert.ok(narrow.form === 'column' && narrow.step < tight.step, 'too narrow for lines abreast: they form column');
+  assert.ok(Math.abs(tiny.step - narrow.step) < 20 && tiny.step > 6, `a tiny drag keeps columns side by side at the minimum gap (${tiny.step.toFixed(1)})`);
+});
+
+test('a dragged front orders each regiment into the line or column that fits, and they arrive in it', () => {
+  let ls: any[] = [];
+  const sim = arena((fr, co) => [...(ls = fr.filter((q) => q.type === 'line').slice(0, 3).map((q, i) => Object.assign(q, { x: -50 + i * 25, z: -60, facing: 0, form: 'line' }))), Object.assign(co[0], { x: 170, z: 170 })]);
+  command(sim, 0, { c: 'move', ids: ls.map((u) => u.id), x: 0, z: 0, f: 0, w: 40 }); // too narrow for three lines abreast
+  assert.ok(ls.every((u) => u.form === 'column'), 'ordered into column');
+  run(sim, 120);
+  assert.ok(ls.every((u) => u.form === 'column' && Math.abs(u.z) < 3), 'arrived in column on the line');
+});
+
+test('a regiment walks round the end of a river that has no bridge, staying dry', () => {
+  let u: any, wet = false;
+  const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: -50, z: -30, facing: 0, form: 'column' }), Object.assign(co[0], { x: 170, z: 170 })], { size: 400, rough: FLAT, rivers: [{ pts: [[-200, 0], [40, 0]], width: 8, bridges: [] }] });
+  command(sim, 0, { c: 'move', ids: [u.id], x: -50, z: 40 });
+  run(sim, 200, () => Math.hypot(u.x + 50, u.z - 40) < 3, () => { if (deepAt(sim.scn, u.x, u.z)) wet = true; });
+  assert.ok(Math.hypot(u.x + 50, u.z - 40) < 6 && !wet, `went round the river's end (at ${u.x.toFixed(0)}, ${u.z.toFixed(0)}, wet ${wet})`);
+});
+
+test('a regiment near its own general marches faster', () => {
+  const trial = (near: boolean) => {
+    let u: any, c: any;
+    const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: 0, z: 0, facing: 0, form: 'column' }), c = Object.assign(fr.find((q) => q.type === 'commander'), { x: near ? 10 : -150, z: 0 }), Object.assign(co[0], { x: 170, z: 170 })]);
+    command(sim, 0, { c: 'move', ids: [u.id], x: 0, z: 200 });
+    run(sim, 10);
+    return { aura: u.aura, went: u.z };
+  };
+  const near = trial(true), far = trial(false);
+  assert.ok(near.aura && !far.aura, 'the aura follows the general');
+  assert.ok(near.went > far.went * 1.03, `marched further under the general's eye (${near.went.toFixed(1)} vs ${far.went.toFixed(1)})`);
+});
+
+test('under its general a regiment shoots from further off and reloads faster', () => {
+  const trial = (near: boolean, dz: number) => {
+    let u: any, e: any;
+    const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: 0, z: 0, facing: 0, form: 'line' }), Object.assign(fr.find((q) => q.type === 'commander'), { x: near ? 10 : -150, z: 0 }), e = Object.assign(co.find((q) => q.type === 'line'), { x: 0, z: dz, facing: Math.PI, form: 'line', stance: 'hold' })]);
+    const m0 = e.men; run(sim, 8);
+    return { lost: m0 - e.men, reload: u.reload };
+  };
+  const R = data('tuning').types.line.range, ca = data('tuning').commanderAura;
+  assert.ok(Math.abs(ca.range * R - 17.25) < 1e-6 || ca.range > 1, 'aura lengthens the range');
+  let d = 14; while (trial(false, d).lost === 0 && d < 60) d += 0.5; // nearest the unaided regiment fails to reach...
+  let far = d; while (trial(false, far).lost > 0 && far < 60) far += 0.5; // ...farthest it still hits
+  assert.equal(trial(false, far).lost, 0);
+  assert.ok(trial(true, far).lost > 0, `the general's regiment still hits at a spacing (${far}) beyond the unaided reach`);
 });
 
 test('a cavalry charge downhill hits harder than one uphill', () => {

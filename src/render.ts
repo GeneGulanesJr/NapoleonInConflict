@@ -704,7 +704,13 @@ export function createView(host: HTMLElement) {
   const rangeGeo = new THREE.RingGeometry(0.985, 1, 72).rotateX(-Math.PI / 2), rangeRings: THREE.Mesh[] = [];
   for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(rangeGeo, new THREE.MeshBasicMaterial({ color: 0xe9e4d6, transparent: true, opacity: 0.35, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 4; scene.add(m); rangeRings.push(m); }
   let refillHint = false, dragLine: { ax: number; az: number; bx: number; bz: number; f: number } | null = null;
-  let ghosts: { u: any; x: number; z: number; f: number | null }[] | null = null; // order preview: where each regiment will stand (sim layout())
+  // aura ring for a selected commander: every regiment of his side inside it gets the damage/speed/morale bonus
+  const auraRings: THREE.Mesh[] = [];
+  for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(rangeGeo, new THREE.MeshBasicMaterial({ color: P.brass, transparent: true, opacity: 0.6, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 4; scene.add(m); auraRings.push(m); }
+  let ghosts: { u: any; x: number; z: number; f: number | null; form?: string }[] | null = null; // order preview: where each regiment will stand (sim layout())
+  // order preview fill: a translucent footprint where each regiment of a dragged order will stand (the ribbon alone is easy to lose against the ground)
+  const ghostGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), ghostFills: THREE.Mesh[] = [];
+  for (let i = 0; i < 40; i++) { const m = new THREE.Mesh(ghostGeo, new THREE.MeshBasicMaterial({ color: 0xa9c4ff, transparent: true, opacity: 0.34, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 3; scene.add(m); ghostFills.push(m); }
   let hoverId = -1, showAll = false; // full name plates only for these (plus selected / in trouble); everyone else gets a pip
 
   // coloured bases: a ribbon round each regiment's footprint on the ground, blue yours, red the enemy's (coats stay historical, and French and Prussian coats are both blue)
@@ -1050,7 +1056,14 @@ export function createView(host: HTMLElement) {
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
     for (const m of [...figs, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
     for (const m of [...figs, bannerM]) if (m.instanceColor) upl(m.instanceColor, m.count, 3);
-    for (const g of ghosts ?? []) { const f = g.f ?? g.u.facing; baseRing(g.x, g.z, Math.sin(f), Math.cos(f), foot(g.u, tu), bTh, BASE_COL.ghost); } // ghost footprints on the ground, facing the ordered way
+    for (const g of ghosts ?? []) { const f = g.f ?? g.u.facing; baseRing(g.x, g.z, Math.sin(f), Math.cos(f), foot(g.form ? { ...g.u, form: g.form } : g.u, tu), bTh, BASE_COL.ghost); } // ghost footprints on the ground, facing the ordered way
+    let ngf = 0;
+    for (const g of ghosts ?? []) {
+      if (ngf >= ghostFills.length) break;
+      const f = g.f ?? g.u.facing, c = Math.cos(f), sn = Math.sin(f), b = foot(g.form ? { ...g.u, form: g.form } : g.u, tu), fx = (b[0] + b[1]) / 2, fz = (b[2] + b[3]) / 2, m = ghostFills[ngf++]; // footprint centre is off the regiment's origin, in its own frame
+      m.visible = true; m.position.set(g.x + fx * c + fz * sn, heightAt(scn, g.x, g.z) + 0.45, g.z - fx * sn + fz * c); m.rotation.y = f; m.scale.set(b[1] - b[0], 1, b[3] - b[2]);
+    }
+    for (let i = ngf; i < ghostFills.length; i++) ghostFills[i].visible = false;
     baseGeo.setDrawRange(0, nb * 6); upl(baseGeo.attributes.position as THREE.BufferAttribute, nb * 6, 3); upl(baseGeo.attributes.color as THREE.BufferAttribute, nb * 6, 3);
     for (const [id, p] of plateMap) if (!live.has(id)) { p.el.remove(); plateMap.delete(id); vis.delete(id); }
     for (const l of vlabels) {
@@ -1098,12 +1111,18 @@ export function createView(host: HTMLElement) {
     for (let i = nr; i < selRings.length; i++) selRings[i].visible = false;
     let nrr = 0;
     for (const u of state.units) {
-      const range = tu.types[u.type]?.range ?? 0;
+      const range = (tu.types[u.type]?.range ?? 0) * (u.aura ? tu.commanderAura.range : 1);
       if (!selected.has(u.id) || range <= 0 || nrr >= rangeRings.length) continue;
       const v = vis.get(u.id); if (!v) continue;
       const r = rangeRings[nrr++]; r.visible = true; r.position.set(v.x, heightAt(scn, v.x, v.z) + 0.5, v.z); r.scale.setScalar(range + 3 * FS); // range counts edge to edge, so add about a formation's depth
     }
     for (let i = nrr; i < rangeRings.length; i++) rangeRings[i].visible = false;
+    let nau = 0;
+    for (const u of state.units) {
+      const v = u.type === 'commander' && selected.has(u.id) && nau < auraRings.length ? vis.get(u.id) : null; if (!v) continue;
+      const r = auraRings[nau++]; r.visible = true; r.position.set(v.x, heightAt(scn, v.x, v.z) + 0.5, v.z); r.scale.setScalar(tu.commanderAura.radius);
+    }
+    for (let i = nau; i < auraRings.length; i++) auraRings[i].visible = false;
     if (dragLine && nl < 58) { // right-drag preview: the line the group will form, plus a tick showing which way it will face
       const d = dragLine, mx = (d.ax + d.bx) / 2, mz = (d.az + d.bz) / 2;
       lp.setXYZ(nl * 2, d.ax, heightAt(scn, d.ax, d.az) + 1, d.az); lp.setXYZ(nl * 2 + 1, d.bx, heightAt(scn, d.bx, d.bz) + 1, d.bz); nl++;
