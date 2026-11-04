@@ -32,7 +32,7 @@ Press **?** or **F10** in battle for the full list.
 
 - **Camera**: WASD / arrows / screen edge pan · Q/E or middle-drag rotate · wheel zooms at the cursor · F focus selection · O follow the selection · Ctrl+F5-F8 save a view, F5-F8 fly back to it · Backspace last alert · Tab big map, drag on the minimap to pan
 - **Select**: left-click / drag · Shift adds · double-click all of that kind · Ctrl+A all · Shift+1-9 save group, 1-9 recall · I next idle
-- **Orders**: right-click move or attack · right-drag form a line (ghosts show where each regiment will stand) · double right-click double time · Alt+right-click/drag move as a block · Ctrl+right-click face that way · Shift+right-click waypoint · right-click a farm to garrison · A then click attack-move · H halt · G stance (hold / attack / hold fire)
+- **Orders**: right-click move or attack · right-drag draw a front (the drag is the width the group fills: wider spreads the regiments out, narrower packs them and they form column to fit; ghosts show where each will stand and in what formation) · double right-click double time · Alt+right-click/drag move as a block · Ctrl+right-click face that way · Shift+right-click waypoint · right-click a farm to garrison · A then click attack-move · H halt · G stance (hold / attack / hold fire)
 - **Formations**: Z/X/C line / column / square · B auto-square · V unit special · K + click bayonet charge
 - **Aid and reserves**: F1/F2/F3 tactical aid · N replenish · reserves panel to call in a regiment
 - **Game**: Space pause · +/- speed (1-8×) · Enter start the battle (deployment) · Esc menu (restart, quit, settings) · J message log · M mute · R radio

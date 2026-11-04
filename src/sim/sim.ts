@@ -107,7 +107,7 @@ export function spawn(sim: Sim, side: number, d: any) {
 
 // ---------------------------------------------------------------- commands
 export type Cmd =
-  | { c: 'move'; ids: number[]; x: number; z: number; q?: boolean; f?: number; w?: number; am?: boolean; col?: boolean; keep?: boolean; run?: boolean; pace?: number | null } // f: facing on arrival (radians), w: frontage to spread the group over, am: attack-move (fight what is met on the way), col: march in column, keep: move as a block, run: double time; pace is the sim's own (a courier carries the group's pace), never sent
+  | { c: 'move'; ids: number[]; x: number; z: number; q?: boolean; f?: number; w?: number; am?: boolean; col?: boolean; keep?: boolean; run?: boolean; pace?: number | null; form?: string } // f: facing on arrival (radians), w: frontage to spread the group over, am: attack-move (fight what is met on the way), col: march in column, keep: move as a block, run: double time; pace is the sim's own (a courier carries the group's pace), never sent
   | { c: 'face'; ids: number[]; x: number; z: number } // wheel in place toward the point
   | { c: 'stance'; ids: number[]; s: string }
   | { c: 'auto'; ids: number[] }
@@ -134,7 +134,7 @@ export function command(sim: Sim, side: number, c: Cmd, now = false) {
   if (s.courier && !now && s.phase !== 'deploy' && 'ids' in c && c.c !== 'auto' && c.c !== 'replenish') { // (while deploying the clock is stopped and the army stands ready: orders are instant) // courier orders: each regiment gets its own copy, resolved now (a move's place in the group, its pace) and delivered when the rider arrives
     const us = mine(c.ids), ps: any[] = c.c === 'move' ? layout(us, c, sim.tu, half) : us.map((u: any) => ({ u })), pace = c.c === 'move' ? c.pace ?? groupPace(ps, c, sim.tu) : null;
     for (const p of ps) {
-      const one: any = c.c === 'move' ? { ...c, ids: [p.u.id], x: p.x, z: p.z, f: p.f ?? undefined, w: undefined, keep: false, pace } : { ...c, ids: [p.u.id] };
+      const one: any = c.c === 'move' ? { ...c, ids: [p.u.id], x: p.x, z: p.z, f: p.f ?? undefined, w: undefined, keep: false, pace, form: p.form } : { ...c, ids: [p.u.id] };
       if (!(c as any).q) s.orders = s.orders.filter((o: any) => o.c.ids[0] !== p.u.id || (o.c.c !== c.c && !(GO.includes(o.c.c) && GO.includes(c.c)))); // a new order countermands the one still on the road
       const t = courierDelay(sim, p.u);
       if (t > 0) s.orders.push({ t: s.t + t, side, c: one }); else command(sim, side, one, true);
@@ -145,14 +145,16 @@ export function command(sim: Sim, side: number, c: Cmd, now = false) {
     const us = mine(c.ids);
     if (!us.length) return;
     const ps = layout(us, c, sim.tu, half), pace = c.pace ?? groupPace(ps, c, sim.tu), tu = sim.tu;
-    for (const { u, x: tx, z: tz, f } of ps) {
+    for (const { u, x: tx, z: tz, f, form } of ps) {
       u.tf = f;
       if (c.q && u.tx != null && u.chase == null) { if (u.queue.length < 6) u.queue.push([tx, tz]); } // shift-click: add a waypoint
       else {
         u.tx = tx; u.tz = tz; u.queue = []; u.chase = null; u.garrison = u.gTarget = null; u.am = !!c.am; u.pace = pace; u.run = !!c.run;
         const d = Math.hypot(tx - u.x, tz - u.z) || 1;
         u.back = u.type !== 'artillery' && !(tu.types[u.type].cav && u.eng != null) && d < tu.fallback.dist && ((tx - u.x) * Math.sin(u.facing) + (tz - u.z) * Math.cos(u.facing)) / d < -0.5; // a short step to the rear: fall back facing the enemy (horse in a melee breaks off instead)
-        if (inColumn(u, c, d, tu)) { u.dep = u.form; u.form = 'column'; u.busy = tu.formChangeTime; } // deploys again on arrival (see step)
+        const want = form ?? c.form; // the formation a dragged front fits the regiment to (line or column), as the order is given
+        if (want && isInf(u) && u.form !== want && u.form !== 'square' && !(u.stun > 0) && !(u.shaken > 0)) { u.form = want; u.busy = Math.max(u.busy, tu.formChangeTime); u.dep = null; }
+        if (inColumn(u, c, d, tu)) { u.dep = u.form; u.form = 'column'; u.busy = Math.max(u.busy, tu.formChangeTime); } // deploys again on arrival (see step)
       }
     }
   } else if (c.c === 'attack') {
@@ -225,7 +227,7 @@ export function command(sim: Sim, side: number, c: Cmd, now = false) {
 
 /** Where each regiment of a move order stands and faces (f null: no ordered facing). Side by side across the order's facing by real frontage, a wider drag spreading them out;
  *  keep: the group moves as a block, each keeping its offset from the centre and its facing, the whole block turned onto a dragged facing. Pure, so the UI can preview it. */
-export function layout(us: any[], c: { x: number; z: number; f?: number; w?: number; keep?: boolean }, tu: any, half: number): { u: any; x: number; z: number; f: number | null }[] {
+export function layout(us: any[], c: { x: number; z: number; f?: number; w?: number; keep?: boolean }, tu: any, half: number): { u: any; x: number; z: number; f: number | null; form?: string }[] {
   const cx = us.reduce((a: number, u: any) => a + u.x, 0) / us.length, cz = us.reduce((a: number, u: any) => a + u.z, 0) / us.length, cl = (v: number) => Math.max(-half, Math.min(half, v));
   if (c.keep) {
     const r = c.f == null ? 0 : c.f - Math.atan2(us.reduce((a: number, u: any) => a + Math.sin(u.facing), 0), us.reduce((a: number, u: any) => a + Math.cos(u.facing), 0)), sn = Math.sin(r), cs = Math.cos(r);
@@ -236,6 +238,14 @@ export function layout(us: any[], c: { x: number; z: number; f?: number; w?: num
   dx /= d; dz /= d;
   if (c.f != null) { dx = Math.sin(c.f); dz = Math.cos(c.f); } // a dragged line: lay the group out across the chosen facing
   const ss = [...us].sort((a: any, b: any) => (a.x * -dz + a.z * dx) - (b.x * -dz + b.z * dx));
+  const gap = tu.groupGap, W = c.w != null && c.w > 8 ? c.w : 0;
+  if (W) { // a dragged front, as in Total War: the drag is the width the group fills, edge to edge. Wider spreads the regiments; narrower packs them, then they form column to fit (never narrower than side by side at the minimum gap)
+    const dims = (form: string) => ss.map((u: any) => { const f = foot(isInf(u) ? { ...u, form } : u, tu); return f[1] - f[0]; }), sum = (D: number[]) => D.reduce((t: number, w: number) => t + w, 0), n = ss.length;
+    const L = dims('line'), form = sum(L) + (n - 1) * 2 * gap <= W ? 'line' : 'column', D = form === 'line' ? L : dims('column');
+    const between = n > 1 ? Math.max(form === 'line' ? 2 * gap : 4 * gap + 4, (W - sum(D)) / (n - 1)) : 0; // spare width becomes the space between regiments (columns marching side by side need elbow room)
+    let x0 = -(sum(D) + (n - 1) * between) / 2;
+    return ss.map((u: any, i: number) => { const off = x0 + D[i] / 2; x0 += D[i] + between; return { u, x: cl(c.x - dz * off), z: cl(c.z + dx * off), f: c.f ?? null, ...(isInf(u) && u.form !== 'square' ? { form } : {}) }; });
+  }
   // side by side by real frontage plus tuning.groupGap a side (and never closer than the idle spacing rule), so a group arrives without piling up
   const hw = ss.map((u: any) => { const f = foot(u, tu); return Math.max((f[1] - f[0]) / 2 + tu.groupGap, 0.7 * rad(u) + 0.5); });
   const sum = hw.reduce((a: number, b: number) => a + b, 0), extra = c.w && ss.length > 1 ? Math.max(0, c.w - 2 * sum) / (ss.length - 1) : 0;

@@ -707,7 +707,7 @@ export function createView(host: HTMLElement) {
   // aura ring for a selected commander: every regiment of his side inside it gets the damage/speed/morale bonus
   const auraRings: THREE.Mesh[] = [];
   for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(rangeGeo, new THREE.MeshBasicMaterial({ color: P.brass, transparent: true, opacity: 0.6, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 4; scene.add(m); auraRings.push(m); }
-  let ghosts: { u: any; x: number; z: number; f: number | null }[] | null = null; // order preview: where each regiment will stand (sim layout())
+  let ghosts: { u: any; x: number; z: number; f: number | null; form?: string }[] | null = null; // order preview: where each regiment will stand (sim layout())
   // order preview fill: a translucent footprint where each regiment of a dragged order will stand (the ribbon alone is easy to lose against the ground)
   const ghostGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), ghostFills: THREE.Mesh[] = [];
   for (let i = 0; i < 40; i++) { const m = new THREE.Mesh(ghostGeo, new THREE.MeshBasicMaterial({ color: 0xa9c4ff, transparent: true, opacity: 0.34, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 3; scene.add(m); ghostFills.push(m); }
@@ -1056,11 +1056,11 @@ export function createView(host: HTMLElement) {
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
     for (const m of [...figs, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
     for (const m of [...figs, bannerM]) if (m.instanceColor) upl(m.instanceColor, m.count, 3);
-    for (const g of ghosts ?? []) { const f = g.f ?? g.u.facing; baseRing(g.x, g.z, Math.sin(f), Math.cos(f), foot(g.u, tu), bTh, BASE_COL.ghost); } // ghost footprints on the ground, facing the ordered way
+    for (const g of ghosts ?? []) { const f = g.f ?? g.u.facing; baseRing(g.x, g.z, Math.sin(f), Math.cos(f), foot(g.form ? { ...g.u, form: g.form } : g.u, tu), bTh, BASE_COL.ghost); } // ghost footprints on the ground, facing the ordered way
     let ngf = 0;
     for (const g of ghosts ?? []) {
       if (ngf >= ghostFills.length) break;
-      const f = g.f ?? g.u.facing, c = Math.cos(f), sn = Math.sin(f), b = foot(g.u, tu), fx = (b[0] + b[1]) / 2, fz = (b[2] + b[3]) / 2, m = ghostFills[ngf++]; // footprint centre is off the regiment's origin, in its own frame
+      const f = g.f ?? g.u.facing, c = Math.cos(f), sn = Math.sin(f), b = foot(g.form ? { ...g.u, form: g.form } : g.u, tu), fx = (b[0] + b[1]) / 2, fz = (b[2] + b[3]) / 2, m = ghostFills[ngf++]; // footprint centre is off the regiment's origin, in its own frame
       m.visible = true; m.position.set(g.x + fx * c + fz * sn, heightAt(scn, g.x, g.z) + 0.45, g.z - fx * sn + fz * c); m.rotation.y = f; m.scale.set(b[1] - b[0], 1, b[3] - b[2]);
     }
     for (let i = ngf; i < ghostFills.length; i++) ghostFills[i].visible = false;

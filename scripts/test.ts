@@ -395,6 +395,25 @@ test('a dragged group order packs regiments side by side, 2 units between their 
   assert.ok(gap({ ...sim.tu, groupGap: 3 })[0] > gap(sim.tu)[0] + 3, 'a wider gap in tuning spreads them');
 });
 
+test('a dragged front fills the drag: wider spreads the regiments, narrower packs them, then they form column to fit', () => {
+  const sim = arena((fr, co) => [...fr.filter((q) => q.type === 'line').slice(0, 4).map((q, i) => Object.assign(q, { x: -60 + i * 25, z: -80, facing: 0, form: 'line' })), co[0]]), us = sim.s.units.filter((u: any) => u.side === 0);
+  const at = (w: number) => { const ps = layout(us, { x: 0, z: 0, f: 0, w }, sim.tu, 198), xs = ps.map((p) => p.x).sort((a, b) => a - b); return { form: ps[0].form, span: xs[xs.length - 1] - xs[0], step: (xs[xs.length - 1] - xs[0]) / (xs.length - 1) }; };
+  const wide = at(300), mid = at(160), tight = at(110), narrow = at(60), tiny = at(15);
+  assert.equal(us.length, 4);
+  assert.ok(wide.form === 'line' && wide.step > mid.step + 20 && mid.step > tight.step + 5, `wider drag, wider spacing (${wide.step.toFixed(0)} > ${mid.step.toFixed(0)} > ${tight.step.toFixed(0)})`);
+  assert.ok(narrow.form === 'column' && narrow.step < tight.step, 'too narrow for lines abreast: they form column');
+  assert.ok(Math.abs(tiny.step - narrow.step) < 20 && tiny.step > 6, `a tiny drag keeps columns side by side at the minimum gap (${tiny.step.toFixed(1)})`);
+});
+
+test('a dragged front orders each regiment into the line or column that fits, and they arrive in it', () => {
+  let ls: any[] = [];
+  const sim = arena((fr, co) => [...(ls = fr.filter((q) => q.type === 'line').slice(0, 3).map((q, i) => Object.assign(q, { x: -50 + i * 25, z: -60, facing: 0, form: 'line' }))), Object.assign(co[0], { x: 170, z: 170 })]);
+  command(sim, 0, { c: 'move', ids: ls.map((u) => u.id), x: 0, z: 0, f: 0, w: 40 }); // too narrow for three lines abreast
+  assert.ok(ls.every((u) => u.form === 'column'), 'ordered into column');
+  run(sim, 120);
+  assert.ok(ls.every((u) => u.form === 'column' && Math.abs(u.z) < 3), 'arrived in column on the line');
+});
+
 test('a regiment walks round the end of a river that has no bridge, staying dry', () => {
   let u: any, wet = false;
   const sim = arena((fr, co) => [u = Object.assign(fr.find((q) => q.type === 'line'), { x: -50, z: -30, facing: 0, form: 'column' }), Object.assign(co[0], { x: 170, z: 170 })], { size: 400, rough: FLAT, rivers: [{ pts: [[-200, 0], [40, 0]], width: 8, bridges: [] }] });
