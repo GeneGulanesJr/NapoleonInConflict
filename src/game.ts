@@ -1,5 +1,5 @@
 // A "source" gives the UI a battle state and a way to send commands, locally or over a WebSocket.
-import { createSim, type Cmd } from './sim/sim.ts';
+import { createSim, SIM_VERSION, type Cmd } from './sim/sim.ts';
 import { runner, DT, type Replay } from './sim/replay.ts';
 import { warm } from './sim/path.ts';
 import { TUNING, fogOn, difficulty, pref } from './campaign.ts';
@@ -57,7 +57,7 @@ export function localSource(scn: any, opts: { roster?: any[]; won?: Record<strin
   const s2 = { ...scn, strength };
   warm(s2, TUNING); // the route grid, baked at load (keyed by the map, which s2 shares with scn)
   const s0 = opts.resume ?? createSim(s2, TUNING, { roster: opts.roster, won: opts.won, grouchy: opts.grouchy, fog: fogOn(), courier: pref('nic-courier', false), seed: opts.seed ?? (Date.now() & 0x7fffffff), deploy: opts.deploy }).s;
-  return drive(TUNING, { scn: s2, ref: { id: scn.id, seed: scn.seed, strength }, won: opts.won, grouchy: opts.grouchy, side, start: JSON.stringify(s0), cmds: [] }, false);
+  return drive(TUNING, { scn: s2, v: SIM_VERSION, ref: { id: scn.id, seed: scn.seed, strength }, won: opts.won, grouchy: opts.grouchy, side, start: JSON.stringify(s0), cmds: [] }, false);
 }
 
 /** Watch a recorded battle again, from its start state. */

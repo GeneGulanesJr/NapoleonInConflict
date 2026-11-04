@@ -348,3 +348,13 @@ button.alt { background: #1b1510; }
 #menu .homeside .hd { margin: 0 0 calc(var(--u) * 3); color: var(--gold); font-weight: 400; text-transform: uppercase; }
 #menu .homeside .cmap .route { animation: march 1s steps(5) infinite; } @keyframes march { to { stroke-dashoffset: -10; } }
 #menu .home .foot { margin: 0; color: #8e8a7a; }
+
+/* ---------- campaign screen on any window: columns shrink instead of overflowing, Begin / Resume stay in reach ---------- */
+#menu .col { flex: 1 1 min(100%, calc(var(--u) * 110)); min-width: 0; } #menu .col.wide { flex: 2 1 min(100%, calc(var(--u) * 170)); }
+#menu .dock { position: sticky; bottom: 0; z-index: 1; flex-wrap: wrap; margin: calc(var(--u) * 6) 0 0; padding: calc(var(--u) * 4) 0; background: rgba(14, 10, 6, .94); border-top: 1px solid var(--edge); }
+#menu .dock button { width: min(100%, calc(var(--u) * 100)); }
+@media (max-width: 600px) { /* a roster row: name and buy buttons on one line, the strength bar under them */
+  #menu .rrow.buy { grid-template-columns: minmax(0, 1fr) auto auto; }
+  #menu .rrow.buy > i { grid-row: 2; grid-column: 1 / -1; }
+  #menu .rrow.buy button { width: calc(var(--u) * 46); }
+}

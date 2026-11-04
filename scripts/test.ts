@@ -7,7 +7,7 @@ import { applyResult, reinforce, recruit, fillCost, type CampaignState } from '.
 import { runner, parseReplay, replayFile, type Replay } from '../src/sim/replay.ts';
 import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
-import { createSim, step, command, manPrice, distToFoot, posted, steady, foot } from '../src/sim/sim.ts';
+import { createSim, step, command, SIM_VERSION, manPrice, distToFoot, posted, steady, foot } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
 import { heightAt, groundAt, los, deepAt } from '../src/sim/world.ts';
 import { route } from '../src/sim/path.ts';
@@ -1011,11 +1011,12 @@ test('keep the shape: a block move keeps each regiment\'s offset and facing; a d
   assert.ok(Math.hypot(p[0].x, p[0].z - 30) < 1e-9 && Math.hypot(p[1].x, p[1].z + 30) < 1e-9 && p.every((q) => Math.abs(q.f! - Math.PI / 2) < 1e-9), 'turned a quarter round as a block');
 });
 
-test('a regiment ordered a short way to its rear falls back facing the enemy at half pace; a longer way it wheels round', () => {
-  const back = (dist: number) => { let a: any; const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: 0, facing: 0, form: 'line' }), Object.assign(co[0], { x: 170, z: 170 })]); command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: -dist }); run(sim, 6); return a; };
-  const near = back(20), far = back(60);
-  assert.ok(near.facing === 0 && near.z < -4 && near.z > -6.5, `stepped back ${(-near.z).toFixed(1)} still facing the front`);
-  assert.ok(Math.abs(far.facing) > 1 && Math.abs(far.z) < 0.5, `wheeling round first (facing ${far.facing.toFixed(2)}, z ${far.z.toFixed(1)})`);
+test('with the enemy close, a regiment ordered a short way to its rear falls back facing it at half pace; a longer way, or with no enemy near, it wheels round', () => {
+  const back = (dist: number, foeZ: number) => { let a: any; const sim = arena((fr, co) => [a = Object.assign(fr.find((u) => u.type === 'line'), { x: 0, z: 0, facing: 0, form: 'line' }), Object.assign(co[0], { x: 170, z: 170 })]); Object.assign(sim.s.units.find((u: any) => u.side === 1), { x: 0, z: foeZ }); command(sim, 0, { c: 'move', ids: [a.id], x: 0, z: -dist }); run(sim, 6); return a; };
+  const near = back(15, 30), far = back(60, 30), alone = back(15, 170);
+  assert.ok(near.facing === 0 && near.z < -3 && near.z > -6.5, `stepped back ${(-near.z).toFixed(1)} still facing the front`);
+  assert.ok(Math.abs(far.facing) > 1 && Math.abs(far.z) < 0.5, `a long way: wheeling round first (facing ${far.facing.toFixed(2)}, z ${far.z.toFixed(1)})`);
+  assert.ok(Math.abs(alone.facing) > 1 && Math.abs(alone.z) < 0.5, `no enemy near: wheeling round first (facing ${alone.facing.toFixed(2)}, z ${alone.z.toFixed(1)})`);
 });
 
 test('a face order halts a regiment and wheels it toward the point without moving', () => {
@@ -1127,7 +1128,7 @@ test('a battle continued from a snapshot plays on exactly, bot memory included',
 /** a recorded quatrebras battle with two orders, `steps` long */
 function recorded(steps: number, seed = 5) {
   const scn = { ...data('quatrebras'), strength: [1, 0.8] }, tu = data('tuning');
-  const rec: Replay = { scn, ref: { id: 'quatrebras', strength: [1, 0.8] }, side: 0, start: JSON.stringify(createSim(scn, tu, { seed }).s), cmds: [] };
+  const rec: Replay = { scn, v: SIM_VERSION, ref: { id: 'quatrebras', strength: [1, 0.8] }, side: 0, start: JSON.stringify(createSim(scn, tu, { seed }).s), cmds: [] };
   const live = runner(tu, rec), ids = live.sim.s.units.filter((u: any) => u.side === 0).map((u: any) => u.id);
   for (let n = 0; n < steps; n++) { if (n === 100) live.cmd({ c: 'move', ids, x: 0, z: 0 }); if (n === 1500) live.cmd({ c: 'form', ids, f: 'column' }); live.tick(); }
   live.sim.s.events.length = 0;
@@ -1155,6 +1156,8 @@ test('a replay file round-trips; a doctored one is turned away', () => {
   assert.equal(parseReplay(JSON.stringify({ ...f, ref: { id: 'skirmish', seed: 42, strength: [1, 1.5] } }), scenarios).scn.date, 'Seed 42', 'a random skirmish is rebuilt from its seed');
   const bad = (why: RegExp, edit: (g: any) => void) => { const g = structuredClone(f); edit(g); assert.throws(() => parseReplay(JSON.stringify(g), scenarios), why); };
   assert.throws(() => parseReplay('{"ref":', scenarios), /not a replay/);
+  bad(/another version/, (g) => (g.v = SIM_VERSION + 1));
+  bad(/another version/, (g) => delete g.v);
   bad(/unknown battle/, (g) => (g.ref.id = 'waterloo'));
   bad(/unknown battle/, (g) => (g.ref.id = '__proto__'));
   bad(/strength/, (g) => (g.ref.strength = [1, 1e9]));
@@ -1167,7 +1170,7 @@ test('a replay file round-trips; a doctored one is turned away', () => {
 
 test("a replay file keeps Grouchy's orders (they shape Waterloo's timeline), and refuses any other value", () => {
   const scn = data('waterloo'), tu = data('tuning'), camp = data('campaign'), ids = camp.grouchy.options.map((o: any) => o.id);
-  const rec: Replay = { scn, ref: { id: 'waterloo', strength: [1, 1] }, grouchy: 'pursue', side: 0, start: JSON.stringify(createSim(scn, tu, { seed: 3, grouchy: 'pursue' }).s), cmds: [] };
+  const rec: Replay = { scn, v: SIM_VERSION, ref: { id: 'waterloo', strength: [1, 1] }, grouchy: 'pursue', side: 0, start: JSON.stringify(createSim(scn, tu, { seed: 3, grouchy: 'pursue' }).s), cmds: [] };
   const live = runner(tu, rec);
   for (let n = 0; n < 40; n++) live.tick();
   Object.assign(rec, { end: 40, chron: [] }); // what a finished battle records
@@ -1304,4 +1307,43 @@ test('there is no auto-square: foot form square only on an order, and the bot do
   Object.assign(cav, { x: 0, z: -200 });
   run(sim, 15, () => inf.form === 'line', () => bot(0.05));
   assert.equal(inf.form, 'line', 'and breaks it up when the horse are gone');
+});
+
+test('a short order to the rear steps back facing the enemy only when one is near; otherwise the regiment turns and marches', () => {
+  const order = (foe: [number, number], to: [number, number]) => {
+    let inf: any;
+    const sim = arena((fr, co) => [inf = Object.assign(fr.filter((u) => u.type === 'line')[0], { x: 0, z: 0, facing: Math.PI / 2, form: 'line' }), Object.assign(co[0], { x: foe[0], z: foe[1] }), Object.assign(co[co.length - 1], { x: 170, z: 170 })]);
+    command(sim, 0, { c: 'move', ids: [inf.id], x: to[0], z: to[1] });
+    return inf;
+  };
+  assert.ok(order([0, -35], [-15, 0]).back, 'enemy within 45: it steps back, keeping its front');
+  assert.ok(!order([0, -100], [-15, 0]).back, 'no enemy near: it turns round and marches');
+  assert.ok(!order([0, -35], [-30, 0]).back, 'a march of 30 is no step back: it turns and marches');
+  assert.ok(!order([0, -35], [15, 0]).back, 'ahead of it is never a step back');
+});
+
+test('golden: the sim plays out as it did when SIM_VERSION was last bumped (saves and replay files are only valid within one version)', () => {
+  const sim = createSim(data('ligny'), data('tuning'), { seed: 1 }), bots = [makeBot(sim, 0), makeBot(sim, 1)];
+  for (let i = 0; i < 1200; i++) { step(sim, 0.05); bots[0](0.05); bots[1](0.05); }
+  let h = 2166136261; // FNV-1a over every regiment's place and strength after a minute of bot against bot
+  for (const ch of JSON.stringify(sim.s.units.map((u: any) => [u.id, Math.round(u.x * 10), Math.round(u.z * 10), Math.round(u.men)]))) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  assert.equal(`${SIM_VERSION}:${h >>> 0}`, '1:4234174103', 'the sim changed: bump SIM_VERSION in src/sim/sim.ts, then put this value in the test');
+});
+
+test('the server drops orders from a client that floods it, and still obeys one that keeps to a normal pace', async () => {
+  await startServer();
+  try {
+    const a = await connect('quatrebras');
+    const u = a.last.units.find((x: any) => x.side === a.side && x.type === 'line');
+    a.send({ t: 'cmd', c: { c: 'stance', ids: [u.id], s: 'aggressive' } });
+    for (let i = 0; i < 300; i++) a.send({ t: 'cmd', c: { c: 'face', ids: [u.id], x: 1, z: 1 } });
+    a.send({ t: 'cmd', c: { c: 'stance', ids: [u.id], s: 'hold' } }); // the 302nd order in a burst: dropped
+    await wait(500);
+    assert.equal(a.last.units.find((x: any) => x.id === u.id).stance, 'aggressive', 'the flood used the allowance up, so the last order never arrived');
+    await wait(1500); // the allowance refills (30 a second)
+    a.send({ t: 'cmd', c: { c: 'stance', ids: [u.id], s: 'hold' } });
+    await wait(500);
+    assert.equal(a.last.units.find((x: any) => x.id === u.id).stance, 'hold', 'an ordinary order goes through again');
+    a.ws.close();
+  } finally { server.removeAllListeners('exit'); server.kill(); }
 });

@@ -56,7 +56,7 @@ function clean(c: any): Cmd | null {
 const wss = new WebSocketServer({ port: Number(process.env.PORT ?? 8080), maxPayload: 4096, perMessageDeflate: true });
 const alive = new WeakSet<WebSocket>();
 wss.on('connection', (ws) => {
-  let room: Room | null = null;
+  let room: Room | null = null, tokens = 40, at = Date.now(); // orders per client: 30 a second, bursts of 40 (a drag of a whole army is a few orders)
   alive.add(ws);
   ws.on('pong', () => alive.add(ws));
   ws.on('message', (raw) => {
@@ -71,6 +71,10 @@ wss.on('connection', (ws) => {
         syncBots(room);
         ws.send(JSON.stringify({ t: 'hello', side, scenario: room.id }));
       } else if (m.t === 'cmd' && room) {
+        const now = Date.now();
+        tokens = Math.min(40, tokens + (now - at) * 0.03); at = now;
+        if (tokens < 1) return; // a flood must not stall every room's tick: the extra orders are dropped
+        tokens--;
         const c = clean(m.c);
         if (c) command(room.sim, room.clients.get(ws)!, c);
       }

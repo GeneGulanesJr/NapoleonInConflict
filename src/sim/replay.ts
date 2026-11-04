@@ -1,12 +1,12 @@
 // Record and replay. A battle is its start state plus each player command and the step it came before;
 // the sim and the bot are deterministic, so feeding those back rebuilds the battle exactly.
-import { createSim, step, command, type Cmd, type Sim } from './sim.ts';
+import { createSim, step, command, SIM_VERSION, type Cmd, type Sim } from './sim.ts';
 import { makeBot } from './bot.ts';
 import { makeSkirmish } from './skirmish.ts';
 
 /** keys: [step, state] every KEY steps and at the end, to seek from; end: the last step; chron: the final chronicle (turning points); ref: the scenario to rebuild for a replay file */
 export type Replay = {
-  scn: any; won?: Record<string, boolean>; grouchy?: string; side: number; start: string; cmds: [number, Cmd][];
+  scn: any; v?: number; won?: Record<string, boolean>; grouchy?: string; side: number; start: string; cmds: [number, Cmd][];
   keys?: [number, string][]; end?: number; chron?: any[]; ref?: { id: string; seed?: number; strength: number[] };
 };
 export const DT = 0.05, KEY = 1200; // a keyframe every 60 sim-seconds
@@ -72,6 +72,7 @@ export function parseReplay(text: string, scenarios: Record<string, any>, orders
   try { f = JSON.parse(text); } catch { throw new Error('not a replay file'); }
   const ref = f?.ref;
   if (!ref || typeof ref !== 'object') throw new Error('not a replay file');
+  if (f.v !== SIM_VERSION) throw new Error('recorded on another version of the game: its orders would not play out the same'); // the sim is deterministic per version only
   const base = ref.id === 'skirmish' && Number.isInteger(ref.seed) ? makeSkirmish(ref.seed) : typeof ref.id === 'string' && Object.hasOwn(scenarios, ref.id) ? scenarios[ref.id] : null;
   if (!base) throw new Error(`unknown battle "${String(ref.id).slice(0, 30)}"`);
   if (!Array.isArray(ref.strength) || ref.strength.length !== 2 || !ref.strength.every((x: unknown) => num(x) && x > 0 && x <= 10)) throw new Error('bad army strength');
@@ -83,5 +84,5 @@ export function parseReplay(text: string, scenarios: Record<string, any>, orders
   if (!Array.isArray(f.keys) || !f.keys.every((k: any) => Array.isArray(k) && k.length === 2 && nat(k[0]) && state(k[1]))) throw new Error('bad keyframes');
   if (!Array.isArray(f.chron) || !f.chron.every((c: any) => c && num(c.t) && (c.side === 0 || c.side === 1) && typeof c.text === 'string')) throw new Error('bad turning points');
   const strength = [...ref.strength];
-  return { scn: { ...base, strength }, ref: { id: ref.id, seed: ref.seed, strength }, won: f.won ?? undefined, grouchy: f.grouchy ?? undefined, side: f.side, start: f.start, cmds: f.cmds, keys: f.keys, end: f.end, chron: f.chron };
+  return { scn: { ...base, strength }, v: f.v, ref: { id: ref.id, seed: ref.seed, strength }, won: f.won ?? undefined, grouchy: f.grouchy ?? undefined, side: f.side, start: f.start, cmds: f.cmds, keys: f.keys, end: f.end, chron: f.chron };
 }

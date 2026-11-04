@@ -4,6 +4,9 @@ import { route } from './path.ts';
 
 export type Sim = { s: any; scn: any; tu: any; tl: any[] };
 
+/** Bump whenever the sim's behaviour changes (code, tuning or scenario data). Saved battles and replay files carry it and are dropped on a mismatch; the golden-hash test in scripts/test.ts fails until you do. */
+export const SIM_VERSION = 1;
+
 export function rand(s: { seed: number }): number {
   s.seed = (s.seed + 0x6d2b79f5) | 0;
   let t = s.seed;
@@ -150,7 +153,7 @@ export function command(sim: Sim, side: number, c: Cmd, now = false) {
       else {
         u.tx = tx; u.tz = tz; u.queue = []; u.chase = null; u.garrison = u.gTarget = null; u.am = !!c.am; u.pace = pace; u.run = !!c.run;
         const d = Math.hypot(tx - u.x, tz - u.z) || 1;
-        u.back = u.type !== 'artillery' && !(tu.types[u.type].cav && u.eng != null) && d < tu.fallback.dist && ((tx - u.x) * Math.sin(u.facing) + (tz - u.z) * Math.cos(u.facing)) / d < -0.5; // a short step to the rear: fall back facing the enemy (horse in a melee breaks off instead)
+        u.back = u.type !== 'artillery' && !(tu.types[u.type].cav && u.eng != null) && d < tu.fallback.dist && !calm(s, tu, u, tu.fallback.foe) &&((tx - u.x) * Math.sin(u.facing) + (tz - u.z) * Math.cos(u.facing)) / d < -0.5; // a short step to the rear: fall back facing the enemy (horse in a melee breaks off instead)
         const want = form ?? c.form; // the formation a dragged front fits the regiment to (line or column), as the order is given
         if (want && isInf(u) && u.form !== want && u.form !== 'square' && !(u.stun > 0) && !(u.shaken > 0)) { u.form = want; u.busy = Math.max(u.busy, tu.formChangeTime); u.dep = null; }
         if (inColumn(u, c, d, tu)) { u.dep = u.form; u.form = 'column'; u.busy = Math.max(u.busy, tu.formChangeTime); } // deploys again on arrival (see step)
@@ -292,7 +295,7 @@ export const manPrice = (tu: any, u: any) => (tu.types[u.type].cost / u.maxMen) 
 /** standing on an objective its side holds: a depot, where replacements trickle in */
 const held = (s: any, u: any) => s.zones.some((z: any) => z.owner === u.side && Math.hypot(u.x - z.x, u.z - z.z) < z.r);
 /** u may take replacements: not in melee, and no enemy (a general apart) within tuning.refillClear */
-const calm = (s: any, tu: any, u: any) => u.eng == null && !s.units.some((e: any) => e.side !== u.side && !e.dead && !e.routed && e.type !== 'commander' && Math.hypot(e.x - u.x, e.z - u.z) < tu.refillClear);
+const calm = (s: any, tu: any, u: any, r = tu.refillClear) => u.eng == null && !s.units.some((e: any) => e.side !== u.side && !e.dead && !e.routed && e.type !== 'commander' && Math.hypot(e.x - u.x, e.z - u.z) < r);
 /** the point on a side's home map edge (the one its entry point lies by) nearest to (x, z): drafts set out from there */
 function homeEdge(sim: Sim, side: number, x: number, z: number) {
   const e = sim.scn.entry[side], h = sim.scn.map.size / 2 - 4;
