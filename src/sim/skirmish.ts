@@ -3,22 +3,24 @@
 export function makeSkirmish(seed: number): any {
   return scaleScenario(makeSkirmishBase(seed), 1.5);
 }
-/** scale a scenario's coordinates (the campaign data files are already scaled this way) */
+/** scale a scenario's coordinates by M; sizes of things on the map (zones, villages, river width, the clock) grow by a gentler F = 1 + 0.4 (M - 1), 1.2 at x1.5 */
 export function scaleScenario(j: any, M: number): any {
-  const f = (n: number) => Math.round(n * M * 10) / 10, m = j.map;
+  const f = (n: number) => Math.round(n * M * 10) / 10, F = 1 + 0.4 * (M - 1), g = (n: number) => Math.round(n * F * 10) / 10, m = j.map;
   m.size = Math.round(m.size * M);
   for (const h of m.hills ?? []) { h.x = f(h.x); h.z = f(h.z); h.rx = f(h.rx); h.rz = f(h.rz); }
   for (const w of m.woods ?? []) { w.x = f(w.x); w.z = f(w.z); w.r = f(w.r); }
-  for (const v of m.villages ?? []) { v.x = f(v.x); v.z = f(v.z); v.r = Math.round(v.r * 1.2 * 10) / 10; }
-  for (const r of m.rivers ?? []) { r.pts = r.pts.map((q: number[]) => q.map(f)); r.bridges = r.bridges.map((q: number[]) => q.map(f)); r.width = Math.round(r.width * 1.2 * 10) / 10; }
+  for (const v of m.villages ?? []) { v.x = f(v.x); v.z = f(v.z); v.r = g(v.r); }
+  for (const r of m.rivers ?? []) { r.pts = r.pts.map((q: number[]) => q.map(f)); r.bridges = r.bridges.map((q: number[]) => q.map(f)); r.width = g(r.width); }
+  for (const l of m.lanes ?? []) { l.pts = l.pts.map((q: number[]) => q.map(f)); l.w = g(l.w); }
   for (const h of [...(m.hedges ?? []), ...(m.roads ?? [])]) h.pts = h.pts.map((q: number[]) => q.map(f));
   if (m.rough) m.rough.scale = f(m.rough.scale);
-  for (const z of j.zones) { z.x = f(z.x); z.z = f(z.z); z.r = Math.round(z.r * 1.2 * 10) / 10; }
+  for (const z of j.zones) { z.x = f(z.x); z.z = f(z.z); z.r = g(z.r); }
   for (const e of j.entry) { e.x = f(e.x); e.z = f(e.z); }
   const sg = (gs: any[]) => { for (const g of gs) for (const k of ['x', 'z', 'dx', 'dz']) if (k in g) g[k] = f(g[k]); };
   for (const side of j.forces) sg(side);
   for (const e of j.timeline ?? []) { for (const k of ['entry', 'go']) if (e[k]) { e[k].x = f(e[k].x); e[k].z = f(e[k].z); } if (e.units) sg(e.units); }
-  j.duration = Math.round(j.duration * 1.2);
+  if (j.waves) { for (const e of j.waves.entries) { e.x = f(e.x); e.z = f(e.z); } j.waves.go = { x: f(j.waves.go.x), z: f(j.waves.go.z) }; }
+  j.duration = Math.round(j.duration * F);
   return j;
 }
 function makeSkirmishBase(seed: number): any {

@@ -1,5 +1,6 @@
 {
   "id": "charleroi",
+  "scale": 1.25,
   "title": "Crossing the Sambre",
   "date": "15 June 1815",
   "blurb": "The Army of the North has crossed the frontier at dawn. Zieten's Prussian outposts hold the Sambre, a deep river in a steep valley, at the barricaded bridges of Charleroi and Châtelet, five kilometres apart. Beyond Charleroi the Fleurus road climbs through the long street of Gilly; behind a wooded brook Pirch II's brigade waits on the plateau of Soleilmont. Seize the bridges and Gilly before the Prussians can concentrate. A warm-up for the real work to come.",
@@ -228,12 +229,10 @@
         "bridges": [
           [
             -262,
-            138.5
-          ],
+            138.5, 14],
           [
             300,
-            107.8
-          ]
+            107.8, 11]
         ]
       },
       {
@@ -616,8 +615,7 @@
       "x": -262,
       "z": 116,
       "r": 16,
-      "value": 4,
-      "owner": 1
+      "value": 4
     },
     {
       "id": "gi",
@@ -625,8 +623,7 @@
       "x": 20,
       "z": -62,
       "r": 18,
-      "value": 3,
-      "owner": 1
+      "value": 3
     },
     {
       "id": "so",
@@ -634,8 +631,7 @@
       "x": 200,
       "z": -170,
       "r": 20,
-      "value": 3,
-      "owner": 1
+      "value": 3
     },
     {
       "id": "cl",
@@ -643,8 +639,7 @@
       "x": 290,
       "z": 90,
       "r": 13,
-      "value": 2,
-      "owner": 1
+      "value": 2
     }
   ],
   "entry": [

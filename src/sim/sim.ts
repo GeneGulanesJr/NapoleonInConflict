@@ -5,7 +5,7 @@ import { route } from './path.ts';
 export type Sim = { s: any; scn: any; tu: any; tl: any[] };
 
 /** Bump whenever the sim's behaviour changes (code, tuning or scenario data). Saved battles and replay files carry it and are dropped on a mismatch; the golden-hash test in scripts/test.ts fails until you do. */
-export const SIM_VERSION = 2;
+export const SIM_VERSION = 3;
 
 export function rand(s: { seed: number }): number {
   s.seed = (s.seed + 0x6d2b79f5) | 0;
@@ -42,7 +42,7 @@ export function createSim(scn: any, tu: any, opts: { seed?: number; roster?: any
     t: 0, seed: opts.seed ?? 1, nextId: 1, units: [], smoke: [], fx: [], out: [], log: [], events: [],
     zones: scn.zones.map((z: any) => ({ ...z, owner: z.owner ?? null, p: z.owner === 0 ? 1 : z.owner === 1 ? -1 : 0 })),
     side: [mkSide(0), mkSide(1)], weather: scn.weather ?? 'clear', over: false, result: null, ti: 0, endCheck: 0,
-    hold: scn.hold ?? null, survive: scn.survive ?? null, fog: !!opts.fog, seen: [[], []], hist: [], chron: [], fallen: [], histT: 0,
+    hold: scn.hold ?? null, survive: scn.survive ?? null, waves: scn.waves ?? null, wave: 0, fog: !!opts.fog, seen: [[], []], hist: [], chron: [], fallen: [], histT: 0,
     courier: !!opts.courier, orders: [], // orders: [{t, side, c}] still on the road, each for one regiment
   };
   const g = opts.grouchy, has = (x: any) => (!x.ifGrouchy || x.ifGrouchy === g) && (!x.unlessGrouchy || x.unlessGrouchy !== g);
@@ -409,7 +409,7 @@ function terrainSpeed(u: any, f: any, tu: any) {
 function damage(sim: Sim, u: any, cas: number, moraleScale = 1, att?: any) {
   if (u.dead) return;
   const tu = sim.tu, s = sim.s;
-  cas = Math.min(cas, u.men);
+  cas = Math.min(cas * (tu.types[u.type].tough ?? 1), u.men); // tough men (the Old Guard) take fewer casualties from the same blow
   u.men -= cas;
   s.side[u.side].lost += cas;
   s.side[1 - u.side].score += cas * tu.casualtyScore * (u.routed ? tu.pursuit.score : 1); // riding down broken men pays
@@ -539,7 +539,8 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
   // round shot falls short or wide more often the further it flies; canister at close range always tells
   const canister = u.spUntil > s.t && u.spKind === 'canister', volley = u.spUntil > s.t && u.spKind === 'volley', close = td < tu.canisterRange * (canister ? 2.2 : 1);
   const first = u.stance === 'holdfire' && u.fired >= tu.holdFire.loaded; // a fresh, carefully loaded first volley after holding fire
-  const miss = u.type === 'artillery' && !close && rand(s) > 1 - 0.65 * (td / rng(u, tu));
+  const G = tu.gunnery, ranged = u.zero?.id === tg.id ? Math.min(1, u.zero.n / G.shots) : 0; // a battery that has been firing at this target has found the range
+  const miss = u.type === 'artillery' && !close && rand(s) < G.miss * (td / rng(u, tu)) ** G.curve * (1 - G.ranging * ranged);
   const fm = u.type === 'skirmisher' || u.type === 'artillery' ? 1 : tu.formFire[u.form];
   const dmgForm = tu.types[tg.type].cav ? 0.8 * cf(tg, 'taken', tu) : tg.type === 'skirmisher' ? 0.6 : (u.type === 'artillery' ? tu.artDmg : tu.formDmg)[tg.form]; // round shot ploughs through dense columns and squares
   const rf = Math.max(tu.rangeFloor, 1 - 0.75 * (td / rng(u, tu)));
@@ -566,6 +567,7 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
   }
   u.reload = T.reload * (0.9 + 0.2 * rand(s)) * (volley ? 1.6 : canister ? 0.6 : 1) * (u.aura ? tu.commanderAura.reload : 1);
   u.fired = 0;
+  if (u.type === 'artillery') u.zero = { id: tg.id, n: u.zero?.id === tg.id ? u.zero.n + 1 : 0 };
   if (T.ammo && --u.ammo < 1) { log(sim, `${u.name} is out of ammunition!`); chron(sim, u.side, `${u.name} out of ammunition`); }
   const fx = Math.sin(u.facing), fz = Math.cos(u.facing);
   s.smoke.push({ x: u.x + fx * 3, z: u.z + fz * 3, age: 0 });
@@ -584,6 +586,15 @@ export function step(sim: Sim, dt: number) {
 
   // timeline
   while (s.ti < sim.tl.length && sim.tl[s.ti].t <= s.t) runEvent(sim, sim.tl[s.ti++]);
+  // endless waves (scn.waves): a fresh group marches in every `every` s, a little bigger each time, for as long as the stand lasts
+  const wv = s.waves;
+  if (wv && s.t >= (s.nextWave ??= wv.t)) {
+    s.nextWave += wv.every;
+    if (s.units.filter((u: any) => u.side === wv.side && !u.dead).length < wv.max) { // a cap keeps a long stand playable: while the field is full the next wave waits its turn
+      const k = s.wave++, en = wv.entries[k % wv.entries.length], units = wv.kinds.filter((w: any) => k >= (w.from ?? 0) && Math.floor(w.base + w.per * k) > 0).map((w: any) => ({ type: w.type, n: Math.floor(w.base + w.per * k), x: 0, z: 0, nat: en.nat, name: `${en.name} ${w.label}` }));
+      runEvent(sim, { type: 'reinforce', side: wv.side, units, entry: en, go: wv.go, spreadX: 1.6, msg: k % 5 === 0 ? `Wave ${k + 1}: ${en.name} troops press in on the ${en.from}!` : undefined });
+    }
+  }
   // couriers arriving with their orders (see command)
   if (s.orders?.some((o: any) => o.t <= s.t)) {
     const due = s.orders.filter((o: any) => o.t <= s.t).sort((a: any, b: any) => a.t - b.t);
@@ -870,6 +881,7 @@ export function step(sim: Sim, dt: number) {
   // morale: recovery, routs
   for (const u of live) {
     if (u.dead) continue;
+    if (u.mv) u.zero = null; // limbering and moving lose the range
     u.still = u.mv || u.routed || u.busy > 0 || u.limT > 0 ? 0 : u.still + dt; // seconds standing in place (not reforming or hitching up): after tuning.hold.after the regiment is posted (see posted())
     const half2 = half - 1;
     u.x = Math.max(-half2, Math.min(half2, u.x)); u.z = Math.max(-half2, Math.min(half2, u.z));
@@ -946,7 +958,7 @@ export function step(sim: Sim, dt: number) {
     // an army only counts as gone after 12s with nobody standing (routed men can still rally) and no help about to land
     s.gone ??= [0, 0];
     const alive = [0, 1].map((i) => {
-      const has = s.units.some((u: any) => u.side === i && !u.routed) || sim.tl.slice(s.ti).some((e: any) => e.type === 'reinforce' && e.side === i && e.t - s.t < 45);
+      const has = (s.waves && s.waves.side === i) || s.units.some((u: any) => u.side === i && !u.routed) || sim.tl.slice(s.ti).some((e: any) => e.type === 'reinforce' && e.side === i && e.t - s.t < 45);
       s.gone[i] = has ? 0 : s.gone[i] + 1;
       return s.gone[i] < 12;
     });

@@ -813,7 +813,8 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     const r = st.result, won = r.winner === me, draw = r.winner < 0;
     const el = $<HTMLElement>(hud, '#result');
     const held = [0, 0]; for (const z of st.zones) if (z.owner != null) held[z.owner] += z.value;
-    const title = draw ? 'DRAW' : won ? (r.decisive ? 'DECISIVE VICTORY' : 'VICTORY') : r.decisive ? 'CRUSHING DEFEAT' : 'DEFEAT';
+    const guard = st.waves ? 1 - st.waves.side : -1, lasted = Math.round(r.stats?.t ?? st.t); // endless waves: the title is about the besieged side
+    const title = st.waves ? (me === guard ? (won ? 'THE GUARD STANDS' : 'THE GUARD FALLS') : (won ? 'THE GUARD IS BROKEN' : 'THE GUARD HOLDS')) : draw ? 'DRAW' : won ? (r.decisive ? 'DECISIVE VICTORY' : 'VICTORY') : r.decisive ? 'CRUSHING DEFEAT' : 'DEFEAT';
     const rep = '<button id="rrep" class="alt">Watch replay</button><button id="rsave" class="alt">Save replay</button>';
     const next = src.replay ? '<button id="rretry">Watch again</button><button id="rmenu" class="alt">Back</button>'
       : opts.campaign ? `<button id="rcont">Continue the campaign</button>${won ? '' : '<button id="rretry" class="alt">Retry battle</button>'}${rep}`
@@ -822,7 +823,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       <table><tr><th></th><th>${SIDE_NAME[me]} (you)</th><th>${SIDE_NAME[1 - me]}</th></tr>
       <tr><td>Score</td><td class="n" data-v="${Number(r.score[me])}">0</td><td class="n" data-v="${Number(r.score[1 - me])}">0</td></tr>
       <tr><td>Men lost</td><td class="n" data-v="${Number(r.lost[me])}">0</td><td class="n" data-v="${Number(r.lost[1 - me])}">0</td></tr>
-      <tr><td>Objectives held</td><td>${held[me]}</td><td>${held[1 - me]}</td></tr></table>
+      <tr><td>Objectives held</td><td>${held[me]}</td><td>${held[1 - me]}</td></tr>${st.waves ? `<tr><td>Time held</td><td colspan="2">${Math.floor(lasted / 60)}:${pad(lasted % 60)} · ${st.wave} waves came</td></tr>` : ''}</table>
       <p class="sub">The verdict weighs objectives held ${Math.round(TUNING.endHeldWeight * 100)}%, points ${Math.round((1 - TUNING.endHeldWeight) * 100)}%: a side can win with fewer points.</p>
       ${reportHtml(r)}
       <div class="rb">${next}</div></div>`;
@@ -974,7 +975,7 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
       if (clk !== lastClk) { $(hud, '#clk').textContent = clk; lastClk = clk; }
       if (st.weather !== lastWx) { $(hud, '#wx').textContent = TUNING.weather[st.weather].label; lastWx = st.weather; }
       const timed = st.hold && st.t < st.hold.t, rem = Math.max(0, (timed ? st.hold.t : scn.duration) - st.t); // a timed objective counts down to its own deadline
-      $(hud, '#left').textContent = `${Math.floor(rem / 60)}:${pad(rem % 60)} ${timed ? 'to hold' : 'left'}`;
+      $(hud, '#left').textContent = st.waves ? `Held ${Math.floor(st.t / 60)}:${pad(st.t % 60)} · wave ${st.wave}` : `${Math.floor(rem / 60)}:${pad(rem % 60)} ${timed ? 'to hold' : 'left'}`; // a last stand counts up: how long the line has lasted
       for (const w of [120, 30]) if (rem <= w && !warned.has(w) && !st.over) { warned.add(w); banner(w >= 60 ? `${w / 60} MINUTES LEFT` : `${w} SECONDS LEFT`, timed ? `Hold ${st.zones.find((z: any) => z.id === st.hold.zone)?.name ?? 'the objective'}: ${st.hold.side === me ? 'you win' : 'the foe wins'} if it stands` : st.survive ? 'The army still fighting at the end decides the day' : 'The objectives held at the end decide the day', '#e8c46a'); cue('alert'); }
       for (const a of abilities) {
         const b = $<HTMLElement>(hud, `[data-ab="${a}"]`), cd = sd.cd[a] ?? 0, ab = abCfg(a);

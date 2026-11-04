@@ -1,5 +1,6 @@
 {
   "id": "ligny",
+  "scale": 1.25,
   "title": "Ligny",
   "date": "16 June 1815, evening",
   "blurb": "Napoleon himself faces Blücher's Prussians, drawn up on the gentle slope behind the Ligny brook. The marshy, willow-lined Ligne winds from Wagnelée through St-Amand and Ligny toward Tongrinelle, and every village on it is a fortress of stone farms and orchards. Above them the Bussy windmill watches the whole field. Break the centre at Ligny and the Prussian army is finished as a fighting force.",
@@ -579,8 +580,7 @@
       "x": -236,
       "z": -60,
       "r": 17,
-      "value": 2,
-      "owner": 1
+      "value": 2
     },
     {
       "id": "sa",
@@ -588,8 +588,7 @@
       "x": -184,
       "z": 20,
       "r": 20,
-      "value": 3,
-      "owner": 1
+      "value": 3
     },
     {
       "id": "li",
@@ -597,8 +596,7 @@
       "x": -25,
       "z": -52,
       "r": 22,
-      "value": 4,
-      "owner": 1
+      "value": 4
     },
     {
       "id": "bw",
@@ -606,8 +604,7 @@
       "x": -82,
       "z": -160,
       "r": 20,
-      "value": 3,
-      "owner": 1
+      "value": 3
     },
     {
       "id": "so",
@@ -615,8 +612,7 @@
       "x": 160,
       "z": -178,
       "r": 18,
-      "value": 3,
-      "owner": 1
+      "value": 3
     },
     {
       "id": "to",
@@ -624,8 +620,7 @@
       "x": 252,
       "z": -66,
       "r": 15,
-      "value": 1.5,
-      "owner": 1
+      "value": 1.5
     }
   ],
   "entry": [

@@ -68,10 +68,10 @@ function segDist(px: number, pz: number, ax: number, az: number, bx: number, bz:
   return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
 }
 
-/** The river whose water is here (off its bridges), or null. */
+/** The river whose water is here (off its bridges), or null. A bridge is [x, z] or [x, z, half-width]: ground within the half-width (7 by default) of its centre is dry, so a wide bridge passes a broader front. */
 export function riverAt(scn: any, x: number, z: number): any {
   for (const r of scn.map.rivers ?? []) {
-    if (r.bridges.some(([bx, bz]: number[]) => Math.hypot(x - bx, z - bz) < 7)) continue;
+    if (r.bridges.some(([bx, bz, bw]: number[]) => Math.hypot(x - bx, z - bz) < (bw ?? 7))) continue;
     for (let i = 0; i + 1 < r.pts.length; i++) if (segDist(x, z, r.pts[i][0], r.pts[i][1], r.pts[i + 1][0], r.pts[i + 1][1]) < r.width / 2) return r;
   }
   return null;
@@ -95,7 +95,7 @@ export function deepAt(scn: any, x: number, z: number): any {
   const X = Math.floor((x + half) / 4), Z = Math.floor((z + half) / 4);
   if (X >= 0 && Z >= 0 && X < n && Z < n && !G[Z * n + X]) return null;
   for (const r of m.rivers ?? []) {
-    if (r.ford || r.bridges.some(([bx, bz]: number[]) => Math.hypot(x - bx, z - bz) < 7)) continue;
+    if (r.ford || r.bridges.some(([bx, bz, bw]: number[]) => Math.hypot(x - bx, z - bz) < (bw ?? 7))) continue;
     for (let i = 0; i + 1 < r.pts.length; i++) if (segDist(x, z, r.pts[i][0], r.pts[i][1], r.pts[i + 1][0], r.pts[i + 1][1]) < r.width / 2) return r;
   }
   return null;
