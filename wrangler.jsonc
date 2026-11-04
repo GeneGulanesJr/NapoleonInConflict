@@ -1,0 +1,9 @@
+{
+  // Cloudflare Workers Builds: `npm run build` writes the game to dist/, which is served as static assets.
+  // "name" must match the Worker in the Cloudflare dashboard (change it here if that one is named differently).
+  "name": "napoleon-in-conflict",
+  "compatibility_date": "2026-06-01",
+  "assets": { "directory": "./dist" },
+  // `wrangler preview` (branch and PR builds) needs this block; it can be empty
+  "previews": {}
+}

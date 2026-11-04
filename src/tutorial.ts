@@ -13,9 +13,9 @@ const base = (st: any, me: number): Base => ({
 const STEPS: [string, Test][] = [
   ['Deploy: select regiments, then right-click or drag inside the blue area to place them. Enter starts the battle.', (st) => st.phase !== 'deploy'],
   ['Select: left-click a regiment, or drag a box round several.', (_st, _me, sel) => sel.length > 0],
-  ['Move: right-click the ground to march there. Right-drag forms a line facing the way you drag.', (st, me) => mine(st, me).some((u: any) => (u.tx != null && !u.march) || u.chase != null)],
-  ['Formation: Z line (most muskets), X column (fastest), C square.', (st, me, _sel, b) => mine(st, me).some((u: any) => b.forms[u.id] && u.form !== b.forms[u.id])],
-  ['Cavalry rides down foot in line or column: form square (C), or press B and the regiment squares up by itself when horse comes near.', (st, me) => mine(st, me).some((u: any) => u.form === 'square' || u.auto)],
+  ['Move: right-click the ground to march there. Right-drag draws a front: the regiments fill the width you drag and face away from you.', (st, me) => mine(st, me).some((u: any) => (u.tx != null && !u.march) || u.chase != null)],
+  ['Formation: Z line (most muskets), X column (fastest), C square. Horse: Z squadron, X wedge.', (st, me, _sel, b) => mine(st, me).some((u: any) => b.forms[u.id] && u.form !== b.forms[u.id])],
+  ['Cavalry rides down foot in line or column: form square (C) when horse comes near. A square takes a few seconds to form, so give the order early.', (st, me) => mine(st, me).some((u: any) => u.form === 'square')],
   ['Artillery: select the battery and right-click an enemy regiment. Round shot ploughs through columns.', (st, me) => { const g = mine(st, me).filter((u: any) => u.type === 'artillery'); return !g.length || g.some((u: any) => u.chase != null); }],
   ['Objectives decide the day: march onto a flag and hold it until it turns blue.', (st, me, _sel, b) => st.zones.filter((z: any) => z.owner === me).length > b.zones],
   ['Help is at hand: call a regiment from the Reserves panel, or a tactical aid with F1-F3.', (st, me, _sel, b) => base(st, me).res < b.res || Object.values(st.side[me].cd).some((v: any) => v > 0)],

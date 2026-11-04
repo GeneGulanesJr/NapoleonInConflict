@@ -15,8 +15,9 @@ Five linked battles: **Charleroi → Quatre Bras → Ligny → Genappe → Water
 ## Battle rules worth knowing
 - Regiments route round deep rivers (by the bridges), woods and villages, and columns, guns and horse take the roads when that is quicker.
 - A long march is made in column and the line forms again on arrival (or as soon as the enemy is within musket range). A group order marches at its slowest member's pace. A short order to the rear steps back facing the enemy.
+- Orders the game cannot carry out (a shaken regiment reforming, a full farm, too few points for a draft) say so in a message. Restart and Quit (without saving) ask twice. Halt (H) leaves a garrison in its farm.
 - **Hold fire** (G): line, guard and guns wait until the enemy is close, then give a heavy first volley, which can make a charge falter.
-- Fire shakes what it hits in proportion to the losses (slower reload, weaker fire, no reforming); a cavalry charge stuns foot that is not in square; night falls late in the long battles.
+- Fire shakes what it hits in proportion to the losses (slower reload, weaker fire, no reforming); a cavalry charge stuns foot that is not in square (a square takes about 3 s to form, and one caught still forming is slaughtered; formed, it marches very slowly); night falls late in the long battles.
 - With regiments selected, the cursor shows what a right-click does: sword = attack, house = garrison, arrow = march. Icons beside a regiment's plate: shield posted, burst shaken, stars stunned, drop tired, crossed blades charging, red arrow wavering, white flag routed. Select one regiment for its full card.
 
 ## Run
@@ -32,9 +33,9 @@ Press **?** or **F10** in battle for the full list.
 
 - **Camera**: WASD / arrows / screen edge pan · Q/E or middle-drag rotate · wheel zooms at the cursor · F focus selection · O follow the selection · Ctrl+F5-F8 save a view, F5-F8 fly back to it · Backspace last alert · Tab big map, drag on the minimap to pan
 - **Select**: left-click / drag · Shift adds · double-click all of that kind · Ctrl+A all · Shift+1-9 save group, 1-9 recall · I next idle
-- **Orders**: right-click move or attack · right-drag draw a front (the drag is the width the group fills: wider spreads the regiments out, narrower packs them and they form column to fit; ghosts show where each will stand and in what formation) · double right-click double time · Alt+right-click/drag move as a block · Ctrl+right-click face that way · Shift+right-click waypoint · right-click a farm to garrison · A then click attack-move · H halt · G stance (hold / attack / hold fire)
-- **Formations**: Z/X/C line / column / square · B auto-square · V unit special · K + click bayonet charge
-- **Aid and reserves**: F1/F2/F3 tactical aid · N replenish · reserves panel to call in a regiment
+- **Orders**: right-click move or attack · right-drag draw a front (the drag is the width the group fills: wider spreads the regiments out, narrower packs them, then a second rank forms behind, then column, then single file; ghosts show where each will stand and in what formation) · double right-click double time · Alt+right-click/drag move as a block · Ctrl+right-click face that way · Shift+right-click waypoint · right-click a farm to garrison · A then click attack-move · H halt · G stance (hold / attack / hold fire)
+- **Formations**: Z/X/C line / column / square (horse: Z squadron, X wedge: hits and shocks harder once formed, but wheels slowly and takes more fire) · V unit special · K + click bayonet charge
+- **Aid and reserves**: F1/F2/F3 tactical aid · N replenish (not in combat or with the enemy near) · reserves panel to call in a regiment
 - **Game**: Space pause · +/- speed (1-8×) · Enter start the battle (deployment) · Esc menu (restart, quit, settings) · J message log · M mute · R radio
 
 ## Tuning

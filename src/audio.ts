@@ -137,23 +137,47 @@ function tick() {
 }
 /** Start or stop the march of nation `nat` (scenario nat code). Safe to call before the user has interacted (it simply stays silent until unlock). */
 export function music(on: boolean, nat = 'fr') {
-  if (!on) { clearInterval(timer); timer = 0; try { speechSynthesis.cancel(); } catch { /* no speech */ } return; }
+  if (!on) { clearInterval(timer); timer = 0; clip?.pause(); try { speechSynthesis.cancel(); } catch { /* no speech */ } return; }
   if (!init() || !ctx || timer) return;
   march = MARCH[nat] ?? MARCH.gb;
   ctx.resume(); nextT = ctx.currentTime + 0.1; step = 0; intensity = 0;
   timer = window.setInterval(tick, 50);
 }
 
-// ---------------------------------------------------------------- officer radio (browser voice; swap for recorded clips later)
+// ---------------------------------------------------------------- officer radio (MiniMax clips from scripts/gen-voice.ts, browser voice for the rest)
 export let radioOn = pref('nic-radio', true);
 export const toggleRadio = () => { radioOn = !radioOn; setPref('nic-radio', radioOn); return radioOn; };
 let lastSay = 0;
-/** prio 2 interrupts whatever is being said; otherwise lines are dropped if the radio is busy. */
+let clip: HTMLAudioElement | null = null;
+const CLIPS = import.meta.glob<string>('./voice/*.mp3', { eager: true, query: '?url', import: 'default' });
+const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); // same as scripts/gen-voice.ts
+/** Lines with a name are a name clip plus a fragment clip: [pattern, name first?, fragment]; the fragments are in LINES in scripts/gen-voice.ts. */
+const FRAG: [RegExp, boolean, string][] = [
+  [/^(.+) has earned its stripes\.$/, true, 'has earned its stripes.'], [/^(.+) is breaking, sir!$/, true, 'is breaking, sir!'],
+  [/^We have lost (.+)[.!]$/, false, 'We have lost'], [/^(.+) is ours, sir\.$/, true, 'is ours, sir.'],
+];
+/** The clip urls that say `text`, in order; empty if any is missing (the browser voice then says the whole line). */
+function clipsFor(text: string, fr: string): string[] {
+  for (const [re, nameFirst, frag] of FRAG) {
+    const m = re.exec(text);
+    if (m) { const a = CLIPS[`./voice/n-${slug(m[1])}.mp3`], b = CLIPS[`./voice/${slug(frag)}${fr}.mp3`]; return a && b ? (nameFirst ? [a, b] : [b, a]) : []; }
+  }
+  const u = CLIPS[`./voice/${slug(text)}${fr}.mp3`]; return u ? [u] : [];
+}
+function play(urls: string[]) {
+  clip = new Audio(urls[0]); clip.volume = 0.9;
+  if (urls.length > 1) clip.onended = () => play(urls.slice(1));
+  clip.play().catch(() => { /* autoplay blocked */ });
+}
+/** prio 2 interrupts whatever is being said; otherwise lines are dropped if the radio is busy. A line with a clip plays it in English or French at random. */
 export function say(text: string, prio = 0) {
-  if (!radioOn || muted || typeof speechSynthesis === 'undefined') return;
-  const now = performance.now();
-  if ((speechSynthesis.speaking || now - lastSay < 2500) && prio < 2) return;
-  if (prio >= 2) speechSynthesis.cancel();
+  if (!radioOn || muted) return;
+  const now = performance.now(), tts = typeof speechSynthesis !== 'undefined';
+  if (((clip && !clip.paused && !clip.ended) || (tts && speechSynthesis.speaking) || now - lastSay < 2500) && prio < 2) return;
+  if (prio >= 2) { clip?.pause(); if (tts) speechSynthesis.cancel(); }
+  const urls = clipsFor(text, Math.random() < 0.5 ? '.fr' : '');
+  if (urls.length) { play(urls); lastSay = now; return; }
+  if (!tts) return;
   const u = new SpeechSynthesisUtterance(text), vs = speechSynthesis.getVoices();
   u.rate = 1.08; u.pitch = 0.8; u.volume = 0.9;
   const v = vs.find((q) => /en-GB/i.test(q.lang)) ?? vs.find((q) => /^en/i.test(q.lang));
