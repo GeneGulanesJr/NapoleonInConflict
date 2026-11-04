@@ -526,7 +526,7 @@ export function createView(host: HTMLElement) {
   const fig = (g: THREE.BufferGeometry, n: number, center: [number, number, number] | null, shadow = false) => mkI(g, n, Object.assign(toon({ vertexColors: true, gradientMap: figRamp, color: new THREE.Color(GL, GL, GL) }), { flatShading: true }) /* faceted from indexed parts: ~half the vertices */, center, shadow);
   const body = fig(bodyG, 5000, [0, 0.35, 0]), legL = fig(legG(0.095), 5000, [0, -0.3, 0]), legR = fig(legG(-0.095), 5000, [0, -0.3, 0]);
   const armsCarry = fig(armsCarryG, 5000, [0, -0.2, 0.05]), armsAim = fig(armsAimG, 3000, [0, -0.05, 0.4]), armsRide = fig(armsRideG, 1600, [0, -0.1, 0.2]);
-  const packM = fig(packG, 5000, [0, 0.35, 0]), baseM = fig(cyl(0.31, 0.29, 0, 0.05, BASE, 10), 5000, [0, 0, 0]);
+  const packM = fig(packG, 5000, [0, 0.35, 0]);
   // one invisible box casts the whole soldier's shadow (cheaper than every part casting); slightly inside the silhouette so it never darkens the figure
   const shadowP = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 1.8, 0.28).translate(0, 0.9 - HIP, 0), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), 5000);
   shadowP.instanceMatrix = body.instanceMatrix; shadowP.count = 0; shadowP.frustumCulled = false; shadowP.castShadow = true; shadowP.receiveShadow = false; scene.add(shadowP);
@@ -538,7 +538,6 @@ export function createView(host: HTMLElement) {
   const bannerM = mkI(paint(new THREE.BoxGeometry(1.0, 0.75, 0.05).translate(0.55, 3.1, 0), 0xffffff), 400, toon({ color: 0xffffff }), null, false);
   const eagleM = mkI(paint(new THREE.BoxGeometry(0.32, 0.32, 0.07).translate(0.55, 3.1, 0), P.brass), 400, toon({ vertexColors: true }), null, false);
   const horses = fig(horseG, 1500, [0, 0.1, 0.2], true), legsF = fig(legsFG, 1500, [0, -0.5, 0]), legsH = fig(legsHG, 1500, [0, -0.5, 0]); // legs cast no shadow: the body's is enough
-  const hbaseM = fig(cyl(0.55, 0.53, 0, 0.05, BASE, 12, 1.9), 1500, [0, 0, 0]);
   const HORSE_COL = [0x7a5236, 0x9a6638, 0x34302c, 0xa8a49a].map((h) => new THREE.Color(h));
   const guns = fig(gunG, 300, [0, 0.8, 0], true);
   // figure rig: rootAt places the feet; joint hangs a child (hip, shoulder, horse legs) off a parent matrix with its own pitch (+ = forward) and roll
@@ -602,7 +601,7 @@ export function createView(host: HTMLElement) {
 
   // per regiment: smoothed centre and facing, its speed, and per man MS floats: x, z, facing, vx, vz, gait phase
   const MS = 6;
-  type Vis = { x: number; z: number; f: number; m: Float32Array; form: string; rs: number; n?: number; side: number; kind: number; seenT?: number };
+  type Vis = { x: number; z: number; f: number; m: Float32Array; form: string; rs: number; n?: number; side: number; kind: number; seenT?: number; th?: number }; // th: the thinning (every th-th man drawn) of the last frame
   const GHOST = 30; // fog of war: seconds an enemy's plate lingers where it was last seen
   // crowd: last frame's men (and the houses) in a flat grid, counting-sorted by cell, so each man only looks at his neighbours to shoulder them apart
   const CG = 2.4, CMAX = 9000, cX = new Float32Array(CMAX), cZ = new Float32Array(CMAX), cR = new Float32Array(CMAX), cU = new Int32Array(CMAX), cI = new Int32Array(CMAX), cS = new Int8Array(CMAX), cCell = new Int32Array(CMAX), cOrd = new Int32Array(CMAX);
@@ -613,7 +612,7 @@ export function createView(host: HTMLElement) {
     cN = 0;
     const add = (x: number, z: number, r: number, u: number, i: number, s: number) => { if (cN < CMAX) { cX[cN] = x; cZ[cN] = z; cR[cN] = r; cU[cN] = u; cI[cN] = i; cS[cN++] = s; } };
     for (let h = 0; h < houseXZ.length; h += 2) add(houseXZ[h], houseXZ[h + 1], 1.7, -1, h, -1);
-    for (const [id, v] of vis) if (v.form !== '' && v.n) for (let i = 0; i < v.n; i++) { const o = i * MS; if (v.m[o] === v.m[o]) add(v.m[o], v.m[o + 1], figR(v.kind, i), id, i, v.side); }
+    for (const [id, v] of vis) if (v.form !== '' && v.n) for (let i = 0; i < v.n; i++) { const o = i * MS; if (v.th! > 1 && i % v.th!) continue; /* men not drawn are not tracked */ if (v.m[o] === v.m[o]) add(v.m[o], v.m[o + 1], figR(v.kind, i), id, i, v.side); }
     cW = Math.ceil(mapSize / CG) + 2; const cells = cW * cW;
     if (cStart.length < cells + 1) { cStart = new Int32Array(cells + 1); cFill = new Int32Array(cells); } else cStart.fill(0);
     for (let k = 0; k < cN; k++) { cCell[k] = cellOf(cZ[k]) * cW + cellOf(cX[k]); cStart[cCell[k] + 1]++; }
@@ -659,6 +658,7 @@ export function createView(host: HTMLElement) {
     if (u.routed) { out[0] = (hash(i * 3 + u.id) - 0.5) * 16; out[1] = (hash(i * 7 + u.id) - 0.5) * 10; return; } // broken ranks scatter
     if (kind === 'skirmisher') { out[0] = (hash(i * 3 + u.id) - 0.5) * 16; out[1] = (hash(i * 7 + u.id) - 0.5) * 7; return; }
     if (kind === 'lancer' || kind === 'cuirassier') {
+      if (u.form === 'wedge') { const r = Math.floor((Math.sqrt(8 * i + 1) - 1) / 2), c = i - (r * (r + 1)) / 2; out[0] = (c - r / 2) * 2.2; out[1] = r * -2.2; return; } // the wedge: rank r has r + 1 riders, the point in front (mirrors foot())
       const cols = n > 10 ? Math.ceil(n / 2) : n, r = Math.floor(i / cols), c = i % cols;
       out[0] = (c - (cols - 1) / 2) * 2.4; out[1] = r * -3; return;
     }
@@ -754,7 +754,7 @@ export function createView(host: HTMLElement) {
   for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(ringGeo, ringMat(0xff5533)); m.visible = false; m.renderOrder = 5; scene.add(m); fxRings.push(m); }
   const reticle = new THREE.Mesh(ringGeo, ringMat(0xffffff)); reticle.visible = false; reticle.renderOrder = 6; scene.add(reticle);
   const lineGeo = new THREE.BufferGeometry();
-  lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(120 * 3), 3));
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(400 * 3), 3));
   const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x9be37a, transparent: true, opacity: 0.85, depthTest: false }));
   lines.frustumCulled = false; lines.renderOrder = 4; scene.add(lines);
 
@@ -866,7 +866,7 @@ export function createView(host: HTMLElement) {
     }
 
     // units
-    let nf = 0, nh = 0, ng = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0, nbs = 0, nac = 0, naa = 0, nar = 0, nsh = 0, nbg = 0, npk = 0;
+    let nf = 0, nh = 0, ng = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0, nac = 0, naa = 0, nar = 0, nsh = 0, nbg = 0, npk = 0;
     const live = new Set<number>();
     const seenSet = state.fog ? new Set<number>(state.seen?.[viewer] ?? []) : null; // fog of war: enemies you cannot see are not drawn
     const k = 1 - Math.exp(-10 * dt);
@@ -909,6 +909,7 @@ export function createView(host: HTMLElement) {
       // footprint ~25*FS plus 15 for shadows thrown into view and the one-frame-old camera; men snap back to their slots when it returns (form = '')
       const cull = still && !frustum.intersectsSphere(cullS.set(v3.set(v.x, heightAt(scn, v.x, v.z), v.z), 25 * FS + 15));
       const tf = u.facing, st = Math.sin(tf), ct = Math.cos(tf); // slots follow the order's facing at once; the men take their time getting there
+      const sideCol = u.routed ? BASE_COL.routed : u.side === viewer ? BASE_COL.mine : BASE_COL.foe; // blue yours, red theirs, grey broken: French and Prussian coats are both blue
       tmpC.setHex(u.routed ? 0x8d8a82 : NAT[u.nat] ?? 0x888888);
       if (u.hurt < 0.18 && !u.routed) tmpC.lerp(WHITE, 0.6); // hit flash
       plumeC.setHex(u.type === 'skirmisher' ? 0x4a8a3a : PLUME[u.nat] ?? 0xe9e4d6);
@@ -918,7 +919,7 @@ export function createView(host: HTMLElement) {
       const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number) => {
         const h1 = hash(u.id * 13 + fi * 7), h2 = hash(u.id * 5 + fi * 3), h3 = hash(u.id * 3 + fi * 11), rider = mount != null, walk = mv && !rider;
         if (mount) mRoot.compose(V.set(0, 1.44 - HY - HIP * 1.1, -0.02), Q.identity(), SV.setScalar(1.1)).premultiply(mount);
-        else { const sc = sc0 * grow * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk && Math.abs(s) > 0.55 ? 0.1 * sc : 0), z, yaw, sc); baseM.setMatrixAt(nbs++, mRoot); } // toy hop on each step
+        else { const sc = sc0 * grow * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk && Math.abs(s) > 0.55 ? 0.1 * sc : 0), z, yaw, sc); } // toy hop on each step
         const lf = u.fired - h3 * 0.2, kick = lf >= 0 && lf < 0.25 ? 1 - lf / 0.25 : 0; // the volley ripples down the line
         const aim = !rider && !u.routed && u.type !== 'commander' && (charging || inFight && (u.type === 'skirmisher' ? (u.fired + h3 * 5) % 5 < 1.6 : u.fired < 0.8 || u.reload < 0.8));
         const jab = foe ? Math.max(0, Math.sin(clock * 7 + h2 * 6.28)) : 0; // bayonet thrusts and sabre cuts in melee
@@ -943,10 +944,9 @@ export function createView(host: HTMLElement) {
         else { shakoM.setMatrixAt(nsh, mBody); shakoM.setColorAt(nsh++, plumeC); }
         if (u.type === 'skirmisher') skirM.setMatrixAt(nsk++, mBody);
       };
-      const fb = [1e9, -1e9, 1e9, -1e9]; // the figures' footprint in the regiment's frame, for its base
-      const snapAll = v.form === '', top = v.rs * 1.2 + T.speed * 1.1, gait = (u.routed ? 13 : charging ? 11 : 8) / T.speed;
+      const thin = isArt ? 1 : cam.dist > 440 ? 3 : cam.dist > 260 ? 2 : 1, snapAll = v.form === '' || v.th !== thin, top = v.rs * 1.2 + T.speed * 1.1, gait = (u.routed ? 13 : charging ? 11 : 8) / T.speed;
       // zoomed out: every 2nd/3rd man is drawn, bigger, so ranks still read as men (not barcode, not a slab); guns keep their crew
-      const thin = isArt ? 1 : cam.dist > 440 ? 3 : cam.dist > 260 ? 2 : 1, grow = thin === 3 ? 1.7 : thin === 2 ? 1.45 : 1 + 0.3 * farT;
+      const grow = thin === 3 ? 1.7 : thin === 2 ? 1.45 : 1 + 0.3 * farT;
       for (let i = 0; i < (cull ? 0 : n); i++) {
         if (thin > 1 && i % thin) continue;
         if (isArt) {
@@ -990,8 +990,6 @@ export function createView(host: HTMLElement) {
           m[o + 5] += dt * gait * Math.max(0.6, Math.min(1.8, sp)); // his own gait phase, faster when he hurries
         }
         const wx = m[o], wz = m[o + 1], yaw = m[o + 2], mv = Math.hypot(m[o + 3], m[o + 4]) > 0.25, s = Math.sin(m[o + 5]);
-        const lx = (wx - v.x) * ct - (wz - v.z) * st, lz = (wx - v.x) * st + (wz - v.z) * ct;
-        fb[0] = Math.min(fb[0], lx); fb[1] = Math.max(fb[1], lx); fb[2] = Math.min(fb[2], lz); fb[3] = Math.max(fb[3], lz);
         const y = heightAt(scn, wx, wz);
         if ((u.routed || isCav && mv) && Math.random() < dt * (u.routed ? 0.12 : 0.05)) spawn(3, wx, y + 0.5, wz, 0.5, 2.4);
         if (isArt) {
@@ -1002,7 +1000,7 @@ export function createView(host: HTMLElement) {
         } else if (isCav) {
           if (nh < 1490 && nf < 4990) { // gallop: the body rocks, front and hind legs reach and gather in turn
             const hp = m[o + 5] * 1.4, hs = Math.sin(hp), gal = mv ? (charging ? 1 : 0.55) : 0;
-            rootAt(mRoot, wx, y, wz, yaw, 1.4 * FS * grow); hbaseM.setMatrixAt(nh, mRoot);
+            rootAt(mRoot, wx, y, wz, yaw, 1.4 * FS * grow);
             joint(mHorse, mRoot, 0, HY + gal * Math.abs(Math.cos(hp)) * 0.14, 0, gal ? gal * hs * 0.12 : Math.sin(clock * 0.7 + i) * 0.02);
             const hc = HORSE_COL[Math.floor(hash(u.id * 7 + i) * 4)];
             horses.setMatrixAt(nh, mHorse); horses.setColorAt(nh, hc); legsF.setColorAt(nh, hc); legsH.setColorAt(nh, hc);
@@ -1012,8 +1010,8 @@ export function createView(host: HTMLElement) {
           }
         } else if (nf < 4990) addFig(i, wx, y, wz, yaw, 1.7 * FS, null, mv, s);
       }
-      v.form = cull || thin > 1 ? '' : u.form; // '' = every man snaps to his slot when the camera comes back in
-      if (fb[0] < 1e9) { const mg = (isCav ? 1.4 : 0.9) * FS; baseRing(v.x, v.z, st, ct, [fb[0] - mg, fb[1] + mg, fb[2] - mg, fb[3] + mg], bTh, u.routed ? BASE_COL.routed : u.side === viewer ? BASE_COL.mine : BASE_COL.foe); }
+      v.form = cull ? '' : u.form; v.th = thin; // '' = every man snaps to his slot when the camera comes back in; so does a change of thinning (the men not drawn were not moving)
+      if (!cull && (selected.has(u.id) || u.id === hoverId)) baseRing(v.x, v.z, st, ct, foot(u, tu), bTh, sideCol); // the ground it covers, only for the regiment you are looking at
       if (!cull && (u.type === 'line' || u.type === 'guard') && !u.routed && nfl < 399) {
         const gy = heightAt(scn, v.x, v.z), sway = Math.sin(clock * 3 + u.id) * 0.35;
         put(flagM, nfl, v.x, gy, v.z, v.f, 1.3 * FS);
@@ -1049,9 +1047,9 @@ export function createView(host: HTMLElement) {
       const sk = full ? unitStatus(u, state.t, tu).join(' ') : ''; // status icons beside full plates only
       if (sk !== p.sk) { p.st.innerHTML = sk && sk.split(' ').map((k) => `<img src="${pxUrl(k)}">`).join(''); p.sk = sk; }
     }
-    horses.count = legsF.count = legsH.count = hbaseM.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; baseM.count = nbs; packM.count = npk;
+    horses.count = legsF.count = legsH.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; packM.count = npk;
     body.count = legL.count = legR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; shakoM.count = nsh; belgM.count = nbg; bearM.count = nbr; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
-    const figs = [body, packM, legL, legR, armsCarry, armsAim, armsRide, baseM, shakoM, belgM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, hbaseM, guns];
+    const figs = [body, packM, legL, legR, armsCarry, armsAim, armsRide, shakoM, belgM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, guns];
     // upload only the live [0, count) slice; clear first so ranges never pile up across frames (hull twins share these attributes)
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
     for (const m of [...figs, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
@@ -1102,10 +1100,10 @@ export function createView(host: HTMLElement) {
       r.visible = true; r.position.set(v.x, heightAt(scn, v.x, v.z) + 0.6, v.z); r.scale.setScalar((u.type === 'skirmisher' ? 7 : 6) * FS);
       let tx: number | null = u.tx, tz: number | null = u.tz;
       if (u.chase != null) { const t = state.units.find((q: any) => q.id === u.chase); if (t) { tx = t.x; tz = t.z; } }
-      if (tx != null && u.queue?.length) { let px = tx, pz = tz as number; for (const q of u.queue) { if (nl >= 58) break; lp.setXYZ(nl * 2, px, heightAt(scn, px, pz) + 1, pz); lp.setXYZ(nl * 2 + 1, q[0], heightAt(scn, q[0], q[1]) + 1, q[1]); nl++; px = q[0]; pz = q[1]; } }
+      if (tx != null && u.queue?.length) { let px = tx, pz = tz as number; for (const q of u.queue) { if (nl >= 198) break; lp.setXYZ(nl * 2, px, heightAt(scn, px, pz) + 1, pz); lp.setXYZ(nl * 2 + 1, q[0], heightAt(scn, q[0], q[1]) + 1, q[1]); nl++; px = q[0]; pz = q[1]; } }
       if (tx != null && tz != null) { // by the waypoints of its route (the last path entry is the goal it was planned for)
         let px = v.x, pz = v.z;
-        for (const q of [...(u.path?.slice(0, -1) ?? []), [tx, tz]]) { if (nl >= 59) break; lp.setXYZ(nl * 2, px, heightAt(scn, px, pz) + 1, pz); lp.setXYZ(nl * 2 + 1, q[0], heightAt(scn, q[0], q[1]) + 1, q[1]); nl++; px = q[0]; pz = q[1]; }
+        for (const q of [...(u.path?.slice(0, -1) ?? []), [tx, tz]]) { if (nl >= 199) break; lp.setXYZ(nl * 2, px, heightAt(scn, px, pz) + 1, pz); lp.setXYZ(nl * 2 + 1, q[0], heightAt(scn, q[0], q[1]) + 1, q[1]); nl++; px = q[0]; pz = q[1]; }
       }
     }
     for (let i = nr; i < selRings.length; i++) selRings[i].visible = false;
@@ -1123,7 +1121,7 @@ export function createView(host: HTMLElement) {
       const r = auraRings[nau++]; r.visible = true; r.position.set(v.x, heightAt(scn, v.x, v.z) + 0.5, v.z); r.scale.setScalar(tu.commanderAura.radius);
     }
     for (let i = nau; i < auraRings.length; i++) auraRings[i].visible = false;
-    if (dragLine && nl < 58) { // right-drag preview: the line the group will form, plus a tick showing which way it will face
+    if (dragLine && nl < 198) { // right-drag preview: the line the group will form, plus a tick showing which way it will face
       const d = dragLine, mx = (d.ax + d.bx) / 2, mz = (d.az + d.bz) / 2;
       lp.setXYZ(nl * 2, d.ax, heightAt(scn, d.ax, d.az) + 1, d.az); lp.setXYZ(nl * 2 + 1, d.bx, heightAt(scn, d.bx, d.bz) + 1, d.bz); nl++;
       lp.setXYZ(nl * 2, mx, heightAt(scn, mx, mz) + 1, mz); lp.setXYZ(nl * 2 + 1, mx + Math.sin(d.f) * 8, heightAt(scn, mx, mz) + 1, mz + Math.cos(d.f) * 8); nl++;

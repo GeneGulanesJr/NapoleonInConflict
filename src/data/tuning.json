@@ -48,9 +48,9 @@
       "speed": 3.3,
       "range": 22,
       "reload": 5,
-      "power": 0.08,
-      "melee": 0.3,
-      "morale": 85,
+      "power": 0.12,
+      "melee": 0.4,
+      "morale": 95,
       "cost": 20,
       "perFig": 9,
       "cav": false
@@ -121,12 +121,14 @@
   "formSpeed": {
     "line": 0.8,
     "column": 1.25,
-    "square": 0.25
+    "square": 0.15
   },
   "artDmg": {
     "line": 1,
     "column": 1.5,
-    "square": 2
+    "square": 2,
+    "squadron": 1,
+    "wedge": 1.4
   },
   "turn": {
     "_note": "Wheel rates in radians/s by formation (foot) or arm; slack = the most a unit may be off its heading and still step off (else it wheels in place first); arc = the most a target may be off the facing and still be fired on.",
@@ -152,9 +154,12 @@
     "up": 2
   },
   "formChangeTime": 2.8,
+  "squareForming": { "_note": "A square still forming (formChangeTime s after the order) has none of its protection: horse hit it `melee` x as hard (a line takes 1.2, a column 2) and its charge shocks and stuns `impact` x, with no square bonus on the morale test", "melee": 2.4, "impact": 1.5 },
+  "cavForms": { "_note": "Horse formations: squadron (the default, a wide front) or wedge. Once formed up (formChangeTime s), a wedge hits `melee` x as hard, shocks and stuns on impact `impact` x, but takes `taken` x the blows and fire and wheels at `turn` x the rate", "squadron": {}, "wedge": { "melee": 1.3, "impact": 1.35, "taken": 1.3, "turn": 0.6 } },
   "groupGap": 1,
   "passLines": { "_note": "seconds a regiment held up by friendly ranks (after trying to step round either side) waits before filing through them", "wait": 3 },
   "refillTime": 15,
+  "refillClear": 70,
   "refillOffCost": 2,
   "refillRise": 1,
   "replacePool": 0.2,

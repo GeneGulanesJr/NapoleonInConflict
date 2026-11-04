@@ -92,12 +92,12 @@ export function spawn(sim: Sim, side: number, d: any) {
   const u = {
     id: sim.s.nextId++, side, type: d.type, name: d.name ?? T.label, nat: d.nat ?? natOf(sim.scn, side),
     men: d.men ?? Math.round(T.men * (sim.scn.strength?.[side] ?? 1)), maxMen: d.maxMen ?? Math.round(T.men * (sim.scn.strength?.[side] ?? 1)), x: d.x, z: d.z, facing: side === 0 ? Math.PI : 0,
-    form: d.form ?? 'line', morale: T.morale, maxMorale: T.morale, routed: false,
+    form: d.form ?? (T.cav && d.type !== 'commander' ? 'squadron' : 'line'), morale: T.morale, maxMorale: T.morale, routed: false,
     tx: null as number | null, tz: null as number | null, chase: null as number | null,
     reload: rand(sim.s) * (T.reload || 1), busy: 0, hurt: 99, fired: 99, mv: false, eng: null as number | null,
     rid: d.rid ?? null, dead: false, path: null as number[][] | null,
     spReady: 0, spUntil: 0, spKind: '', acc: 0, accT: 0,
-    xp: d.xp ?? 0, vet: rankOf(sim.tu, d.xp ?? 0), stance: 'hold', auto: false, sq: false, cavSeen: -99, queue: [] as number[][],
+    xp: d.xp ?? 0, vet: rankOf(sim.tu, d.xp ?? 0), stance: 'hold', queue: [] as number[][],
     garrison: null as number | null, gTarget: null as number | null, aura: false, flankT: -99, refill: false, tf: null as number | null, am: false, march: false, draftFor: null as number | null, refilled: 0, still: 0,
     fat: 0, mcap: T.morale, bay: null as number | null, tested: false, limbered: false, limT: 0, stun: 0, shaken: 0, // stun: seconds left stunned by a cavalry charge; shaken: seconds left rattled by fire; fatigue 0..1, morale ceiling, bayonet-charge target, charge morale test done, guns hooked to their teams, seconds left limbering/unlimbering
   };
@@ -110,7 +110,6 @@ export type Cmd =
   | { c: 'move'; ids: number[]; x: number; z: number; q?: boolean; f?: number; w?: number; am?: boolean; col?: boolean; keep?: boolean; run?: boolean; pace?: number | null; form?: string } // f: facing on arrival (radians), w: frontage to spread the group over, am: attack-move (fight what is met on the way), col: march in column, keep: move as a block, run: double time; pace is the sim's own (a courier carries the group's pace), never sent
   | { c: 'face'; ids: number[]; x: number; z: number } // wheel in place toward the point
   | { c: 'stance'; ids: number[]; s: string }
-  | { c: 'auto'; ids: number[] }
   | { c: 'replenish'; ids: number[] }
   | { c: 'garrison'; ids: number[]; vid: number }
   | { c: 'attack'; ids: number[]; target: number }
@@ -131,7 +130,7 @@ export function command(sim: Sim, side: number, c: Cmd, now = false) {
   if (s.over) return;
   const mine = (ids: number[]) => ids.map((id) => s.units.find((u: any) => u.id === id && u.side === side && !u.dead && !u.routed)).filter(Boolean);
   const half = sim.scn.map.size / 2 - 2;
-  if (s.courier && !now && s.phase !== 'deploy' && 'ids' in c && c.c !== 'auto' && c.c !== 'replenish') { // (while deploying the clock is stopped and the army stands ready: orders are instant) // courier orders: each regiment gets its own copy, resolved now (a move's place in the group, its pace) and delivered when the rider arrives
+  if (s.courier && !now && s.phase !== 'deploy' && 'ids' in c && c.c !== 'replenish') { // (while deploying the clock is stopped and the army stands ready: orders are instant) // courier orders: each regiment gets its own copy, resolved now (a move's place in the group, its pace) and delivered when the rider arrives
     const us = mine(c.ids), ps: any[] = c.c === 'move' ? layout(us, c, sim.tu, half) : us.map((u: any) => ({ u })), pace = c.c === 'move' ? c.pace ?? groupPace(ps, c, sim.tu) : null;
     for (const p of ps) {
       const one: any = c.c === 'move' ? { ...c, ids: [p.u.id], x: p.x, z: p.z, f: p.f ?? undefined, w: undefined, keep: false, pace, form: p.form } : { ...c, ids: [p.u.id] };
@@ -166,20 +165,18 @@ export function command(sim: Sim, side: number, c: Cmd, now = false) {
   } else if (c.c === 'form') {
     for (const u of mine(c.ids)) {
       u.dep = null; // an explicit formation overrides deploying on arrival
-      if ((u.type === 'line' || u.type === 'guard') && u.form !== c.f && sim.tu.formFire[c.f] && !(u.stun > 0) && !(u.shaken > 0)) { u.form = c.f; u.busy = sim.tu.formChangeTime; } // a regiment stunned by a charge or shaken by fire cannot reform
+      if (u.form === c.f || u.stun > 0 || u.shaken > 0) continue; // a regiment stunned by a charge or shaken by fire cannot reform
+      if ((isInf(u) && sim.tu.formFire[c.f]) || (isCav(u, sim.tu) && sim.tu.cavForms[c.f])) { u.form = c.f; u.busy = sim.tu.formChangeTime; }
     }
   } else if (c.c === 'stop' || c.c === 'face') { // face: halt and wheel toward the point (the arrival wheel in step)
-    for (const u of mine(c.ids)) { u.tx = u.tz = u.chase = null; u.queue = []; u.garrison = u.gTarget = null; u.am = false; u.tf = c.c === 'face' ? Math.atan2(c.x - u.x, c.z - u.z) : null; }
+    for (const u of mine(c.ids)) { if (u.garrison != null) continue; /* halting does not turf the men out of their farm: a move or attack order does */ u.tx = u.tz = u.chase = null; u.queue = []; u.gTarget = null; u.am = false; u.tf = c.c === 'face' ? Math.atan2(c.x - u.x, c.z - u.z) : null; }
   } else if (c.c === 'stance') {
     for (const u of mine(c.ids)) u.stance = c.s === 'aggressive' || c.s === 'skirmish' || (c.s === 'holdfire' && (isInf(u) || u.type === 'artillery')) ? c.s : 'hold';
-  } else if (c.c === 'auto') {
-    const us = mine(c.ids).filter(isInf), on = !us.every((u: any) => u.auto);
-    for (const u of us) u.auto = on;
   } else if (c.c === 'replenish') { // on an objective we hold (a depot) men trickle in, a toggle (see step); anywhere else a draft marches from our map edge at refillOffCost x the price
     const us = mine(c.ids).filter((u: any) => u.type !== 'commander' && u.men < u.maxMen && u.draftFor == null), dep = us.filter((u: any) => held(s, u)), on = !dep.every((u: any) => u.refill);
-    for (const u of dep) u.refill = on;
+    for (const u of dep) if (!on || calm(s, sim.tu, u)) u.refill = on; // switching it off is always allowed; on, only while the enemy is not near
     for (const u of us) {
-      if (held(s, u) || s.units.some((d: any) => d.draftFor === u.id && !d.dead)) continue; // one draft at a time
+      if (held(s, u) || !calm(s, sim.tu, u) || s.units.some((d: any) => d.draftFor === u.id && !d.dead)) continue; // one draft at a time, and none into a fight
       const sd = s.side[side], per = manPrice(sim.tu, u) * sim.tu.refillOffCost, men = Math.min(u.maxMen - u.men, Math.floor(sd.rp / per), Math.floor(sd.pool));
       if (men < u.maxMen * 0.05) continue; // can't afford a useful draft (or the depots are empty)
       sd.rp -= men * per; sd.pool -= men; u.refilled += men;
@@ -219,7 +216,7 @@ export function command(sim: Sim, side: number, c: Cmd, now = false) {
     const f = c.f == null ? fe : Math.cos(c.f - fe) < 0 ? c.f + Math.PI : c.f; // a dragged line keeps its line, but fronts the enemy
     command(sim, side, { c: 'move', ids: c.ids, x: c.x, z: c.z, f, w: c.w }, true); // the move order's layout gives each regiment its spot
     for (const u of mine(c.ids)) {
-      if (s.deploy[side].some((d: any) => Math.hypot(u.tx - d.x, u.tz - d.z) < d.r)) { u.x = u.tx; u.z = u.tz; u.facing = f; } // a spot outside the zone: that regiment stays put
+      const p = clampDeploy(s.deploy[side], u.tx, u.tz); u.x = p.x; u.z = p.z; u.facing = f; // a spot outside the zone is pulled in to its edge
       u.tx = u.tz = u.tf = null;
     }
   }
@@ -238,19 +235,45 @@ export function layout(us: any[], c: { x: number; z: number; f?: number; w?: num
   dx /= d; dz /= d;
   if (c.f != null) { dx = Math.sin(c.f); dz = Math.cos(c.f); } // a dragged line: lay the group out across the chosen facing
   const ss = [...us].sort((a: any, b: any) => (a.x * -dz + a.z * dx) - (b.x * -dz + b.z * dx));
-  const gap = tu.groupGap, W = c.w != null && c.w > 8 ? c.w : 0;
-  if (W) { // a dragged front, as in Total War: the drag is the width the group fills, edge to edge. Wider spreads the regiments; narrower packs them, then they form column to fit (never narrower than side by side at the minimum gap)
-    const dims = (form: string) => ss.map((u: any) => { const f = foot(isInf(u) ? { ...u, form } : u, tu); return f[1] - f[0]; }), sum = (D: number[]) => D.reduce((t: number, w: number) => t + w, 0), n = ss.length;
-    const L = dims('line'), form = sum(L) + (n - 1) * 2 * gap <= W ? 'line' : 'column', D = form === 'line' ? L : dims('column');
-    const between = n > 1 ? Math.max(form === 'line' ? 2 * gap : 4 * gap + 4, (W - sum(D)) / (n - 1)) : 0; // spare width becomes the space between regiments (columns marching side by side need elbow room)
-    let x0 = -(sum(D) + (n - 1) * between) / 2;
-    return ss.map((u: any, i: number) => { const off = x0 + D[i] / 2; x0 += D[i] + between; return { u, x: cl(c.x - dz * off), z: cl(c.z + dx * off), f: c.f ?? null, ...(isInf(u) && u.form !== 'square' ? { form } : {}) }; });
+  const gap = tu.groupGap, W = c.w != null && c.w > 0 ? c.w : 0;
+  if (W) { // a dragged front, as in Total War: the drag is the width each rank fills, edge to edge. Wider spreads the regiments; narrower packs them, then a second rank forms behind, then column, then a single file (never closer than the minimum gap)
+    const n = us.length, lat = (u: any) => u.x * -dz + u.z * dx, fwd = (u: any) => (u.x - c.x) * dx + (u.z - c.z) * dz;
+    const dim = (u: any, form: string) => foot(isInf(u) ? { ...u, form } : u, tu), wid = (u: any, form: string) => { const f = dim(u, form); return f[1] - f[0]; }, min = (form: string) => (form === 'line' ? 2 * gap : 4 * gap + 4); // columns marching abreast need elbow room
+    const byFwd = [...us].sort((a: any, b: any) => fwd(b) - fwd(a) || a.id - b.id); // the regiments nearest the front take the front rank
+    const plan = (r: number) => { const rows: any[][] = []; for (let i = 0, k = 0; i < r; i++) { const m = Math.floor(n / r) + (i < n % r ? 1 : 0); rows.push(byFwd.slice(k, (k += m))); } return rows; };
+    const fits = (rows: any[][], form: string) => rows.every((row) => row.reduce((t: number, u: any) => t + wid(u, form), 0) + (row.length - 1) * min(form) <= W);
+    let form = 'line', rows = plan(1);
+    if (!fits(rows, form) && n > 1) rows = plan(2);
+    if (!fits(rows, form)) { form = 'column'; rows = plan(1); for (let r = 2; r <= n && !fits(rows, form); r++) rows = plan(r); }
+    const out: { u: any; x: number; z: number; f: number | null; form?: string }[] = [];
+    let back = 0, behind = 0; // how far this rank stands behind the front one, and how deep the rank before it reaches
+    rows.forEach((row, ri) => {
+      const F = row.map((u: any) => dim(u, form)), ws = F.map((f) => f[1] - f[0]), tot = ws.reduce((a, b) => a + b, 0), between = row.length > 1 ? Math.max(min(form), (W - tot) / (row.length - 1)) : 0; // spare width becomes the space between regiments
+      if (ri) back += behind + Math.max(...F.map((f) => f[3])) + 3 * gap;
+      behind = Math.max(...F.map((f) => -f[2]));
+      let x0 = -(tot + (row.length - 1) * between) / 2;
+      row.map((u: any, i: number) => ({ u, w: ws[i] })).sort((p, q) => lat(p.u) - lat(q.u)).forEach(({ u, w }) => {
+        const off = x0 + w / 2; x0 += w + between;
+        out.push({ u, x: cl(c.x - dz * off - dx * back), z: cl(c.z + dx * off - dz * back), f: c.f ?? null, ...(isInf(u) && u.form !== 'square' ? { form } : {}) });
+      });
+    });
+    return out;
   }
   // side by side by real frontage plus tuning.groupGap a side (and never closer than the idle spacing rule), so a group arrives without piling up
   const hw = ss.map((u: any) => { const f = foot(u, tu); return Math.max((f[1] - f[0]) / 2 + tu.groupGap, 0.7 * rad(u) + 0.5); });
   const sum = hw.reduce((a: number, b: number) => a + b, 0), extra = c.w && ss.length > 1 ? Math.max(0, c.w - 2 * sum) / (ss.length - 1) : 0;
   let acc = -sum - (extra * (ss.length - 1)) / 2;
   return ss.map((u: any, i: number) => { const off = acc + hw[i]; acc += 2 * hw[i] + extra; return { u, x: cl(c.x - dz * off), z: cl(c.z + dx * off), f: c.f ?? null }; });
+}
+/** The nearest point of a side's deployment zone (circles {x, z, r}) to (x, z): the point itself when inside one. Pure, so the order preview can show where a regiment will really stand. */
+export function clampDeploy(zs: any[], x: number, z: number): { x: number; z: number } {
+  let best = { x, z }, bd = Infinity;
+  for (const d of zs) {
+    const dist = Math.hypot(x - d.x, z - d.z), out = dist - (d.r - 0.5);
+    if (out <= 0) return { x, z };
+    if (out < bd) { bd = out; best = { x: d.x + ((x - d.x) / dist) * (d.r - 0.5), z: d.z + ((z - d.z) / dist) * (d.r - 0.5) }; }
+  }
+  return best;
 }
 /** u's marching speed in formation `form`, before ground, weather and fatigue */
 const marchSpeed = (u: any, form: string, tu: any) => tu.types[u.type].speed * (isInf(u) ? tu.formSpeed[form] : 1);
@@ -268,6 +291,8 @@ function courierDelay(sim: Sim, u: any) {
 export const manPrice = (tu: any, u: any) => (tu.types[u.type].cost / u.maxMen) * (1 + (tu.refillRise * (u.refilled ?? 0)) / u.maxMen);
 /** standing on an objective its side holds: a depot, where replacements trickle in */
 const held = (s: any, u: any) => s.zones.some((z: any) => z.owner === u.side && Math.hypot(u.x - z.x, u.z - z.z) < z.r);
+/** u may take replacements: not in melee, and no enemy (a general apart) within tuning.refillClear */
+const calm = (s: any, tu: any, u: any) => u.eng == null && !s.units.some((e: any) => e.side !== u.side && !e.dead && !e.routed && e.type !== 'commander' && Math.hypot(e.x - u.x, e.z - u.z) < tu.refillClear);
 /** the point on a side's home map edge (the one its entry point lies by) nearest to (x, z): drafts set out from there */
 function homeEdge(sim: Sim, side: number, x: number, z: number) {
   const e = sim.scn.entry[side], h = sim.scn.map.size / 2 - 4;
@@ -322,7 +347,9 @@ function foot0(u: any, tu: any): number[] {
   if (u.type === 'artillery') { const w = ((Math.max(1, Math.ceil(u.men / 54)) - 1) / 2) * 4.2 + 2.8; return [-w, w, -4, 2.2]; }
   if (u.routed || u.type === 'skirmisher') return [-8, 8, -3.5, 3.5];
   const n = Math.max(1, Math.ceil(u.men / T.perFig));
-  if (T.cav) { const cols = n > 10 ? Math.ceil(n / 2) : n, rows = Math.ceil(n / cols), w = ((cols - 1) / 2) * 2.4 + 1.2; return [-w, w, -(rows - 1) * 3 - 1.6, 1.6]; }
+  if (T.cav) {
+    if (u.form === 'wedge' && u.type !== 'commander') { const R = Math.ceil((Math.sqrt(8 * n + 1) - 1) / 2), w = ((R - 1) / 2) * 2.2 + 1.2; return [-w, w, -(R - 1) * 2.2 - 1.6, 1.6]; } // a triangle of riders, the point in front: R ranks, one more rider in each
+    const cols = n > 10 ? Math.ceil(n / 2) : n, rows = Math.ceil(n / cols), w = ((cols - 1) / 2) * 2.4 + 1.2; return [-w, w, -(rows - 1) * 3 - 1.6, 1.6]; }
   if (u.form === 'column') { const rows = Math.ceil(n / 3); return [-2.2, 2.2, -(rows - 1) * 1.5 + n / 6 - 0.7, n / 6 + 0.7]; }
   if (u.form === 'square') { const h = (Math.max(2, Math.ceil(n / 4) + 1) - 1) * 0.8 + 0.7; return [-h, h, -h, h]; }
   const ranks = n > 24 ? 3 : 2, w = ((Math.ceil(n / ranks) - 1) / 2) * 1.3 + 0.7;
@@ -361,6 +388,9 @@ function blocker(u: any, x: number, z: number, live: any[], tu: any, fr: Map<any
   return null;
 }
 const isInf = (u: any) => u.type === 'line' || u.type === 'guard';
+const isCav = (u: any, tu: any) => tu.types[u.type].cav && u.type !== 'commander';
+/** A cavalry formation's modifier k (tuning.cavForms): once formed up a wedge hits and shocks harder, and it pays in turning and in the blows it takes. 1 for any other unit. */
+const cf = (u: any, k: string, tu: any) => { const m = tu.types[u.type].cav ? tu.cavForms[u.form]?.[k] : undefined; return m == null || ((k === 'melee' || k === 'impact') && u.busy > 0) ? 1 : m; };
 /** Hour of day on the scenario clock ('HH:MM' start, then `hours` over `duration` s) at battle time t. */
 export const hour = (scn: any, t: number) => { const [h, m] = (scn.clock?.start ?? '12:00').split(':').map(Number); return h + (m || 0) / 60 + (t / scn.duration) * (scn.clock?.hours ?? 0); };
 /** Darkness 0 (day) .. 1 (night) from the scenario clock (tuning.night). */
@@ -411,7 +441,7 @@ function screened(sim: Sim, u: any, tg: any) {
 }
 /** 0 front, 1 flank, 2 rear: where the attacker stands relative to the target's facing (squares, garrisons and broken men have no flanks) */
 function aspect(att: any, tg: any): number {
-  if (tg.form === 'square' || tg.garrison != null || tg.routed) return 0;
+  if (formed(tg) || tg.garrison != null || tg.routed) return 0;
   const dx = att.x - tg.x, dz = att.z - tg.z, d = Math.hypot(dx, dz) || 1, c = (dx * Math.sin(tg.facing) + dz * Math.cos(tg.facing)) / d;
   return c > 0.5 ? 0 : c < -0.5 ? 2 : 1;
 }
@@ -427,7 +457,9 @@ export function masked(u: any, e: any, live: any[], tu: any) {
 }
 /** How solid a square is against cavalry: 1 when it has at least as many men as the horsemen, fading fast (ratio squared) as it is outnumbered. */
 export const solid = (sq: any, cav: any) => Math.min(1, sq.men / Math.max(1, cav.men)) ** 2;
-function meleeMult(a: any, d: any): number {
+/** a square that has finished forming: while it forms (busy) it is still open ranks */
+const formed = (u: any) => u.form === 'square' && !(u.busy > 0);
+function meleeMult(a: any, d: any, tu: any): number {
   if (d.routed) return 1.5;
   const ac = a.type === 'lancer' || a.type === 'cuirassier';
   const dc = d.type === 'lancer' || d.type === 'cuirassier';
@@ -435,7 +467,7 @@ function meleeMult(a: any, d: any): number {
     if (d.type === 'artillery') return 2.5;
     if (d.type === 'skirmisher') return 2.2;
     if (dc) return 1;
-    return d.form === 'square' ? 1.2 - 0.95 * solid(d, a) : d.form === 'column' ? 2 : 1.2; // full square 0.25, a swamped one is just a line (1.2)
+    return d.form === 'square' ? (d.busy > 0 ? tu.squareForming.melee : 1.2 - 0.95 * solid(d, a)) : d.form === 'column' ? 2 : 1.2; // full square 0.25, a swamped one is just a line (1.2); caught still forming it is far worse than a column
   }
   if (dc) return a.form === 'square' ? 1 + 0.6 * solid(a, d) : a.form === 'column' ? 0.5 : a.type === 'skirmisher' ? 0.3 : 1;
   if (d.type === 'artillery') return 2;
@@ -453,14 +485,14 @@ const breakingOff = (q: any, f: any, tu: any) => tu.types[q.type].cav && q.tx !=
 export const rng = (u: any, tu: any): number => tu.types[u.type].range * (u.aura ? tu.commanderAura.range : 1);
 /** Wheel u toward angle a at its rate (tuning.turn); returns the angle still left to turn. */
 function face(u: any, a: number, dt: number, tu: any, rate?: number): number {
-  const r = rate ?? tu.turn[tu.types[u.type].cav ? 'cavalry' : isInf(u) ? u.form : u.type] ?? 1, d = Math.atan2(Math.sin(a - u.facing), Math.cos(a - u.facing)), k = Math.max(-r * dt, Math.min(r * dt, d));
+  const r = rate ?? (tu.turn[tu.types[u.type].cav ? 'cavalry' : isInf(u) ? u.form : u.type] ?? 1) * cf(u, 'turn', tu), d = Math.atan2(Math.sin(a - u.facing), Math.cos(a - u.facing)), k = Math.max(-r * dt, Math.min(r * dt, d));
   u.facing += k;
   return Math.abs(d - k);
 }
 /** Morale test for d as a charge by a closes in (tuning.shock): true = it stands. */
 export function steady(sim: Sim, d: any, a: any): boolean {
-  const tu = sim.tu, k = tu.shock, cav = tu.types[a.type].cav && !tu.types[d.type].cav && d.form !== 'square';
-  const st = Math.max(0, d.morale) / d.maxMorale - k.loss * (1 - d.men / d.maxMen) - k.fat * d.fat + (d.form === 'square' ? k.square : 0) + (d.garrison != null ? k.garrison : 0) - k.flank[aspect(a, d)]
+  const tu = sim.tu, k = tu.shock, cav = tu.types[a.type].cav && !tu.types[d.type].cav && !formed(d);
+  const st = Math.max(0, d.morale) / d.maxMorale - k.loss * (1 - d.men / d.maxMen) - k.fat * d.fat + (formed(d) ? k.square : 0) + (d.garrison != null ? k.garrison : 0) - k.flank[aspect(a, d)]
     - k.size * Math.max(0, Math.min(1, a.men / Math.max(1, d.men) - 1)) - k.fresh * Math.max(0, d.fat - a.fat) + k.vet * d.vet + (d.aura ? k.aura : 0) - (cav ? k.cav : 0) + (posted(d, tu) ? tu.hold.shock : 0) + k.spread * (rand(sim.s) - 0.5);
   return st >= k.pass;
 }
@@ -506,7 +538,7 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
   const first = u.stance === 'holdfire' && u.fired >= tu.holdFire.loaded; // a fresh, carefully loaded first volley after holding fire
   const miss = u.type === 'artillery' && !close && rand(s) > 1 - 0.65 * (td / rng(u, tu));
   const fm = u.type === 'skirmisher' || u.type === 'artillery' ? 1 : tu.formFire[u.form];
-  const dmgForm = tu.types[tg.type].cav ? 0.8 : tg.type === 'skirmisher' ? 0.6 : (u.type === 'artillery' ? tu.artDmg : tu.formDmg)[tg.form]; // round shot ploughs through dense columns and squares
+  const dmgForm = tu.types[tg.type].cav ? 0.8 * cf(tg, 'taken', tu) : tg.type === 'skirmisher' ? 0.6 : (u.type === 'artillery' ? tu.artDmg : tu.formDmg)[tg.form]; // round shot ploughs through dense columns and squares
   const rf = Math.max(tu.rangeFloor, 1 - 0.75 * (td / rng(u, tu)));
   const elev = Math.max(0.8, Math.min(1.25, 1 + 0.02 * (heightAt(scn, u.x, u.z) - heightAt(scn, tg.x, tg.z))));
   const asp = aspect(u, tg);
@@ -617,12 +649,6 @@ export function step(sim: Sim, dt: number) {
       continue;
     }
 
-    // auto-square: infantry with the toggle on form square when cavalry close in, and stand back to line afterwards
-    if (u.auto && isInf(u)) {
-      const cavNear = live.some((e: any) => e.side !== u.side && !e.routed && tu.types[e.type].cav && e.type !== 'commander' && Math.hypot(e.x - u.x, e.z - u.z) < 34);
-      if (cavNear) { u.cavSeen = s.t; if (u.form !== 'square' && u.busy <= 0 && !(u.shaken > 0)) { u.form = 'square'; u.busy = tu.formChangeTime; u.sq = true; } } // shaken by fire, it cannot form square in time
-      else if (u.sq && u.form === 'square' && s.t - u.cavSeen > 6 && u.busy <= 0 && !(u.shaken > 0)) { u.form = 'line'; u.busy = tu.formChangeTime; u.sq = false; }
-    }
     // stances: aggressive units go for anything close when idle; skirmishers kite
     if (u.gTarget == null && u.garrison == null && u.tx == null && u.chase == null && u.eng == null && u.busy <= 0 && u.stance !== 'hold' && u.stance !== 'holdfire') {
       let ne: any = null, nd = 1e9;
@@ -638,7 +664,7 @@ export function step(sim: Sim, dt: number) {
     if (u.garrison != null) continue; // garrisoned units hold their post (move, stop or attack orders release them)
     // march in column: the column forms its line again at the end of the march, or as soon as a foe it can see is within musket range
     if (u.dep) {
-      if (u.form !== 'column') u.dep = null; // reformed some other way meanwhile (auto-square)
+      if (u.form !== 'column') u.dep = null; // reformed some other way meanwhile
       else if (u.busy <= 0 && !(u.shaken > 0) && ((u.tx == null && u.chase == null) || live.some((e: any) => e.side !== u.side && !e.routed && seen[u.side].has(e.id) && Math.hypot(e.x - u.x, e.z - u.z) < T.range + 40 && gapBetween(u, e, tu) < T.range))) { u.form = u.dep; u.dep = null; u.busy = tu.formChangeTime; }
     }
     if (u.tx == null) { u.pace = null; u.run = u.back = false; } // a march's pace, double time and falling back end with it
@@ -704,7 +730,12 @@ export function step(sim: Sim, dt: number) {
           const passing = (u.jam ?? 0) > tu.passLines.wait, b = blocker(u, mx, mz, live, tu, fr, !passing); // held up long enough: it files through friendly ranks (passage of lines)
           if (b && b.side !== u.side) { mx = u.x; mz = u.z; } // the enemy's ranks stop it: it halts at contact and the melee decides
           else if (b) { // a friendly regiment in the way: step round it, keeping to one side until clear, else try the other side
-            if (u.chase == null && dd < 30) { u.tx = u.tz = null; const nxt = u.queue.shift(); if (nxt) { u.tx = nxt[0]; u.tz = nxt[1]; } } // its ground is taken: close enough
+            const f0 = u.facing; if (u.tf != null) u.facing = u.tf; // judge the spot as the regiment will stand on it, in its ordered facing
+            if (u.chase == null && dd < 30 && u.tx != null && blocker(u, u.tx, u.tz, live, tu, fr)) { // its own spot is taken by a friend: stand on the free ground beside it nearest to where it is, else give the order up
+              const sp = [5, 10, 16, 24].flatMap((r) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [u.tx + Math.sin(k * 0.785) * r, u.tz + Math.cos(k * 0.785) * r])).filter(([x, z]) => Math.abs(x) < half - 2 && Math.abs(z) < half - 2 && !deepAt(scn, x, z) && !blocker(u, x, z, live, tu, fr)).sort((p, q) => Math.hypot(p[0] - u.x, p[1] - u.z) - Math.hypot(q[0] - u.x, q[1] - u.z))[0]; // the free spot nearest the regiment itself
+              if (sp) { u.tx = sp[0]; u.tz = sp[1]; u.path = null; } else { u.tx = u.tz = null; const nxt = u.queue.shift(); if (nxt) { u.tx = nxt[0]; u.tz = nxt[1]; } }
+            }
+            u.facing = f0;
             u.av ??= Math.sign(dx * (b.z - u.z) - dz * (b.x - u.x)) || (u.id & 1 ? 1 : -1);
             const step = Math.hypot(mx - u.x, mz - u.z), h = Math.atan2(dx, dz);
             let ok = false;
@@ -735,7 +766,9 @@ export function step(sim: Sim, dt: number) {
 
     // melee: nearest enemy in contact
     let c: any = null, cd = 0.8;
-    for (const e of live) { if (e.dead || e.side === u.side || Math.hypot(e.x - u.x, e.z - u.z) > fr.get(u)! + fr.get(e)! + cd) continue; const g = gapBetween(u, e, tu); if (g < cd) { cd = g; c = e; } } // bounding circles first: only close pairs pay for the exact edge test
+    const cur = u.eng != null ? byId.get(u.eng) : null, cg = cur && !cur.dead && cur.side !== u.side ? gapBetween(u, cur, tu) : 9;
+    if (cg < 1.2) { c = cur; cd = cg; } // already locked with it: stay, unless another foe is clearly nearer
+    for (const e of live) { if (e.dead || e.side === u.side || Math.hypot(e.x - u.x, e.z - u.z) > fr.get(u)! + fr.get(e)! + 1.2) continue; const g = gapBetween(u, e, tu); if (g < cd - (c === cur && cur ? 0.6 : 0)) { cd = g; c = e; } } // bounding circles first: only close pairs pay for the exact edge test
     if (c) {
       // horse charging downhill hits harder, uphill weaker: ground fall across 16 units through the contact, scaled and clamped to +-30%
       const ex = c.x - u.x, ez = c.z - u.z, el = Math.hypot(ex, ez) || 1;
@@ -744,12 +777,12 @@ export function step(sim: Sim, dt: number) {
         u.eng = c.id;
         { const want = Math.atan2(c.x - u.x, c.z - u.z), dd = Math.atan2(Math.sin(want - u.facing), Math.cos(want - u.facing)); u.eF = u.facing + Math.max(-1, Math.min(1, dd)); } // face the foe once, at most ~57 degrees (no per-tick swinging), wheeling there below
         if (T.cav && u.spUntil > s.t && u.spKind === 'charge' && !u.tested && !c.routed) { u.fat = Math.min(1, u.fat + tu.fatigue.blown); if (shock(sim, u, c) === 'recoil') continue; } // horses are blown by the charge; the foe's nerve is tested on impact
-        if (T.cav && !c.routed && c.form !== 'square' && !tu.types[c.type].cav) {
+        if (T.cav && !c.routed && (c.form !== 'square' || c.busy > 0) && !tu.types[c.type].cav) { const sqf = c.form === 'square' ? tu.squareForming.impact : 1; // a square caught still forming takes the full shock, and more
           const mom = faltered(u, s, tu) ? tu.falter.impact : 1; // a charge shot to pieces on the way in hits home weakly
-          c.morale -= tu.chargeShock * hc * mom;
+          c.morale -= tu.chargeShock * hc * mom * cf(u, 'impact', tu) * sqf;
           const stun = c.garrison == null; // behind a farm's walls the men keep their order
           if (stun) { // in proportion to the impact: slope, the horse's numbers against the foot's, a true Charge (V), lost momentum
-            c.stun = Math.max(c.stun ?? 0, tu.stun.time * hc * mom * Math.max(tu.stun.size[0], Math.min(tu.stun.size[1], u.men / Math.max(1, c.men))) * (u.spUntil > s.t && u.spKind === 'charge' ? tu.stun.charge : 1));
+            c.stun = Math.max(c.stun ?? 0, tu.stun.time * hc * mom * cf(u, 'impact', tu) * sqf * Math.max(tu.stun.size[0], Math.min(tu.stun.size[1], u.men / Math.max(1, c.men))) * (u.spUntil > s.t && u.spKind === 'charge' ? tu.stun.charge : 1));
             c.busy = Math.max(c.busy, c.stun); // busy: no firing, moving or reforming until it clears
           }
           ev(sim, { k: 'charge', x: c.x, z: c.z, side: c.side, stun });
@@ -760,7 +793,7 @@ export function step(sim: Sim, dt: number) {
       const away = breakingOff(c, u, tu), asp = away ? 0 : aspect(u, c), gm = c.garrison != null ? (T.cav ? tu.garrison.meleeCav : tu.garrison.meleeInf) : 1; // horse getting clear takes a parting blow, not a rear attack, as it wheels away
       if (asp && s.t - c.flankT > 6) { c.flankT = s.t; ev(sim, { k: 'flank', x: c.x, z: c.z, side: c.side, kind: asp }); chron(sim, 1 - c.side, `${asp === 2 ? 'Rear' : 'Flank'} attack on ${c.name}`); }
       if (asp) c.shaken = Math.max(c.shaken ?? 0, tu.shaken.flank[asp]); // attacked on the flank or rear, its ranks cannot turn to face it in good order
-      damage(sim, c, u.men * T.melee * meleeMult(u, c) * hc * gm * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.melee) * tu.meleeRate * (u.spUntil > s.t && u.spKind === 'charge' ? 1.6 : 1) * (u.bay === c.id && !faltered(u, s, tu) ? tu.bayonet.melee : 1) * (1 - tu.fatigue.melee * u.fat) * (away ? tu.breakoff.hit : 1) * (u.stun > 0 ? tu.stun.melee : 1) * (u.aura ? tu.commanderAura.dmg : 1) * dt,
+      damage(sim, c, u.men * T.melee * meleeMult(u, c, tu) * hc * gm * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.melee) * tu.meleeRate * cf(u, 'melee', tu) * cf(c, 'taken', tu) * (u.spUntil > s.t && u.spKind === 'charge' ? 1.6 : 1) * (u.bay === c.id && !faltered(u, s, tu) ? tu.bayonet.melee : 1) * (1 - tu.fatigue.melee * u.fat) * (away ? tu.breakoff.hit : 1) * (u.stun > 0 ? tu.stun.melee : 1) * (u.aura ? tu.commanderAura.dmg : 1) * dt,
         tu.flank.morale[asp] * (T.cav || tu.types[c.type].cav ? 1 : tu.bayonet.grind), u); // foot against foot does not grind on for long: one side gives way
       u.fat = Math.min(1, u.fat + tu.fatigue.fight * dt);
       if (c.dead) u.eng = null;
@@ -810,7 +843,7 @@ export function step(sim: Sim, dt: number) {
     for (let j = i + 1; j < live.length; j++) {
       const b = live[j];
       if (b.dead || a.eng === b.id || b.eng === a.id || a.garrison != null || b.garrison != null) continue;
-      if (a.side === b.side && (a.mv || b.mv)) continue; // friends pass through each other while marching (no bulldozing your own line); they spread out once both halt
+      if (a.side === b.side && (a.mv || b.mv || a.eng != null || b.eng != null)) continue; // friends pass through each other while marching (no bulldozing your own line) and are not shoved out of a melee; they spread out once both halt
       const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
       if (d < 0.001) continue;
       const min = a.side === b.side ? 0.7 * (rad(a) + rad(b)) + 1 : d - gapBetween(a, b, tu) + 0.2; // enemies are kept edge-to-edge apart, never overlapped
@@ -863,7 +896,7 @@ export function step(sim: Sim, dt: number) {
     if (u.routed || u.men >= u.maxMen) { if (!u.routed) log(sim, `${u.name} is back to full strength.`); u.refill = false; continue; }
     const sd = s.side[u.side];
     if (sd.pool < 1) { u.refill = false; log(sim, `${u.side === 0 ? 'French' : 'Coalition'} depots are empty: no more replacements.`); continue; }
-    if (u.eng != null || u.hurt < 3 || !held(s, u)) continue; // paused: fighting, under fire, or off our depots (elsewhere a draft marches in, see command)
+    if (!calm(s, tu, u) || u.hurt < 3 || !held(s, u)) continue; // paused: fighting, under fire, or off our depots (elsewhere a draft marches in, see command)
     const per = manPrice(tu, u), add = Math.min((u.maxMen / tu.refillTime) * dt, u.maxMen - u.men, sd.rp / per, sd.pool);
     u.men += add; sd.rp -= add * per; sd.pool -= add; u.refilled += add;
   }
@@ -877,7 +910,7 @@ export function step(sim: Sim, dt: number) {
     if (d.draftFor == null || d.dead) continue;
     const r = byId.get(d.draftFor);
     if (!r || r.dead || r.routed) { d.draftFor = null; d.name = `Draft (${Math.round(d.men)} men)`; continue; }
-    if (gapBetween(d, r, tu) < 1.5) { r.men = Math.min(r.maxMen, r.men + d.men); d.dead = true; d.fate = 'merged'; log(sim, `${r.name} is joined by ${Math.round(d.men)} fresh men.`); continue; }
+    if (gapBetween(d, r, tu) < 1.5 && calm(s, tu, r)) { r.men = Math.min(r.maxMen, r.men + d.men); d.dead = true; d.fate = 'merged'; log(sim, `${r.name} is joined by ${Math.round(d.men)} fresh men.`); continue; }
     if (!d.routed) { d.tx = r.x; d.tz = r.z; d.chase = null; }
   }
 

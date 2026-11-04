@@ -4,7 +4,7 @@ import { los } from './world.ts';
 
 const dist = (a: any, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
 /** a square too strong for this cavalry regiment to charge */
-const firm = (e: any, cav: any) => e.form === 'square' && !e.routed && solid(e, cav) > 0.5;
+const firm = (e: any, cav: any, tu: any) => e.form === 'square' && !e.routed && solid(e, cav) > 0.5 && !(e.busy > 0 && dist(e, cav) / tu.types[cav.type].speed < e.busy); // a square that would still be forming when the horse arrive is not firm: ride it down
 /** u stands in front of e (the sim's aspect test: front when the cosine is over 0.5) */
 const ahead = (u: any, e: any) => ((u.x - e.x) * Math.sin(e.facing) + (u.z - e.z) * Math.cos(e.facing)) / (dist(u, e) || 1) > 0.5;
 /** e's flank on u's side: where u stands square to e's facing, its frontage clear of e's by `gap`, a little behind e's front so the approach swings wide of anyone fighting it from the front */
@@ -24,7 +24,7 @@ export function makeBot(sim: Sim, side: number) {
     // ...and ride back out of musket range instead of idling where the square can shoot it down
     for (const u of sim.s.units) if (u.side === side && u.chase != null && (u.type === 'lancer' || u.type === 'cuirassier')) {
       const t = sim.s.units.find((q: any) => q.id === u.chase);
-      if (t && firm(t, u)) { const d = dist(u, t) || 1; command(sim, side, { c: 'move', ids: [u.id], x: t.x + ((u.x - t.x) / d) * 50, z: t.z + ((u.z - t.z) / d) * 50 }); }
+      if (t && firm(t, u, sim.tu)) { const d = dist(u, t) || 1; command(sim, side, { c: 'move', ids: [u.id], x: t.x + ((u.x - t.x) / d) * 50, z: t.z + ((u.z - t.z) / d) * 50 }); }
     }
     if (b.acc < 2) return;
     b.acc = 0;
@@ -102,7 +102,6 @@ function think(sim: Sim, side: number, mem: any) {
       if (s.t >= u.spReady && s.units.some((f: any) => f.side === side && f.routed && dist(f, u) < tu.commanderAura.rallyRadius)) command(sim, side, { c: 'special', ids: [u.id] });
       continue;
     }
-    if (!u.auto && (u.type === 'line' || u.type === 'guard')) command(sim, side, { c: 'auto', ids: [u.id] });
     let near: any = null, nd = 1e9;
     for (const e of foes) { const d = dist(u, e); if (d < nd) { nd = d; near = e; } }
 
@@ -144,7 +143,9 @@ function think(sim: Sim, side: number, mem: any) {
     if (u.type === 'line' || u.type === 'guard') {
       const hf = stance === 'defend' && near && near.mv && nd < 45 && (near.form === 'column' || tu.types[near.type].cav) ? 'holdfire' : 'hold'; // let a column or horse coming on close in, then give it the heavy first volley
       if (u.stance !== hf) command(sim, side, { c: 'stance', ids: [u.id], s: hf });
-      if (u.form === 'square') { hold(); continue; } // auto-square (switched on above) forms and breaks squares; a second rule here made regiments flip-flop
+      const cavD = foes.reduce((m: number, e: any) => (tu.types[e.type].cav && e.type !== 'commander' ? Math.min(m, dist(u, e)) : m), 1e9); // the bot forms square by hand, when it sees horse close in (it thinks every 2 s), and breaks it up when they are gone
+      if (cavD < 60 && u.form !== 'square') { command(sim, side, { c: 'form', ids: [u.id], f: 'square' }); hold(); continue; }
+      if (u.form === 'square') { if (cavD > 90 && u.busy <= 0) command(sim, side, { c: 'form', ids: [u.id], f: 'line' }); hold(); continue; }
       if (u.chase != null) continue;
       // bayonet charge when clearly stronger locally
       if (stance === 'attack' && near && nd < 22 && u.morale > 60 && u.fat < 0.5 && near.morale < 0.6 * near.maxMorale) { // go in with the bayonet once the foe wavers
@@ -187,12 +188,14 @@ function think(sim: Sim, side: number, mem: any) {
       else if (u.chase !== tg.id) command(sim, side, { c: 'attack', ids: [u.id], target: tg.id });
     } else {
       // cavalry: hunt foot that cannot form square (shaken or stunned), guns, skirmishers, routers and thin lines; avoid squares
+      const wedge = () => { if (u.form !== 'wedge') command(sim, side, { c: 'form', ids: [u.id], f: 'wedge' }); }; // form the wedge for the charge, back to squadron once the foe is far
+      if (u.chase == null && u.eng == null && u.form === 'wedge' && nd > 110) command(sim, side, { c: 'form', ids: [u.id], f: 'squadron' });
       if (u.chase != null) continue;
       const rsv = u === reserve;
       let prey: any = null, pv = 0;
       for (const e of rsv ? [] : enemies) {
         const d = dist(u, e);
-        if (d > 95 || firm(e, u)) continue;
+        if (d > 95 || firm(e, u, tu)) continue;
         const fo = !tu.types[e.type].cav && e.type !== 'artillery' && e.type !== 'skirmisher';
         const w = fo && (e.shaken > 0 || e.stun > 0) && e.form !== 'square' ? 3 : e.type === 'artillery' ? 2.5 : e.type === 'skirmisher' ? 2
           : e.routed || (fo && e.morale < 70) || e.form === 'column' || e.form === 'square' ? 1 : 0; // a square that is not firm is outnumbered
@@ -200,11 +203,11 @@ function think(sim: Sim, side: number, mem: any) {
       }
       const fit = u.morale > 45 && u.men > 0.3 * u.maxMen, ft = fit && !prey && !rsv ? flankTarget(u, 120) : null;
       const ht = rsv && fit ? foes.find((e: any) => tu.types[e.type].cav && e.type !== 'commander' && dist(u, e) < 100 && my.some((f: any) => (f.type === 'line' || f.type === 'guard') && (f.eng === e.id || e.eng === f.id))) : null; // the reserve rides at enemy horse in among our foot
-      if (ht) command(sim, side, { c: 'attack', ids: [u.id], target: ht.id });
-      else if (prey && fit) command(sim, side, { c: 'attack', ids: [u.id], target: prey.id });
+      if (ht) { wedge(); command(sim, side, { c: 'attack', ids: [u.id], target: ht.id }); }
+      else if (prey && fit) { wedge(); command(sim, side, { c: 'attack', ids: [u.id], target: prey.id }); }
       else if (ft) { // ride round to its flank, then charge (defending horse counter-attacks this way too)
         const p = flankOf(ft, u, 4, tu);
-        if (!ahead(u, ft) || dist(u, p) < 6) command(sim, side, { c: 'attack', ids: [u.id], target: ft.id }); else goto(p.x, p.z);
+        if (!ahead(u, ft) || dist(u, p) < 6) { wedge(); command(sim, side, { c: 'attack', ids: [u.id], target: ft.id }); } else goto(p.x, p.z);
       } else if (stance === 'attack') {
         const inf = my.filter((f: any) => f.type === 'line' || f.type === 'guard');
         if (inf.length) {

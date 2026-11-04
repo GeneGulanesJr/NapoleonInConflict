@@ -43,10 +43,10 @@ function clean(c: any): Cmd | null {
       ? { c: 'move', ids: c.ids, x: c.x, z: c.z, q: c.q === true, f: c.f ?? undefined, w: c.w ?? undefined, am: c.am === true, col: c.col === true, keep: c.keep === true, run: c.run === true } : null; // never pace: that is the sim's own
     case 'face': return ids(c.ids) && num(c.x) && num(c.z) ? { c: 'face', ids: c.ids, x: c.x, z: c.z } : null;
     case 'attack': case 'bayonet': return ids(c.ids) && num(c.target) ? { c: c.c, ids: c.ids, target: c.target } : null;
-    case 'form': return ids(c.ids) && known(tu.formFire, c.f) ? { c: 'form', ids: c.ids, f: c.f } : null;
+    case 'form': return ids(c.ids) && (known(tu.formFire, c.f) || known(tu.cavForms, c.f)) ? { c: 'form', ids: c.ids, f: c.f } : null;
     case 'stance': return ids(c.ids) && typeof c.s === 'string' ? { c: 'stance', ids: c.ids, s: c.s } : null;
     case 'garrison': return ids(c.ids) && num(c.vid) ? { c: 'garrison', ids: c.ids, vid: c.vid } : null;
-    case 'stop': case 'special': case 'auto': case 'replenish': return ids(c.ids) ? { c: c.c, ids: c.ids } : null;
+    case 'stop': case 'special': case 'replenish': return ids(c.ids) ? { c: c.c, ids: c.ids } : null;
     case 'ability': return known(tu.abilities, c.name) && num(c.x) && num(c.z) ? { c: 'ability', name: c.name, x: c.x, z: c.z } : null;
     case 'deploy': return known(tu.types, c.type) ? { c: 'deploy', type: c.type } : null;
   }

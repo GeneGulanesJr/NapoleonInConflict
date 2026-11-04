@@ -4,8 +4,11 @@ import { createView } from './render.ts';
 import { runBattle, CONTROLS, type Outcome } from './battle.ts';
 import { localSource, remoteSource, replaySource } from './game.ts';
 import { unlock } from './audio.ts';
+import { ICONS, pxCanvas } from './pixel.ts';
 import { settings } from './settings.ts';
-import { parseReplay, type Replay } from './sim/replay.ts';
+import { parseReplay, DT, type Replay } from './sim/replay.ts';
+import { createSim, step } from './sim/sim.ts';
+import { makeBot } from './sim/bot.ts';
 import {
   CAMPAIGN, SCENARIOS, TUNING, newCampaign, load, save, clearSave, applyResult, freshRoster, wonMap, EXTRA_BATTLES, makeSkirmish, type CampaignState,
   loadBattle, saveBattle, clearBattle, type BattleSave, reinforce, recruit, fillCost, recruitCost, prefNum, setPrefNum, pref,
@@ -18,23 +21,32 @@ const menu = document.getElementById('menu')!;
 const view = createView(viewHost);
 let battle: { destroy(): void } | null = null;
 
-// idle backdrop: slowly orbiting battlefield behind the menus
-let backdrop = 0;
+// idle backdrop: a skirmish the bots fight behind the menus, in golden-hour light; the camera follows the fighting and leans a little with the mouse
+let backdrop = 0, lean: ((e: PointerEvent) => void) | null = null;
 function startBackdrop() {
-  view.setScenario(SCENARIOS.waterloo, TUNING);
-  view.cam.dist = 130; view.cam.x = 0; view.cam.z = 0;
-  const idle = { sync: { t: 0, units: [], zones: SCENARIOS.waterloo.zones, smoke: [], fx: [], weather: 'clear' } };
-  let last = performance.now();
+  const scn = makeSkirmish(Date.now() & 0xffff);
+  view.setScenario(scn, TUNING); view.setDusk(true);
+  const fresh = () => { const g = createSim(scn, TUNING, { seed: (Date.now() & 0x7fff) + 1 }); return { g, bots: [makeBot(g, 0), makeBot(g, 1)] }; };
+  let run = fresh(), acc = 0, mx = 0, tilt = 0, yaw = 0.4, last = performance.now();
+  view.cam.dist = 115; view.cam.x = 0; view.cam.z = 0;
+  lean = (e) => { mx = e.clientX / innerWidth - 0.5; };
+  addEventListener('pointermove', lean);
   const loop = (n: number) => {
     backdrop = requestAnimationFrame(loop);
     const dt = Math.min(0.1, (n - last) / 1000); last = n;
-    view.cam.yaw += dt * 0.05;
-    view.sync(idle.sync, dt, 0, []);
+    if (run.g.s.over) run = fresh();
+    acc = Math.min(acc + dt * (run.g.s.t < 50 ? 6 : 2), 1); // the march in is skipped over quickly, the fighting plays at a watchable pace
+    while (acc >= DT && !run.g.s.over) { step(run.g, DT); run.bots[0](DT); run.bots[1](DT); acc -= DT; }
+    const us: any[] = run.g.s.units, hot = us.filter((u) => u.eng != null || u.fired < 4), at = hot.length ? hot : us, k = Math.min(1, dt * 0.5);
+    if (at.length) { view.cam.x += (at.reduce((s, u) => s + u.x, 0) / at.length - view.cam.x) * k; view.cam.z += (at.reduce((s, u) => s + u.z, 0) / at.length - view.cam.z) * k; }
+    tilt += (mx - tilt) * Math.min(1, dt * 2); yaw += dt * 0.02;
+    view.cam.yaw = yaw + tilt * 0.3;
+    view.sync(run.g.s, dt, 0, run.g.s.events.splice(0));
     view.render();
   };
   backdrop = requestAnimationFrame(loop);
 }
-const stopBackdrop = () => cancelAnimationFrame(backdrop);
+const stopBackdrop = () => { cancelAnimationFrame(backdrop); if (lean) removeEventListener('pointermove', lean); view.setDusk(false); };
 
 function screen(html: string, bind: (el: HTMLElement) => void) {
   menu.style.display = 'flex';
@@ -48,24 +60,43 @@ function screen(html: string, bind: (el: HTMLElement) => void) {
 const hideMenu = () => { menu.style.display = 'none'; menu.innerHTML = ''; };
 
 // ------------------------------------------------------------------ title
+/** how much of the army's full strength a campaign still has, in percent */
+const armyPct = (c: CampaignState) => Math.round((c.roster.reduce((a, u) => a + u.men, 0) / Object.keys(CAMPAIGN.roster).reduce((a, t) => a + CAMPAIGN.roster[t].length * TUNING.types[t].men, 0)) * 100);
 function title() {
-  const saved = load();
+  const saved = load(), n = CAMPAIGN.battles.length, c = saved ?? newCampaign();
+  const live = saved && !saved.ended && loadBattle(saved), next = SCENARIOS[CAMPAIGN.battles[Math.min(c.idx, n - 1)]];
+  const mark: Record<string, string> = { win: '✔', draw: '≈', loss: '✘' };
   screen(`
-    <h1 class="logo">NAPOLEON <em>IN CONFLICT</em></h1>
-    <p class="sub stag">The Waterloo Campaign — June 1815</p>
-    <div class="btns">
-      <button class="stag" id="new">New Campaign</button>
-      ${saved ? `<button class="stag" id="cont">Continue Campaign <small>(battle ${Math.min(saved.idx + 1, 5)} of 5${loadBattle(saved) ? ', in progress' : ''})</small></button>` : ''}
-      <button class="stag alt" id="quick">Quick Battle</button>
-      <button class="stag alt" id="mp">Multiplayer</button>
-      <button class="stag alt" id="set">Settings</button>
-    </div>
-    <p class="help stag">${CONTROLS.map(([g, ks]) => `<b>${g}</b> ${ks.map(([k, d]) => `${k}: ${d}`).join(' · ')}`).join('<br>')}</p>`, (el) => {
+    <div class="home">
+      <header class="stag"><h1 class="logo">NAPOLEON <em>IN CONFLICT</em></h1>
+        <p class="tag"><span class="orn"></span>The Waterloo Campaign · 15–18 June 1815<span class="orn"></span></p></header>
+      <div class="hbody">
+        <nav class="homenav">
+          ${saved ? `<button class="stag primary" id="cont">${saved.ended ? 'The campaign is over' : 'Continue Campaign'}<small>${saved.ended ? 'Read how it ended' : `Battle ${Math.min(saved.idx + 1, n)} of ${n} · ${next.title}${live ? ' · in progress' : ''}`}</small></button>` : ''}
+          <button class="stag ${saved ? 'alt' : 'primary'}" id="new">New Campaign<small>${saved ? 'Starts over: your saved campaign is lost' : 'Five linked battles, Charleroi to Waterloo'}</small></button>
+          <button class="stag alt" id="quick">Quick Battle<small>Any battle, either side, or a random skirmish</small></button>
+          <button class="stag alt" id="mp">Multiplayer<small>Team against team on one field</small></button>
+          <div class="homerow stag"><button class="alt" id="set">Settings</button><button class="alt" id="how">How to play</button></div>
+        </nav>
+        <aside class="homeside stag">
+          <h4 class="hd">The road to Waterloo</h4>${routeMap(c)}
+          <p class="stat">${saved ? `<b>${armyPct(c)}%</b> army strength<br><b>${c.glory ?? 0}</b> glory to spend<br>Battles ${CAMPAIGN.battles.map((b: string) => mark[c.results[b]] ?? '·').join(' ')}` : 'Command the Army of the North through the Hundred Days. Losses carry from one battle to the next.'}</p>
+        </aside>
+      </div>
+      <div class="homehelp" style="display:none">${CONTROLS.map(([g, ks]) => `<div><b>${g}</b>${ks.map(([k, d]) => `<p><kbd>${k}</kbd> ${d}</p>`).join('')}</div>`).join('')}</div>
+      <p class="foot stag">Enter ${saved ? 'continues' : 'begins'} the campaign · ? in battle lists every control</p>
+    </div>`, (el) => {
+    el.querySelectorAll('.orn').forEach((o) => o.appendChild(pxCanvas(ICONS.sword, 2))); // the cursor's sword, either side of the date
     el.querySelector<HTMLElement>('#new')!.onclick = () => { unlock(); clearSave(); clearBattle(); const c = newCampaign(); save(c); campaignScreen(c); };
     el.querySelector<HTMLElement>('#cont')?.addEventListener('click', () => { unlock(); campaignScreen(saved!); });
     el.querySelector<HTMLElement>('#quick')!.onclick = () => { unlock(); quickScreen(); };
     el.querySelector<HTMLElement>('#mp')!.onclick = () => { unlock(); mpScreen(); };
     el.querySelector<HTMLElement>('#set')!.onclick = () => { unlock(); settingsScreen(); };
+    ([['#cont', 'march'], ['#new', 'sword'], ['#quick', 'barrage'], ['#mp', 'cavalry']] as const).forEach(([s, i]) => { const b = el.querySelector(s), ic = pxCanvas(ICONS[i], 1); ic.className = 'ic'; b?.prepend(ic); }); // the battle icons, drawn from their grids
+    const key = (e: KeyboardEvent) => { if (!el.isConnected) removeEventListener('keydown', key); else if (e.key === 'Enter' && document.activeElement === document.body) el.querySelector<HTMLElement>('.primary')!.click(); };
+    addEventListener('keydown', key);
+    const help = el.querySelector<HTMLElement>('.homehelp')!, how = el.querySelector<HTMLElement>('#how')!;
+    how.onclick = () => { const open = help.style.display === 'none'; help.style.display = open ? '' : 'none'; how.textContent = open ? 'Hide controls' : 'How to play'; };
   });
 }
 
