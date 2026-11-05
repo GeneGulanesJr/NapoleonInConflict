@@ -1527,7 +1527,7 @@ test('golden: the sim plays out as it did when SIM_VERSION was last bumped (save
   for (let i = 0; i < 1200; i++) { step(sim, 0.05); bots[0](0.05); bots[1](0.05); }
   let h = 2166136261; // FNV-1a over every regiment's place and strength after a minute of bot against bot
   for (const ch of JSON.stringify(sim.s.units.map((u: any) => [u.id, Math.round(u.x * 10), Math.round(u.z * 10), Math.round(u.men)]))) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-  assert.equal(`${SIM_VERSION}:${h >>> 0}`, '5:3234146736', 'the sim changed: bump SIM_VERSION in src/sim/sim.ts, then put this value in the test');
+  assert.equal(`${SIM_VERSION}:${h >>> 0}`, '6:3439430313', 'the sim changed: bump SIM_VERSION in src/sim/sim.ts, then put this value in the test');
 });
 
 test('the server drops orders from a client that floods it, and still obeys one that keeps to a normal pace', async () => {

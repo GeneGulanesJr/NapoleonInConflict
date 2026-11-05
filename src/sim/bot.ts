@@ -35,7 +35,8 @@ export function makeBot(sim: Sim, side: number) {
 function think(sim: Sim, side: number, mem: any) {
   const { s, scn, tu } = sim;
   if (s.over) return;
-  const stance: string = scn.bot?.[side] ?? (side === 0 ? 'attack' : 'defend');
+  const baseStance: string = scn.bot?.[side] ?? (side === 0 ? 'attack' : 'defend');
+  let stance = baseStance; // per regiment inside the loop below: a garrison always holds
   const sd = s.side[side];
   const my = s.units.filter((u: any) => u.side === side && !u.dead && !u.routed);
   const sv = (e: any) => !s.fog || s.seen[side].includes(e.id); // the bot only knows what it can see
@@ -86,7 +87,7 @@ function think(sim: Sim, side: number, mem: any) {
   const mineZones = s.zones.filter((z: any) => z.owner === side);
   const en = scn.entry[side], retreat = stance === 'retreat'; // a rearguard falls back toward its own map edge, fighting whatever catches it, instead of holding ground
   // points to hold and take. cap = most regiments a point may draw: a captured point keeps a small guard (new reserves fill it), a point we held and lost gets a counter-attack sized to the foe around it, and only if that is a modest part of the army
-  const held: Record<string, boolean> = (mem.held ??= {}), cap: Record<string, number> = {};
+  const held: Record<string, boolean> = (mem.held ??= {}), cap: Record<string, number> = {}, anchor: Record<number, string> = (mem.anchor ??= {}); // anchor: regiment id -> the point it was first assigned beside and now garrisons for good
   const warned: Record<string, boolean> = (mem.warned ??= {}); // counter-attacks already announced to the player
   for (const z of s.zones) if (z.owner === side) { held[z.id] = true; delete warned[z.id]; }
   const avg = my.reduce((q: number, u: any) => q + u.men, 0) / (my.length || 1);
@@ -124,7 +125,8 @@ function think(sim: Sim, side: number, mem: any) {
     }
     // pick / refresh a goal zone
     let a = mem.assign[u.id];
-    if (!a || !zones.some((z: any) => z.id === a.zid) || (load[a.zid] ?? 0) > (cap[a.zid] ?? 1e9)) { // gone, or over its quota: the surplus moves on
+    const first = !a;
+    if (!anchor[u.id] && (!a || !zones.some((z: any) => z.id === a.zid) || (load[a.zid] ?? 0) > (cap[a.zid] ?? 1e9))) { // gone, or over its quota: the surplus moves on (a garrison never does)
       if (a) load[a.zid]--;
       let bz: any = null, bsc = 1e9;
       const open = zones.filter((z: any) => (load[z.id] ?? 0) < (cap[z.id] ?? 1e9));
@@ -132,8 +134,10 @@ function think(sim: Sim, side: number, mem: any) {
       const ang = rand(s) * Math.PI * 2, rr = Math.sqrt(rand(s)) * bz.r * 0.7;
       a = mem.assign[u.id] = { zid: bz.id, ox: Math.cos(ang) * rr, oz: Math.sin(ang) * rr };
       load[bz.id] = (load[bz.id] ?? 0) + 1;
+      if (first && !retreat && dist(u, bz) < bz.r + 50) anchor[u.id] = bz.id; // first assigned beside a point: this regiment is its garrison
     }
-    const z = zones.find((q: any) => q.id === a.zid);
+    const anc = !!anchor[u.id], z = zones.find((q: any) => q.id === a.zid) ?? s.zones.find((q: any) => q.id === a.zid); // a garrison keeps its point even when the army's plans leave it out
+    stance = anc ? 'defend' : baseStance;
     const gx = z.x + a.ox, gz = z.z + a.oz;
     const goto = (x: number, zz: number) => {
       if (u.tx != null && Math.hypot(u.tx - x, u.tz - zz) < 4) return;
@@ -142,7 +146,7 @@ function think(sim: Sim, side: number, mem: any) {
     const hold = () => { if (u.tx != null || u.chase != null) command(sim, side, { c: 'stop', ids: [u.id] }); };
     // worn down: fall back to the nearest quiet objective we hold, take on replacements there (the replenish rule above), then rejoin. Regiments defending one of our objectives stay put.
     const dry = T.ammo && u.ammo < 3, wet = !T.ammo || u.ammo >= 0.7 * T.ammo; // nearly out of ammunition: fall back to a depot to take more on
-    if ((dry || (u.men < 0.4 * u.maxMen && sd.pool >= 1 && sd.rp > 10)) && u.garrison == null && !s.zones.some((q: any) => q.owner === side && dist(u, q) < q.r)) mem.mend[u.id] = true;
+    if ((dry || (u.men < 0.4 * u.maxMen && sd.pool >= 1 && sd.rp > 10)) && u.garrison == null && !anc && !s.zones.some((q: any) => q.owner === side && dist(u, q) < q.r)) mem.mend[u.id] = true;
     if (mem.mend[u.id]) {
       const dz = mineZones.filter((q: any) => !q.contested).sort((p: any, q: any) => dist(u, p) - dist(u, q))[0];
       if (!dz || (u.men >= 0.95 * u.maxMen && wet) || (dist(u, dz) < dz.r && !u.refill && wet)) delete mem.mend[u.id]; // done, nowhere to go, or no money to refill: back to the fight
