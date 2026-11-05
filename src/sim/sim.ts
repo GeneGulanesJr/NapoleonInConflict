@@ -5,7 +5,7 @@ import { route } from './path.ts';
 export type Sim = { s: any; scn: any; tu: any; tl: any[] };
 
 /** Bump whenever the sim's behaviour changes (code, tuning or scenario data). Saved battles and replay files carry it and are dropped on a mismatch; the golden-hash test in scripts/test.ts fails until you do. */
-export const SIM_VERSION = 3;
+export const SIM_VERSION = 5;
 
 export function rand(s: { seed: number }): number {
   s.seed = (s.seed + 0x6d2b79f5) | 0;
@@ -536,11 +536,12 @@ function smokeFactor(sim: Sim, x: number, z: number) {
 /** One volley (or round) from u at tg, td units off its nearest edge (0 = point blank). */
 function shoot(sim: Sim, u: any, tg: any, td: number) {
   const { s, scn, tu } = sim, T = tu.types[u.type], W = tu.weather[s.weather] ?? tu.weather.clear;
-  // round shot falls short or wide more often the further it flies; canister at close range always tells
-  const canister = u.spUntil > s.t && u.spKind === 'canister', volley = u.spUntil > s.t && u.spKind === 'volley', close = td < tu.canisterRange * (canister ? 2.2 : 1);
+  // round shot falls short or wide more often the further it flies; canister is deadliest at the muzzle and thins out to nothing at its (short) reach
+  const canister = u.spUntil > s.t && u.spKind === 'canister', volley = u.spUntil > s.t && u.spKind === 'volley', cs = tu.canisterSpecial;
+  const grape = u.type === 'artillery' ? Math.max(0, 1 - td / (tu.canisterRange * (canister ? cs.reach : 1))) : 0; // 1 at point blank, 0 at the edge of canister range
   const first = u.stance === 'holdfire' && u.fired >= tu.holdFire.loaded; // a fresh, carefully loaded first volley after holding fire
   const G = tu.gunnery, ranged = u.zero?.id === tg.id ? Math.min(1, u.zero.n / G.shots) : 0; // a battery that has been firing at this target has found the range
-  const miss = u.type === 'artillery' && !close && rand(s) < G.miss * (td / rng(u, tu)) ** G.curve * (1 - G.ranging * ranged);
+  const miss = u.type === 'artillery' && rand(s) < G.miss * (td / rng(u, tu)) ** G.curve * (1 - G.ranging * ranged) * (1 - grape); // the spread of canister makes a miss unlikely up close
   const fm = u.type === 'skirmisher' || u.type === 'artillery' ? 1 : tu.formFire[u.form];
   const dmgForm = tu.types[tg.type].cav ? 0.8 * cf(tg, 'taken', tu) : tg.type === 'skirmisher' ? 0.6 : (u.type === 'artillery' ? tu.artDmg : tu.formDmg)[tg.form]; // round shot ploughs through dense columns and squares
   const rf = Math.max(tu.rangeFloor, 1 - 0.75 * (td / rng(u, tu)));
@@ -550,7 +551,7 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
   let cas = u.men * T.power * rf * fm * dmgForm * (tg.garrison != null ? tu.garrison.cover : featureAt(scn, tg.x, tg.z).cover) * tu.flank.dmg[asp] * (1 + u.vet * tu.veterancy.fire) * smokeFactor(sim, tg.x, tg.z) * W.fire * (1 - dark(sim) * tu.night.fire) * elev
     * (0.5 + 0.5 * Math.max(0, u.morale) / u.maxMorale) * (1 - tu.fatigue.fire * u.fat) * (posted(tg, tu) ? tu.hold.fire : 1) * (u.aura ? tu.commanderAura.dmg : 1) * (u.lead ? tu.commanderAura.front.dmg : 1) * (0.8 + 0.4 * rand(s))
     * (u.shaken > 0 ? tu.shaken.fire : 1) * (u.type === 'skirmisher' && tg.type === 'artillery' ? tu.screen.guns : screened(sim, u, tg) ? tu.screen.fire : 1); // rattled men shoot worse; sharpshooters pick off gun crews; a skirmish screen soaks up fire
-  if (u.type === 'artillery' && close) cas *= tu.canisterMult * (canister ? 1.4 : 1);
+  if (grape > 0) cas *= (1 + (tu.canisterMult - 1) * grape) * (canister ? cs.boost : 1);
   if (volley) { cas *= 2.2; u.spUntil = 0; }
   else if (first) cas *= tu.holdFire.first;
   if (miss) ev(sim, { k: 'boom', x: tg.x + (rand(s) - 0.5) * 16, z: tg.z + (rand(s) - 0.5) * 16 }); // the ball ploughs up the ground nearby
@@ -558,14 +559,14 @@ function shoot(sim: Sim, u: any, tg: any, td: number) {
     const bite = hit(sim, tg, cas, tu.flank.morale[asp], u, tu.shaken.flank[asp]); // caught on the flank, men are rattled the more
     const charging = tg.bay != null || (tu.types[tg.type].cav && tg.chase != null);
     if (charging && bite >= tu.falter.share && !faltered(tg, s, tu)) { tg.falter = s.t; tg.spUntil = 0; ev(sim, { k: 'falter', x: tg.x, z: tg.z, side: tg.side }); } // a charge shot to pieces still comes on, but without its momentum (no Charge or bayonet bonus)
-    if (u.type === 'artillery' && !close) { // round shot carries on through the files and strikes the next regiment in its path
+    if (u.type === 'artillery' && grape < 0.5) { // round shot carries on through the files and strikes the next regiment in its path
       const dl = Math.hypot(tg.x - u.x, tg.z - u.z) || 1, dx = (tg.x - u.x) / dl, dz = (tg.z - u.z) / dl;
       const q = s.units.find((q: any) => q !== tg && q.side === tg.side && !q.dead && q.garrison == null && Math.hypot(q.x - tg.x, q.z - tg.z) < tu.plough.reach + 30
         && [0.25, 0.5, 0.75, 1].some((k) => distToFoot(q, tu, tg.x + dx * tu.plough.reach * k, tg.z + dz * tu.plough.reach * k) < 0.5));
       if (q) hit(sim, q, cas * tu.plough.carry, 1, u, 0);
     }
   }
-  u.reload = T.reload * (0.9 + 0.2 * rand(s)) * (volley ? 1.6 : canister ? 0.6 : 1) * (u.aura ? tu.commanderAura.reload : 1);
+  u.reload = T.reload * (0.9 + 0.2 * rand(s)) * (volley ? 1.6 : canister ? cs.reload : 1) * (u.aura ? tu.commanderAura.reload : 1);
   u.fired = 0;
   if (u.type === 'artillery') u.zero = { id: tg.id, n: u.zero?.id === tg.id ? u.zero.n + 1 : 0 };
   if (T.ammo && --u.ammo < 1) { log(sim, `${u.name} is out of ammunition!`); chron(sim, u.side, `${u.name} out of ammunition`); }
@@ -847,16 +848,23 @@ export function step(sim: Sim, dt: number) {
     const ab = tu.abilities[f.kind];
     f.t += dt;
     if (f.t < ab.delay || f.t > ab.delay + ab.dur) continue;
-    for (const u of live) {
+    if (!ab.blast) for (const u of live) { // rockets: a steady strike over the whole circle
       if (u.dead || Math.hypot(u.x - f.x, u.z - f.z) > ab.r) continue;
-      hit(sim, u, u.maxMen * ab.dps * dt * tu.artDmg[u.form], 0.5, null, 0); // a barrage or rocket strike shakes in proportion to what it takes, like any fire
+      hit(sim, u, u.maxMen * ab.dps * dt * tu.artDmg[u.form], 0.5, null, 0); // a rocket strike shakes in proportion to what it takes, like any fire
       u.morale -= ab.mdps * dt;
     }
     f.acc += ab.booms * dt;
     while (f.acc >= 1) {
       f.acc--;
-      const a = rand(s) * Math.PI * 2, r = Math.sqrt(rand(s)) * ab.r;
-      ev(sim, { k: 'boom', x: f.x + Math.cos(a) * r, z: f.z + Math.sin(a) * r });
+      const a = rand(s) * Math.PI * 2, r = Math.sqrt(rand(s)) * ab.r, bx = f.x + Math.cos(a) * r, bz = f.z + Math.sin(a) * r;
+      ev(sim, { k: 'boom', x: bx, z: bz });
+      if (ab.blast) for (const u of live) { // barrage: each shell hurts what it lands near, so some regiments are lucky
+        const k = 1 - Math.hypot(u.x - bx, u.z - bz) / ab.blast;
+        if (u.dead || u.routed || k <= 0) continue;
+        const m0 = u.morale;
+        hit(sim, u, u.maxMen * ab.dmg * k, 0.5, null, 0);
+        u.morale = Math.max(u.morale - ab.mor * k, Math.min(m0, ab.floor * u.maxMorale)); // never rout it, only soften it
+      }
     }
   }
   s.fx = s.fx.filter((f: any) => f.t < tu.abilities[f.kind].delay + tu.abilities[f.kind].dur + 0.1);

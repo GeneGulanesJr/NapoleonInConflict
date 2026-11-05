@@ -7,7 +7,7 @@ import { applyResult, reinforce, recruit, fillCost, type CampaignState } from '.
 import { runner, parseReplay, replayFile, type Replay } from '../src/sim/replay.ts';
 import { upscale } from '../src/render.ts';
 import { readFileSync } from 'node:fs';
-import { createSim, step, command, spawn as spawnUnit, SIM_VERSION, manPrice, distToFoot, posted, steady, foot, verdict } from '../src/sim/sim.ts';
+import { createSim, step, command, useAbility, spawn as spawnUnit, SIM_VERSION, manPrice, distToFoot, posted, steady, foot, verdict } from '../src/sim/sim.ts';
 import { makeBot } from '../src/sim/bot.ts';
 import { heightAt, groundAt, los, deepAt, riverAt } from '../src/sim/world.ts';
 import { route } from '../src/sim/path.ts';
@@ -1483,12 +1483,50 @@ test('the Old Guard is stronger than the line: one regiment beats two, but not t
   assert.ok(three.guard < three.lines, `1 v 3: the Guard keeps ${Math.round(three.guard)} men, the lines ${Math.round(three.lines)}`);
 });
 
+test('a barrage lands scattered shells: it hurts and unsettles the regiment under it, spares one far off, and never routs by itself', () => {
+  let under: any, away: any;
+  const sim = arena((fr, co) => {
+    const [a, b] = co.filter((u) => u.type === 'line');
+    under = Object.assign(a, { x: 0, z: 0, form: 'line' }); away = Object.assign(b, { x: 150, z: 0, form: 'line' });
+    return [Object.assign(fr.find((u) => u.type === 'line'), { x: -150, z: 150 }), under, away];
+  });
+  sim.scn.abilities = [['barrage'], []];
+  assert.ok(useAbility(sim, 0, 'barrage', 0, 0));
+  let low = 1e9;
+  run(sim, 30, () => false, () => { low = Math.min(low, under.morale); });
+  assert.ok(under.men < under.maxMen && low < under.maxMorale, `the regiment under it was hurt (${under.men}/${under.maxMen}, morale ${low})`);
+  assert.ok(low >= sim.tu.abilities.barrage.floor * under.maxMorale && !under.routed, `shaken but not broken (morale fell to ${low})`);
+  assert.equal(away.men, away.maxMen, 'a regiment beyond the circle is untouched');
+});
+
+test('canister thins out smoothly with distance (no cliff at its edge) and the special does not carry it past round-shot range', () => {
+  const lost = (gap: number, special: boolean) => {
+    let sum = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      let g: any, l: any;
+      const sim = arena((fr, co) => {
+        g = fr.find((u) => u.type === 'artillery'); l = co.find((u) => u.type === 'line');
+        return [Object.assign(g, { men: 180, maxMen: 180, x: 0, z: 0, facing: 0, limbered: false, limT: 0 }), Object.assign(l, { men: 540, maxMen: 540, x: 0, z: gap + 5, facing: Math.PI, form: 'line', ammo: 0 }), Object.assign(fr.find((u) => u.type === 'line'), { x: -300, z: -300 })];
+      });
+      sim.s.seed = seed;
+      if (special) command(sim, 0, { c: 'special', ids: [g.id] });
+      run(sim, 10);
+      sum += 540 - l.men;
+    }
+    return sum / 12;
+  };
+  const near = lost(8, true), mid = lost(35, true), far = lost(50, true), plain = lost(8, false);
+  assert.ok(near > mid && mid > far, `the special fades with range (${near.toFixed(0)} > ${mid.toFixed(0)} > ${far.toFixed(0)})`);
+  assert.ok(near > plain, `the special hits harder than plain fire up close (${near.toFixed(0)} vs ${plain.toFixed(0)})`);
+  assert.ok(far < 0.15 * 540, `well past canister range it is only round shot (${far.toFixed(0)} men)`);
+});
+
 test('golden: the sim plays out as it did when SIM_VERSION was last bumped (saves and replay files are only valid within one version)', () => {
   const sim = createSim(data('ligny'), data('tuning'), { seed: 1 }), bots = [makeBot(sim, 0), makeBot(sim, 1)];
   for (let i = 0; i < 1200; i++) { step(sim, 0.05); bots[0](0.05); bots[1](0.05); }
   let h = 2166136261; // FNV-1a over every regiment's place and strength after a minute of bot against bot
   for (const ch of JSON.stringify(sim.s.units.map((u: any) => [u.id, Math.round(u.x * 10), Math.round(u.z * 10), Math.round(u.men)]))) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-  assert.equal(`${SIM_VERSION}:${h >>> 0}`, '3:734255717', 'the sim changed: bump SIM_VERSION in src/sim/sim.ts, then put this value in the test');
+  assert.equal(`${SIM_VERSION}:${h >>> 0}`, '5:3234146736', 'the sim changed: bump SIM_VERSION in src/sim/sim.ts, then put this value in the test');
 });
 
 test('the server drops orders from a client that floods it, and still obeys one that keeps to a normal pace', async () => {

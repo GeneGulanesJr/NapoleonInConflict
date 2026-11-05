@@ -177,6 +177,7 @@
   "rangeFloor": 0.25,
   "canisterRange": 30,
   "canisterMult": 1.8,
+  "canisterSpecial": { "_note": "Canister is strongest at the muzzle (canisterMult x) and thins out linearly to round shot at canisterRange. The Canister special stretches that range by `reach`, hits `boost` x harder and reloads `reload` x as long", "reach": 1.5, "boost": 1.2, "reload": 0.75 },
   "meleeRate": 0.02,
   "chargeShock": 22,
   "routSpread": {
@@ -277,12 +278,15 @@
       "label": "Artillery Barrage",
       "key": "F1",
       "cd": 120,
-      "delay": 6,
+      "_note": "Shells land at random spots inside `r` (booms per s for `dur` s, after `delay` s of warning); each one hurts whatever stands within `blast` of it, fading to nothing at the edge: `dmg` = share of the regiment's men and `mor` = morale at a direct hit. Fire never takes a regiment below `floor` x its full morale, so it softens for a charge but does not rout.",
+      "delay": 10,
       "dur": 8,
-      "r": 16,
-      "dps": 0.012,
-      "mdps": 2.5,
-      "booms": 3
+      "r": 24,
+      "blast": 8,
+      "dmg": 0.09,
+      "mor": 70,
+      "floor": 0.25,
+      "booms": 2
     },
     "rockets": {
       "label": "Congreve Rockets",

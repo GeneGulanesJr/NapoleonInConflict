@@ -72,13 +72,13 @@ function think(sim: Sim, side: number, mem: any) {
     } else {
       let best: any = null, bs = 0;
       for (const e of foes) {
-        if (!my.some((f: any) => dist(f, e) < 110)) continue; // needs a spotter
+        if (!my.some((f: any) => dist(f, e) < 110) || (name === 'barrage' && e.mv)) continue; // needs a spotter; guns do not lay on men who are marching
         let sc = 0;
         for (const o of foes) if (dist(o, e) < ab.r) sc += o.men / 270;
         for (const f of my) if (dist(f, e) < ab.r * 1.2) sc -= 3; // keep clear of own men
         if (sc > bs) { bs = sc; best = e; }
       }
-      if (best && bs >= (name === 'barrage' ? 1.5 : 1)) useAbility(sim, side, name, best.x, best.z);
+      if (best && bs >= (name === 'barrage' ? 4 : 1)) useAbility(sim, side, name, best.x, best.z);
     }
   }
 
@@ -109,7 +109,7 @@ function think(sim: Sim, side: number, mem: any) {
     const spc = tu.specials?.[u.type];
     if (spc && s.t >= u.spReady && s.t > 20 && near) {
       const k = spc.kind, ct = u.chase != null ? enemies.find((e: any) => e.id === u.chase) : null;
-      if ((k === 'volley' && nd < T.range * 0.8 && !u.mv) || (k === 'canister' && nd < tu.canisterRange * 2) || (k === 'sprint' && nd < 70 && nd > 25) || (k === 'charge' && ct && dist(u, ct) < 35)) command(sim, side, { c: 'special', ids: [u.id] }); // the Charge sounds ~25-35 out from its target (thinking every 2 s), so it carries home at the gallop
+      if ((k === 'volley' && nd < T.range * 0.8 && !u.mv) || (k === 'canister' && nd < tu.canisterRange * tu.canisterSpecial.reach) || (k === 'sprint' && nd < 70 && nd > 25) || (k === 'charge' && ct && dist(u, ct) < 35)) command(sim, side, { c: 'special', ids: [u.id] }); // the Charge sounds ~25-35 out from its target (thinking every 2 s), so it carries home at the gallop
     }
     // pick / refresh a goal zone
     let a = mem.assign[u.id];
