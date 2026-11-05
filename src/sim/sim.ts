@@ -5,7 +5,7 @@ import { route } from './path.ts';
 export type Sim = { s: any; scn: any; tu: any; tl: any[] };
 
 /** Bump whenever the sim's behaviour changes (code, tuning or scenario data). Saved battles and replay files carry it and are dropped on a mismatch; the golden-hash test in scripts/test.ts fails until you do. */
-export const SIM_VERSION = 6;
+export const SIM_VERSION = 7;
 
 export function rand(s: { seed: number }): number {
   s.seed = (s.seed + 0x6d2b79f5) | 0;
