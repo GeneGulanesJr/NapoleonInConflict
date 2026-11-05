@@ -4,9 +4,13 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { animate } from 'animejs';
-import { heightAt, lineDist, featureAt, riverAt } from './sim/world.ts';
-import { posted, foot, hour } from './sim/sim.ts';
+import { heightAt as groundH, lineDist, featureAt, riverAt } from './sim/world.ts';
+import { posted, foot, hour, distToFoot } from './sim/sim.ts';
 import { pxUrl } from './pixel.ts';
+
+/** Relief is drawn this much taller than it is (the ridges were hard to read at true height). Everything drawn stands on this ground; the sim (line of sight, gun reach) keeps the true height, so use groundH for that. */
+const RELIEF = 1.5;
+const heightAt = (s: any, x: number, z: number) => groundH(s, x, z) * RELIEF;
 
 // palette (sRGB hex, from the style guide)
 const P = { fr: 0x3f6fdc, gb: 0xd8453a, pr: 0x3b4a85, nl: 0xd8872a, br: 0x2a2a2e, trim: 0xe9e4d6, ink: 0x14110d, skin: 0xd8b090, wood: 0x5a4128, brass: 0xd3a64e, steel: 0xb8bcc4,
@@ -157,7 +161,10 @@ export function createView(host: HTMLElement) {
     flashHook(sh); sh.uniforms.uDetail = { value: detail };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aKind; varying vec4 vKind;').replace('#include <project_vertex>', '#include <project_vertex>\nvKind = aKind;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec4 vKind; uniform sampler2D uDetail;`).replace('#include <color_fragment>', `#include <color_fragment>
-      diffuseColor.rgb *= 1.0 + ( dot( texture2D( uDetail, vFlW.xz / ${(DN * DTEX).toFixed(1)} ), vKind ) - 0.5 * dot( vKind, vec4( 1.0 ) ) ) * 0.25;`); // zero weights (wood, water) => no change
+      diffuseColor.rgb *= 1.0 + ( dot( texture2D( uDetail, vFlW.xz / ${(DN * DTEX).toFixed(1)} ), vKind ) - 0.5 * dot( vKind, vec4( 1.0 ) ) ) * 0.25;
+      // relief: higher ground reads lighter, and contour lines every unit of height (4 m), heavier every fifth. The 0.25 offset keeps them off the half-unit terraces, so flat ground stays clean.
+      vec2 cq = vec2( vFlW.y - 0.25, ( vFlW.y - 0.25 ) * 0.2 ), cl = abs( fract( cq - 0.5 ) - 0.5 ) / max( fwidth( cq ), vec2( 1e-4 ) );
+      diffuseColor.rgb *= ( 1.0 + clamp( vFlW.y, -2.0, 20.0 ) * 0.02 ) * ( 1.0 - min( dot( vKind, vec4( 1.0 ) ), 1.0 ) * ( ( 1.0 - min( cl.x, 1.0 ) ) * 0.2 + ( 1.0 - min( cl.y, 1.0 ) ) * 0.3 ) );`); // zero weights (wood, water) => no change
   };
   const toon = (o: THREE.MeshToonMaterialParameters = {}, hook = flashHook) => { const m = new THREE.MeshToonMaterial({ gradientMap: ramp, ...o }); m.onBeforeCompile = hook; return m; };
 
@@ -525,14 +532,15 @@ export function createView(host: HTMLElement) {
   const GL = 1.35, figRamp = new THREE.DataTexture(new Uint8Array([0.47, 0.47, 0.47, 0.47, 0.75, 0.75, 1, 1, GL, GL].map((v) => Math.round((v / GL) * 255))), 10, 1, THREE.RedFormat);
   figRamp.minFilter = figRamp.magFilter = THREE.NearestFilter; figRamp.needsUpdate = true;
   const fig = (g: THREE.BufferGeometry, n: number, center: [number, number, number] | null, shadow = false) => mkI(g, n, Object.assign(toon({ vertexColors: true, gradientMap: figRamp, color: new THREE.Color(GL, GL, GL) }), { flatShading: true }) /* faceted from indexed parts: ~half the vertices */, center, shadow);
-  const body = fig(bodyG, 5000, [0, 0.35, 0]), legL = fig(legG(0.095), 5000, [0, -0.3, 0]), legR = fig(legG(-0.095), 5000, [0, -0.3, 0]);
-  const armsCarry = fig(armsCarryG, 5000, [0, -0.2, 0.05]), armsAim = fig(armsAimG, 3000, [0, -0.05, 0.4]), armsRide = fig(armsRideG, 1600, [0, -0.1, 0.2]);
-  const packM = fig(packG, 5000, [0, 0.35, 0]);
+  const FIG_MAX = 8000, CROWD = 1.4; // figure buffers; CROWD = how many more men than the sim's count the line and guard show when zoomed in (the spacing is already close to a man's width: much past 1.4 they overlap)
+  const body = fig(bodyG, FIG_MAX, [0, 0.35, 0]), legL = fig(legG(0.095), FIG_MAX, [0, -0.3, 0]), legR = fig(legG(-0.095), FIG_MAX, [0, -0.3, 0]);
+  const armsCarry = fig(armsCarryG, FIG_MAX, [0, -0.2, 0.05]), armsAim = fig(armsAimG, FIG_MAX, [0, -0.05, 0.4]), armsRide = fig(armsRideG, 1600, [0, -0.1, 0.2]);
+  const packM = fig(packG, FIG_MAX, [0, 0.35, 0]);
   // one invisible box casts the whole soldier's shadow (cheaper than every part casting); slightly inside the silhouette so it never darkens the figure
-  const shadowP = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 1.8, 0.28).translate(0, 0.9 - HIP, 0), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), 5000);
+  const shadowP = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 1.8, 0.28).translate(0, 0.9 - HIP, 0), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), FIG_MAX);
   shadowP.instanceMatrix = body.instanceMatrix; shadowP.count = 0; shadowP.frustumCulled = false; shadowP.castShadow = true; shadowP.receiveShadow = false; scene.add(shadowP);
   const hat = [0, 1.05, 0] as [number, number, number];
-  const shakoM = fig(shakoG, 5000, hat), belgM = fig(belgicG, 3000, hat), bearM = fig(bearG, 1500, hat), cuirM = fig(cuirG, 1500, [0, 0.5, 0]), capM = fig(capG, 1500, hat), bicM = fig(bicG, 200, hat);
+  const shakoM = fig(shakoG, FIG_MAX, hat), belgM = fig(belgicG, FIG_MAX, hat), bearM = fig(bearG, 3000, hat), cuirM = fig(cuirG, 1500, [0, 0.5, 0]), capM = fig(capG, 1500, hat), bicM = fig(bicG, 200, hat);
   const skirM = fig(skirG, 2500, null), lanceM = fig(lanceG, 1500, null);
   // one standard per infantry regiment (pole + finial, waving banner in the nation's colour, gold eagle)
   const flagM = mkI(merge([bx(0.07, 3.6, 0.07, 0, 1.8, 0, P.wood), bx(0.18, 0.2, 0.18, 0, 3.7, 0, P.brass)]), 400, toon({ vertexColors: true }), [0, 1.8, 0], false);
@@ -602,18 +610,18 @@ export function createView(host: HTMLElement) {
 
   // per regiment: smoothed centre and facing, its speed, and per man MS floats: x, z, facing, vx, vz, gait phase
   const MS = 6;
-  type Vis = { x: number; z: number; f: number; m: Float32Array; form: string; rs: number; n?: number; side: number; kind: number; seenT?: number; th?: number }; // th: the thinning (every th-th man drawn) of the last frame
+  type Vis = { x: number; z: number; f: number; m: Float32Array; form: string; rs: number; n?: number; nd?: number; side: number; kind: number; seenT?: number; th?: number }; // th: the thinning (every th-th man drawn) of the last frame
   const GHOST = 30; // fog of war: seconds an enemy's plate lingers where it was last seen
   // crowd: last frame's men (and the houses) in a flat grid, counting-sorted by cell, so each man only looks at his neighbours to shoulder them apart
-  const CG = 2.4, CMAX = 9000, cX = new Float32Array(CMAX), cZ = new Float32Array(CMAX), cR = new Float32Array(CMAX), cU = new Int32Array(CMAX), cI = new Int32Array(CMAX), cS = new Int8Array(CMAX), cCell = new Int32Array(CMAX), cOrd = new Int32Array(CMAX);
+  const CG = 2.4, CMAX = 14000, cX = new Float32Array(CMAX), cZ = new Float32Array(CMAX), cR = new Float32Array(CMAX), cU = new Int32Array(CMAX), cI = new Int32Array(CMAX), cS = new Int8Array(CMAX), cCell = new Int32Array(CMAX), cOrd = new Int32Array(CMAX);
   let cN = 0, cW = 1, cStart = new Int32Array(2), cFill = new Int32Array(1), houseXZ: number[] = [];
   const cellOf = (x: number) => Math.max(0, Math.min(cW - 1, Math.floor((x + mapSize / 2) / CG) + 1));
-  const figR = (kind: number, i: number) => (kind === 2 ? (i & 1 ? 0.5 : 1.6) : kind === 1 ? 1 : 0.5) * FS; // man, horse, gun
+  const figR = (kind: number, i: number) => (kind === 2 ? (i & 1 ? 0.5 : 1.6) : kind === 1 ? 1 : 0.42) * FS; // man, horse, gun (a man's room is small enough for the denser ranks to stand without shoving)
   function buildCrowd() {
     cN = 0;
     const add = (x: number, z: number, r: number, u: number, i: number, s: number) => { if (cN < CMAX) { cX[cN] = x; cZ[cN] = z; cR[cN] = r; cU[cN] = u; cI[cN] = i; cS[cN++] = s; } };
     for (let h = 0; h < houseXZ.length; h += 2) add(houseXZ[h], houseXZ[h + 1], 1.7, -1, h, -1);
-    for (const [id, v] of vis) if (v.form !== '' && v.n) for (let i = 0; i < v.n; i++) { const o = i * MS; if (v.th! > 1 && i % v.th!) continue; /* men not drawn are not tracked */ if (v.m[o] === v.m[o]) add(v.m[o], v.m[o + 1], figR(v.kind, i), id, i, v.side); }
+    for (const [id, v] of vis) if (v.form !== '' && v.nd) for (let i = 0; i < v.nd; i++) { const o = i * MS; if (v.th! > 1 && i % v.th!) continue; /* men not drawn are not tracked */ if (v.m[o] === v.m[o]) add(v.m[o], v.m[o + 1], figR(v.kind, i), id, i, v.side); }
     cW = Math.ceil(mapSize / CG) + 2; const cells = cW * cW;
     if (cStart.length < cells + 1) { cStart = new Int32Array(cells + 1); cFill = new Int32Array(cells); } else cStart.fill(0);
     for (let k = 0; k < cN; k++) { cCell[k] = cellOf(cZ[k]) * cW + cellOf(cX[k]); cStart[cCell[k] + 1]++; }
@@ -653,7 +661,8 @@ export function createView(host: HTMLElement) {
   }
   const tmpC = new THREE.Color(), tmpC2 = new THREE.Color(), plumeC = new THREE.Color();
 
-  function slots(u: any, n: number, i: number, out: number[]) {
+  /** Where man i of n stands, relative to the regiment, before the FS scale. dn = how many times denser than the sim's own count (n / the sim's men): the same frontage and depth, packed tighter. */
+  function slots(u: any, n: number, i: number, out: number[], dn = 1) {
     const kind = u.type;
     if (u.garrison != null) { out[0] = ((i % 5) - 2) * 1.25; out[1] = -Math.floor(i / 5) * 1.2; return; }
     if (u.routed) { out[0] = (hash(i * 3 + u.id) - 0.5) * 16; out[1] = (hash(i * 7 + u.id) - 0.5) * 10; return; } // broken ranks scatter
@@ -663,15 +672,15 @@ export function createView(host: HTMLElement) {
       const cols = n > 10 ? Math.ceil(n / 2) : n, r = Math.floor(i / cols), c = i % cols;
       out[0] = (c - (cols - 1) / 2) * 2.4; out[1] = r * -3; return;
     }
-    if (u.form === 'column') { const r = Math.floor(i / 3), c = i % 3; out[0] = (c - 1) * 1.5; out[1] = -r * 1.5 + n / 6; return; }
+    if (u.form === 'column') { const r = Math.floor(i / 3), c = i % 3; out[0] = (c - 1) * 1.5; out[1] = (-r * 1.5 + n / 6) / dn; return; }
     if (u.form === 'square') {
-      const k = Math.max(2, Math.ceil(n / 4) + 1), per = 4 * (k - 1), p = i % per, side = Math.floor(p / (k - 1)), t = (p % (k - 1)) / (k - 1), h = (k - 1) * 0.8;
+      const k = Math.max(2, Math.ceil(n / 4) + 1), per = 4 * (k - 1), p = i % per, side = Math.floor(p / (k - 1)), t = (p % (k - 1)) / (k - 1), h = ((k - 1) * 0.8) / dn;
       const a = -h + 2 * h * t;
       out[0] = side === 0 ? a : side === 1 ? h : side === 2 ? -a : -h;
       out[1] = side === 0 ? h : side === 1 ? -a : side === 2 ? -h : a; return;
     }
-    const ranks = n > 24 ? 3 : 2, cols = Math.ceil(n / ranks), r = Math.floor(i / cols), c = i % cols;
-    out[0] = (c - (cols - 1) / 2) * 1.3; out[1] = -r * 1.5;
+    const ranks = n / dn > 24 ? 3 : 2, cols = Math.ceil(n / ranks), r = Math.floor(i / cols), c = i % cols;
+    out[0] = ((c - (cols - 1) / 2) * 1.3) / dn; out[1] = -r * 1.5;
   }
 
   function put(mesh: THREE.InstancedMesh, idx: number, x: number, y: number, z: number, rot: number, sc = 1) {
@@ -702,8 +711,31 @@ export function createView(host: HTMLElement) {
   const ringMat = (c: number) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide });
   for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(ringGeo, ringMat(P.brass)); m.visible = false; m.renderOrder = 5; scene.add(m); selRings.push(m); }
   // firing-range rings for selected regiments (thin, so a 95-unit gun ring doesn't become a band)
-  const rangeGeo = new THREE.RingGeometry(0.985, 1, 72).rotateX(-Math.PI / 2), rangeRings: THREE.Mesh[] = [];
-  for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(rangeGeo, new THREE.MeshBasicMaterial({ color: 0xe9e4d6, transparent: true, opacity: 0.35, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 4; scene.add(m); rangeRings.push(m); }
+  // The ring is the sim's own reach rule (see the ranged-fire loop in sim.ts): the line where the front edge of a foe comes within reach of the formation's edge, so it bulges where guns on higher ground shoot further.
+  const rangeGeo = new THREE.RingGeometry(0.985, 1, 72).rotateX(-Math.PI / 2); // a plain circle, for the commander aura
+  const RA = 72, rangeIdx: number[] = [], rangeRings: THREE.Mesh[] = []; // a ribbon: an inner and an outer vertex per angle
+  for (let i = 0; i < RA; i++) { const j = (i + 1) % RA; rangeIdx.push(i * 2, i * 2 + 1, j * 2, i * 2 + 1, j * 2 + 1, j * 2); }
+  for (let i = 0; i < 60; i++) {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(RA * 6), 3)); g.setIndex(rangeIdx);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xe9e4d6, transparent: true, opacity: 0.35, depthTest: false, side: THREE.DoubleSide })); m.visible = false; m.frustumCulled = false; m.renderOrder = 4; scene.add(m); rangeRings.push(m);
+  }
+  function reachRing(m: THREE.Mesh, u: any, rg: number) {
+    const key = `${u.x}|${u.z}|${u.facing}|${u.men}|${u.form}|${rg}`; // rebuilt only when the regiment moves, turns or changes shape
+    if (m.userData.key === key) return;
+    m.userData.key = key;
+    const p = (m.geometry.attributes.position as THREE.BufferAttribute), hu = groundH(scn, u.x, u.z), art = u.type === 'artillery';
+    for (let i = 0; i < RA; i++) {
+      const a = (i / RA) * Math.PI * 2, dx = Math.sin(a), dz = Math.cos(a);
+      let r = rg;
+      for (let k = 0; k < 3; k++) { // walk out along the ray until the gap to the formation equals the reach at that ground
+        const x = u.x + dx * r, z = u.z + dz * r;
+        r += rg * (art ? Math.max(1, Math.min(1.3, 1 + tu.terrain.gunReach * (hu - groundH(scn, x, z)))) : 1) - distToFoot(u, tu, x, z);
+      }
+      const y = heightAt(scn, u.x + dx * r, u.z + dz * r) + 0.5; // drawn on the exaggerated ground
+      p.setXYZ(i * 2, u.x + dx * (r - 1), y, u.z + dz * (r - 1)); p.setXYZ(i * 2 + 1, u.x + dx * r, y, u.z + dz * r);
+    }
+    p.needsUpdate = true;
+  }
   let refillHint = false, dragLine: { ax: number; az: number; bx: number; bz: number; f: number } | null = null;
   // aura ring for a selected commander: every regiment of his side inside it gets the damage/speed/morale bonus
   const auraRings: THREE.Mesh[] = [];
@@ -906,7 +938,8 @@ export function createView(host: HTMLElement) {
       const n = isArt ? nGun * 2 : Math.max(1, Math.min(u.garrison != null ? 10 : 1e9, Math.ceil(u.men / T.perFig))); // a garrison shows a handful of men at the walls
       if (v.n && n < v.n) for (let q = 0; q < Math.min(3, v.n - n); q++) spawn(3, v.x + (Math.random() - 0.5) * 10, heightAt(scn, v.x, v.z) + 0.6, v.z + (Math.random() - 0.5) * 5, 0.5, 2.6); // men falling
       v.n = n; v.side = u.side; v.kind = isArt ? 2 : isCav ? 1 : 0;
-      if (v.m.length < n * MS) { const o = new Float32Array(n * MS + 40 * MS).fill(NaN); o.set(v.m); v.m = o; } // NaN = a new man, placed straight on his slot
+      const nCap = Math.ceil(n * CROWD);
+      if (v.m.length < nCap * MS) { const o = new Float32Array(nCap * MS + 40 * MS).fill(NaN); o.set(v.m); v.m = o; } // NaN = a new man, placed straight on his slot
       // footprint ~25*FS plus 15 for shadows thrown into view and the one-frame-old camera; men snap back to their slots when it returns (form = '')
       const cull = still && !frustum.intersectsSphere(cullS.set(v3.set(v.x, heightAt(scn, v.x, v.z), v.z), 25 * FS + 15));
       const tf = u.facing, st = Math.sin(tf), ct = Math.cos(tf); // slots follow the order's facing at once; the men take their time getting there
@@ -948,12 +981,14 @@ export function createView(host: HTMLElement) {
       const thin = isArt ? 1 : cam.dist > 440 ? 3 : cam.dist > 260 ? 2 : 1, snapAll = v.form === '' || v.th !== thin, top = v.rs * 1.2 + T.speed * 1.1, gait = (u.routed ? 13 : charging ? 11 : 8) / T.speed;
       // zoomed out: every 2nd/3rd man is drawn, bigger, so ranks still read as men (not barcode, not a slab); guns keep their crew
       const grow = thin === 3 ? 1.7 : thin === 2 ? 1.45 : 1 + 0.3 * farT;
-      for (let i = 0; i < (cull ? 0 : n); i++) {
+      const dense = thin === 1 && (u.type === 'line' || u.type === 'guard') && u.garrison == null && !u.routed, nd = dense ? nCap : n; // zoomed in, the line and guard show CROWD x the men in the same frontage (the sim's footprint still comes from perFig); the rest, and everything zoomed out, keep their count
+      v.nd = nd;
+      for (let i = 0; i < (cull ? 0 : nd); i++) {
         if (thin > 1 && i % thin) continue;
         if (isArt) {
           const g = i >> 1, lx = (g - (nGun - 1) / 2) * 4.2 + (i & 1 ? 1.4 : -1.4), lz = i & 1 ? -2.4 : 0;
           sl[0] = lx; sl[1] = lz;
-        } else slots(u, n, i, sl);
+        } else slots(u, nd, i, sl, nd / n);
         const hm = hash(u.id * 17 + i * 29);
         if (u.type === 'skirmisher' && !u.routed) { sl[0] += Math.sin(clock * 0.25 + hm * 30) * 1.2; sl[1] += Math.cos(clock * 0.21 + hm * 17) * 0.8; } // skirmishers drift about their posts
         sl[0] *= FS; sl[1] *= FS; // everything is laid out FS times wider
@@ -997,9 +1032,9 @@ export function createView(host: HTMLElement) {
           if (!(i & 1)) { // the gun leaps back when it fires, then is run up again
             const back = u.fired < 0.08 ? u.fired / 0.08 : Math.max(0, 1 - (u.fired - 0.08) / 1.4);
             rootAt(mRoot, wx, y, wz, yaw, 1.3 * FS); joint(mPart, mRoot, 0, 0, -0.7 * back, u.fired < 0.3 ? -0.08 * (1 - u.fired / 0.3) : 0); guns.setMatrixAt(ng++, mPart);
-          } else if (nf < 4990) addFig(i, wx, y, wz, yaw, 1.7 * FS, null, mv, s);
+          } else if (nf < FIG_MAX - 10) addFig(i, wx, y, wz, yaw, 1.7 * FS, null, mv, s);
         } else if (isCav) {
-          if (nh < 1490 && nf < 4990) { // gallop: the body rocks, front and hind legs reach and gather in turn
+          if (nh < 1490 && nf < FIG_MAX - 10) { // gallop: the body rocks, front and hind legs reach and gather in turn
             const hp = m[o + 5] * 1.4, hs = Math.sin(hp), gal = mv ? (charging ? 1 : 0.55) : 0;
             rootAt(mRoot, wx, y, wz, yaw, 1.4 * FS * grow);
             joint(mHorse, mRoot, 0, HY + gal * Math.abs(Math.cos(hp)) * 0.14, 0, gal ? gal * hs * 0.12 : Math.sin(clock * 0.7 + i) * 0.02);
@@ -1009,7 +1044,7 @@ export function createView(host: HTMLElement) {
             joint(mPart, mHorse, 0, 1.0 - HY, -0.55, gal * Math.sin(hp + 2.2) * 0.55); legsH.setMatrixAt(nh++, mPart);
             addFig(i, 0, 0, 0, 0, 0, mHorse, mv, hs);
           }
-        } else if (nf < 4990) addFig(i, wx, y, wz, yaw, 1.7 * FS, null, mv, s);
+        } else if (nf < FIG_MAX - 10) addFig(i, wx, y, wz, yaw, (dense ? 1.6 : 1.7) * FS, null, mv, s); // a touch smaller when packed tighter
       }
       v.form = cull ? '' : u.form; v.th = thin; // '' = every man snaps to his slot when the camera comes back in; so does a change of thinning (the men not drawn were not moving)
       if (!cull && (selected.has(u.id) || u.id === hoverId)) baseRing(v.x, v.z, st, ct, foot(u, tu), bTh, sideCol); // the ground it covers, only for the regiment you are looking at
@@ -1112,8 +1147,7 @@ export function createView(host: HTMLElement) {
     for (const u of state.units) {
       const range = (tu.types[u.type]?.range ?? 0) * (u.aura ? tu.commanderAura.range : 1);
       if (!selected.has(u.id) || range <= 0 || nrr >= rangeRings.length) continue;
-      const v = vis.get(u.id); if (!v) continue;
-      const r = rangeRings[nrr++]; r.visible = true; r.position.set(v.x, heightAt(scn, v.x, v.z) + 0.5, v.z); r.scale.setScalar(range + 3 * FS); // range counts edge to edge, so add about a formation's depth
+      const r = rangeRings[nrr++]; r.visible = true; reachRing(r, u, range);
     }
     for (let i = nrr; i < rangeRings.length; i++) rangeRings[i].visible = false;
     let nau = 0;
