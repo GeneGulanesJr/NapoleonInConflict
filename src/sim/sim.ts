@@ -82,7 +82,7 @@ export function log(sim: Sim, msg: string) {
   sim.s.log.push({ t: sim.s.t, msg });
   if (sim.s.log.length > 60) sim.s.log.shift();
 }
-function ev(sim: Sim, e: any) {
+export function ev(sim: Sim, e: any) {
   sim.s.events.push(e);
   if (sim.s.events.length > 400) sim.s.events.shift();
 }

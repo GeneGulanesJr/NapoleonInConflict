@@ -1,5 +1,5 @@
 // Bot commander. Uses the same command() API as a human player, so it plays by the same rules.
-import { command, foot, rand, solid, useAbility, type Sim } from './sim.ts';
+import { command, ev, foot, rand, solid, useAbility, type Sim } from './sim.ts';
 import { los } from './world.ts';
 
 const dist = (a: any, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -84,11 +84,22 @@ function think(sim: Sim, side: number, mem: any) {
 
   // zone assignment
   const mineZones = s.zones.filter((z: any) => z.owner === side);
-  const goalZones = stance === 'attack' ? s.zones.filter((z: any) => z.owner !== side) : mineZones.length ? mineZones : s.zones;
   const en = scn.entry[side], retreat = stance === 'retreat'; // a rearguard falls back toward its own map edge, fighting whatever catches it, instead of holding ground
+  // points to hold and take. cap = most regiments a point may draw: a captured point keeps a small guard (new reserves fill it), a point we held and lost gets a counter-attack sized to the foe around it, and only if that is a modest part of the army
+  const held: Record<string, boolean> = (mem.held ??= {}), cap: Record<string, number> = {};
+  const warned: Record<string, boolean> = (mem.warned ??= {}); // counter-attacks already announced to the player
+  for (const z of s.zones) if (z.owner === side) { held[z.id] = true; delete warned[z.id]; }
+  const avg = my.reduce((q: number, u: any) => q + u.men, 0) / (my.length || 1);
+  const goalZones = s.zones.filter((z: any) => {
+    if (z.owner === side) { if (stance === 'attack') cap[z.id] = 2; return true; }
+    if (!held[z.id]) return stance === 'attack';
+    const k = Math.max(2, Math.ceil((1.3 * foes.reduce((q: number, e: any) => q + (dist(e, z) < z.r + 60 ? e.men : 0), 0)) / avg)); // 1.3x their men
+    cap[z.id] = k;
+    return k <= Math.ceil(0.4 * my.length); // not feasible: give it up rather than feed the army in
+  });
   const zones = retreat ? [{ id: 'home', x: en.x * 0.84, z: en.z * 0.84, r: 45 }] : goalZones.length ? goalZones : s.zones;
   const load: Record<string, number> = {};
-  for (const id in mem.assign) { const a = mem.assign[id]; load[a.zid] = (load[a.zid] ?? 0) + 1; }
+  for (const u of my) { const a = mem.assign[u.id]; if (a) load[a.zid] = (load[a.zid] ?? 0) + 1; } // living, formed regiments only
 
   for (const u of my) {
     if (u.busy > 0 || u.draftFor != null) continue; // drafts march to their regiment on their own
@@ -113,15 +124,16 @@ function think(sim: Sim, side: number, mem: any) {
     }
     // pick / refresh a goal zone
     let a = mem.assign[u.id];
-    if (!a || !zones.some((z: any) => z.id === a.zid)) {
+    if (!a || !zones.some((z: any) => z.id === a.zid) || (load[a.zid] ?? 0) > (cap[a.zid] ?? 1e9)) { // gone, or over its quota: the surplus moves on
       if (a) load[a.zid]--;
       let bz: any = null, bsc = 1e9;
-      for (const z of zones) { const sc = dist(u, z) + 70 * (load[z.id] ?? 0); if (sc < bsc) { bsc = sc; bz = z; } }
+      const open = zones.filter((z: any) => (load[z.id] ?? 0) < (cap[z.id] ?? 1e9));
+      for (const z of open.length ? open : zones) { const sc = dist(u, z) + 70 * (load[z.id] ?? 0); if (sc < bsc) { bsc = sc; bz = z; } }
       const ang = rand(s) * Math.PI * 2, rr = Math.sqrt(rand(s)) * bz.r * 0.7;
       a = mem.assign[u.id] = { zid: bz.id, ox: Math.cos(ang) * rr, oz: Math.sin(ang) * rr };
       load[bz.id] = (load[bz.id] ?? 0) + 1;
     }
-    const z = (retreat ? zones : s.zones).find((q: any) => q.id === a.zid);
+    const z = zones.find((q: any) => q.id === a.zid);
     const gx = z.x + a.ox, gz = z.z + a.oz;
     const goto = (x: number, zz: number) => {
       if (u.tx != null && Math.hypot(u.tx - x, u.tz - zz) < 4) return;
@@ -219,4 +231,6 @@ function think(sim: Sim, side: number, mem: any) {
       } else if (dist(u, z) > z.r * 1.5) goto(gx, gz);
     }
   }
+  // warn the player once per lost point when a counter-attack is on its way
+  for (const z of zones) if (z.owner !== side && held[z.id] && !warned[z.id] && (load[z.id] ?? 0) > 0) { warned[z.id] = true; ev(sim, { k: 'counter', side, zid: z.id, x: z.x, z: z.z }); }
 }

@@ -27,6 +27,7 @@ const LINES: [en: string, fr: string][] = [
   // fragments that go next to a name clip (FRAG in src/audio.ts): "<name> has earned its stripes." "We have lost <name>."
   ['has earned its stripes.', 'a gagné ses galons.'], ['is breaking, sir!', 'plie, mon général !'],
   ['We have lost', 'Nous avons perdu'], ['is ours, sir.', 'est à nous, mon général.'],
+  ['They are counter-attacking', 'Contre-attaque ennemie sur'], // + the zone's name clip
 ];
 // keep in step with slug() in src/audio.ts
 const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
