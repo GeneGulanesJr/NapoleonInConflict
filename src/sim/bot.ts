@@ -102,6 +102,8 @@ function think(sim: Sim, side: number, mem: any) {
   const load: Record<string, number> = {};
   for (const u of my) { const a = mem.assign[u.id]; if (a) load[a.zid] = (load[a.zid] ?? 0) + 1; } // living, formed regiments only
 
+  const stay = new Set<number>(); // a capped point is kept by the regiments nearest it (not whoever comes first in the list), so the men who took it hold it
+  for (const id in cap) { const q = s.zones.find((y: any) => y.id === id); my.filter((u: any) => mem.assign[u.id]?.zid === id).sort((p: any, r: any) => dist(p, q) - dist(r, q)).slice(0, cap[id]).forEach((u: any) => stay.add(u.id)); }
   let mending = my.filter((u: any) => mem.mend[u.id]).length;
   const maxMend = Math.max(1, Math.ceil(0.15 * my.length)); // at most ~15% of the army is off resupplying at any time
   for (const u of my) {
@@ -128,7 +130,7 @@ function think(sim: Sim, side: number, mem: any) {
     // pick / refresh a goal zone
     let a = mem.assign[u.id];
     const first = !a;
-    if (!anchor[u.id] && (!a || !zones.some((z: any) => z.id === a.zid) || (load[a.zid] ?? 0) > (cap[a.zid] ?? 1e9))) { // gone, or over its quota: the surplus moves on (a garrison never does)
+    if (!anchor[u.id] && (!a || !zones.some((z: any) => z.id === a.zid) || ((load[a.zid] ?? 0) > (cap[a.zid] ?? 1e9) && !stay.has(u.id)))) { // gone, or over its quota: the surplus moves on (a garrison never does)
       if (a) load[a.zid]--;
       let bz: any = null, bsc = 1e9;
       const open = zones.filter((z: any) => (load[z.id] ?? 0) < (cap[z.id] ?? 1e9));
