@@ -102,6 +102,10 @@ function think(sim: Sim, side: number, mem: any) {
   const load: Record<string, number> = {};
   for (const u of my) { const a = mem.assign[u.id]; if (a) load[a.zid] = (load[a.zid] ?? 0) + 1; } // living, formed regiments only
 
+  const stay = new Set<number>(); // a capped point is kept by the regiments nearest it (not whoever comes first in the list), so the men who took it hold it
+  for (const id in cap) { const q = s.zones.find((y: any) => y.id === id); my.filter((u: any) => mem.assign[u.id]?.zid === id).sort((p: any, r: any) => dist(p, q) - dist(r, q)).slice(0, cap[id]).forEach((u: any) => stay.add(u.id)); }
+  let mending = my.filter((u: any) => mem.mend[u.id]).length;
+  const maxMend = Math.max(1, Math.ceil(0.15 * my.length)); // at most ~15% of the army is off resupplying at any time
   for (const u of my) {
     if (u.busy > 0 || u.draftFor != null) continue; // drafts march to their regiment on their own
     if (u.march) { if (u.tx != null || u.chase != null) continue; u.march = false; } // a scripted reinforcement keeps to its route (e.g. Bülow on Plancenoit) until it gets there
@@ -126,7 +130,7 @@ function think(sim: Sim, side: number, mem: any) {
     // pick / refresh a goal zone
     let a = mem.assign[u.id];
     const first = !a;
-    if (!anchor[u.id] && (!a || !zones.some((z: any) => z.id === a.zid) || (load[a.zid] ?? 0) > (cap[a.zid] ?? 1e9))) { // gone, or over its quota: the surplus moves on (a garrison never does)
+    if (!anchor[u.id] && (!a || !zones.some((z: any) => z.id === a.zid) || ((load[a.zid] ?? 0) > (cap[a.zid] ?? 1e9) && !stay.has(u.id)))) { // gone, or over its quota: the surplus moves on (a garrison never does)
       if (a) load[a.zid]--;
       let bz: any = null, bsc = 1e9;
       const open = zones.filter((z: any) => (load[z.id] ?? 0) < (cap[z.id] ?? 1e9));
@@ -146,11 +150,17 @@ function think(sim: Sim, side: number, mem: any) {
     const hold = () => { if (u.tx != null || u.chase != null) command(sim, side, { c: 'stop', ids: [u.id] }); };
     // worn down: fall back to the nearest quiet objective we hold, take on replacements there (the replenish rule above), then rejoin. Regiments defending one of our objectives stay put.
     const dry = T.ammo && u.ammo < 3, wet = !T.ammo || u.ammo >= 0.7 * T.ammo; // nearly out of ammunition: fall back to a depot to take more on
-    if ((dry || (u.men < 0.4 * u.maxMen && sd.pool >= 1 && sd.rp > 10)) && u.garrison == null && !anc && !s.zones.some((q: any) => q.owner === side && dist(u, q) < q.r)) mem.mend[u.id] = true;
+    // ...but never the whole army at once, never out of contact, never a long trek: a depot more than 160 away is not worth leaving the line for
+    if (!mem.mend[u.id] && (dry || (u.men < 0.4 * u.maxMen && sd.pool >= 1 && sd.rp > 10)) && u.garrison == null && !anc && mending < maxMend && !(near && nd < 60)
+      && mineZones.some((q: any) => !q.contested && dist(u, q) < 160) && !s.zones.some((q: any) => q.owner === side && dist(u, q) < q.r)) { mem.mend[u.id] = true; mending++; }
     if (mem.mend[u.id]) {
       const dz = mineZones.filter((q: any) => !q.contested).sort((p: any, q: any) => dist(u, p) - dist(u, q))[0];
       if (!dz || (u.men >= 0.95 * u.maxMen && wet) || (dist(u, dz) < dz.r && !u.refill && wet)) delete mem.mend[u.id]; // done, nowhere to go, or no money to refill: back to the fight
-      else { if (dist(u, dz) > dz.r * 0.5) goto(dz.x, dz.z); else hold(); continue; }
+      else { // wait at its own post inside the depot, not in a heap on its centre
+        const k = Math.min(1, (dz.r * 0.7) / (Math.hypot(a.ox, a.oz) || 1)), px = dz.x + a.ox * k, pz = dz.z + a.oz * k;
+        if (dist(u, { x: px, z: pz }) > 6) goto(px, pz); else hold();
+        continue;
+      }
     }
     if (stance === 'defend' && u.garrison == null && u.gTarget == null && (u.type === 'line' || u.type === 'guard' || u.type === 'skirmisher')) { // man the farm that sits on our objective
       const vs = scn.map.villages ?? [], vi = vs.findIndex((v: any) => v.garrison && dist(v, z) < 25);
