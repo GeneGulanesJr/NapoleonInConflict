@@ -925,6 +925,10 @@ export function runBattle(root: HTMLElement, view: View, src: Source, scn: any, 
     for (const e of evs) {
       if (e.k === 'arrive') { popup(e); say(e.side === me ? 'Reinforcements have arrived, sir.' : 'Enemy reinforcements spotted.', 1); }
       else if (e.k === 'aid') aidCue(e);
+      else if (e.k === 'counter' && e.side !== me) { // the foe is retaking a point it lost
+        const zn = st.zones.find((q: any) => q.id === e.zid)?.name ?? 'an objective';
+        banner('COUNTER-ATTACK', `The enemy is retaking ${zn}`, SIDE_COLOR[e.side]); cue('counter'); say(`They are counter-attacking ${zn}!`, 1); toast(`Enemy counter-attack on ${zn}`, e);
+      }
       else if (e.k === 'flank' && e.side === me) {
         say(e.kind === 2 ? 'They are in our rear!' : 'We are being flanked!', 1);
         if (st.t - lastFlank > 4) { // the event has no name: it is the regiment standing where it happened

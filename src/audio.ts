@@ -71,16 +71,18 @@ export function playEvents(events: any[], camX: number, camZ: number) {
   }
 }
 
-/** Short UI cues: kind = 'capture' | 'arrive' | 'alert' */
+/** Short UI cues: kind = 'capture' | 'arrive' | 'counter' | 'alert' */
 export function cue(kind: string) {
   if (!init() || !ctx || !sfx || muted) return;
-  const t = ctx.currentTime;
-  const notes = kind === 'capture' ? [392, 523, 659] : kind === 'arrive' ? [330, 392] : [220, 196];
+  const t = ctx.currentTime, horn = kind === 'counter'; // counter-attack: a snare roll under two low brass calls rising a fifth
+  const notes = kind === 'capture' ? [392, 523, 659] : kind === 'arrive' ? [330, 392] : horn ? [147, 147, 220] : [220, 196], gap = horn ? 0.32 : 0.12;
+  if (horn) for (let i = 0; i < 14; i++) burst(0.12 + i * 0.012, 0.09, 1800, 0.8, 'bandpass', 0, i * 0.055);
   notes.forEach((f, i) => {
-    const o = ctx!.createOscillator(), g = ctx!.createGain();
-    o.type = 'triangle'; o.frequency.value = f;
-    g.gain.setValueAtTime(0, t + i * 0.12); g.gain.linearRampToValueAtTime(0.18, t + i * 0.12 + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.12 + 0.5);
-    o.connect(g); g.connect(sfx!); o.start(t + i * 0.12); o.stop(t + i * 0.12 + 0.55);
+    const o = ctx!.createOscillator(), g = ctx!.createGain(), at = t + i * gap + (horn ? 0.3 : 0);
+    o.type = horn ? 'sawtooth' : 'triangle'; o.frequency.value = f;
+    if (horn) { const lp = ctx!.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700; o.connect(lp); lp.connect(g); } else o.connect(g);
+    g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(horn ? 0.22 : 0.18, at + 0.02); g.gain.exponentialRampToValueAtTime(0.001, at + (horn ? 0.6 : 0.5));
+    g.connect(sfx!); o.start(at); o.stop(at + (horn ? 0.65 : 0.55));
   });
 }
 
@@ -155,6 +157,7 @@ const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 const FRAG: [RegExp, boolean, string][] = [
   [/^(.+) has earned its stripes\.$/, true, 'has earned its stripes.'], [/^(.+) is breaking, sir!$/, true, 'is breaking, sir!'],
   [/^We have lost (.+)[.!]$/, false, 'We have lost'], [/^(.+) is ours, sir\.$/, true, 'is ours, sir.'],
+  [/^They are counter-attacking (.+)[.!]$/, false, 'They are counter-attacking'],
 ];
 /** The clip urls that say `text`, in order; empty if any is missing (the browser voice then says the whole line). */
 function clipsFor(text: string, fr: string): string[] {

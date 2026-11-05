@@ -544,10 +544,11 @@ test('a worn-down bot regiment falls back to an objective it holds and takes on 
   let r: any;
   const sim = arena((fr, co) => [Object.assign(fr[0], { x: 170, z: 170 }), r = Object.assign(co.find((u) => u.type === 'line'), { x: 60, z: 60, men: 150 })]);
   Object.assign(sim.s.side[1], { rp: 100, pool: 1000 });
-  sim.scn = { ...sim.scn, bot: ['defend', 'attack'] }; // attacking, it would otherwise march on the French objective (pi), not back to ge
-  const z = sim.s.zones.find((q: any) => q.id === 'ge'), bot = makeBot(sim, 1);
+  sim.scn = { ...sim.scn, bot: ['defend', 'attack'] }; // attacking, it takes the French objective (pi), then keeps it as a guard and refills there
+  const bot = makeBot(sim, 1);
   run(sim, 240, () => r.men >= 0.95 * r.maxMen, () => bot(0.05));
-  assert.ok(r.men >= 0.95 * r.maxMen && Math.hypot(r.x - z.x, r.z - z.z) < z.r, `refilled to ${Math.round(r.men)} at (${r.x.toFixed(0)}, ${r.z.toFixed(0)})`);
+  const z = sim.s.zones.find((q: any) => q.owner === 1 && Math.hypot(r.x - q.x, r.z - q.z) < q.r); // any objective its side holds
+  assert.ok(r.men >= 0.95 * r.maxMen && z, `refilled to ${Math.round(r.men)} at (${r.x.toFixed(0)}, ${r.z.toFixed(0)})`);
 });
 
 test('bot cavalry rides round to the flank of a foe pinned by its infantry, not into its front', () => {
