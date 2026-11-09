@@ -1,0 +1,32 @@
+[
+  { "t": 2, "side": 0, "who": "Carabiniers|Grenadiers|Berthier|Cervoni|Dallemagne|Lannes|Dupas", "c": "move", "x": -40, "z": 0, "col": true },
+  { "t": 40, "side": 0, "who": "General Bonaparte", "c": "move", "x": -34, "z": 8 },
+
+  { "t": 262, "side": 0, "who": "Carabiniers", "c": "move", "x": -10, "z": 0, "col": true },
+  { "t": 262, "side": 0, "who": "Grenadiers", "c": "move", "x": -17, "z": 0, "col": true },
+  { "t": 262, "side": 0, "who": "Berthier|Cervoni|Dallemagne|Lannes|Dupas", "c": "move", "x": -22, "z": 4 },
+
+  { "t": 290, "side": 0, "who": "Carabiniers", "c": "move", "x": 0, "z": 0, "run": true, "col": true },
+  { "t": 294, "side": 0, "who": "Carabiniers", "c": "men", "to": 250, "over": 10 },
+  { "t": 296, "side": 0, "who": "Grenadiers", "c": "move", "x": -8, "z": 0, "col": true },
+
+  { "t": 304, "side": 0, "who": "Berthier|Cervoni|Dallemagne|Lannes|Dupas|^Masséna$", "c": "move", "x": 8, "z": 0, "run": true },
+  { "t": 306, "side": 0, "who": "Carabiniers|Grenadiers", "c": "move", "x": 34, "z": 0, "run": true, "col": true },
+  { "t": 309, "side": 0, "who": "Berthier|Cervoni|Dallemagne|Lannes|Dupas|^Masséna$", "c": "move", "x": 36, "z": 0, "run": true },
+  { "t": 310, "side": 0, "who": "Grenadiers", "c": "men", "to": 430, "over": 40 },
+  { "t": 316, "side": 1, "who": "on the slope", "c": "men", "to": 120, "over": 14 },
+  { "t": 322, "side": 0, "who": "Masséna's Division", "c": "move", "x": 34, "z": 0, "col": true },
+  { "t": 342, "side": 1, "who": "on the slope", "c": "men", "to": 0, "over": 3 },
+  { "t": 350, "side": 1, "who": "flank", "c": "move", "x": 70, "z": 0, "col": true },
+
+  { "t": 372, "side": 1, "who": "Terzi|Carlstädter", "c": "move", "x": 20, "z": 0 },
+  { "t": 372, "side": 0, "who": "Augereau", "c": "move", "x": 34, "z": 0, "col": true },
+  { "t": 374, "side": 1, "who": "Terzi", "c": "men", "to": 330, "over": 25 },
+  { "t": 380, "side": 0, "who": "Carabiniers|Grenadiers|Berthier|Cervoni|Dallemagne|Lannes|Dupas", "c": "move", "x": 16, "z": 0 },
+  { "t": 396, "side": 0, "who": "Carabiniers|Grenadiers|Berthier|Cervoni|Dallemagne|Lannes|Dupas|Masséna", "c": "move", "x": 36, "z": 0 },
+
+  { "t": 392, "side": 0, "who": "Beaumont|Ordener", "c": "move", "x": 10, "z": -112 },
+  { "t": 402, "side": 0, "who": "Beaumont|Ordener", "c": "move", "x": 52, "z": -30 },
+  { "t": 404, "side": 1, "who": "Terzi|Carlstädter", "c": "move", "x": 46, "z": -10 },
+  { "t": 426, "side": 1, "who": ".", "c": "move", "x": 120, "z": -14, "col": true }
+]

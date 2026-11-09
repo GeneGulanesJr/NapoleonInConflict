@@ -1,0 +1,86 @@
+{
+  "id": "lodi",
+  "title": "The Bridge of Lodi",
+  "date": "10 May 1796, afternoon",
+  "blurb": "Beaulieu's army is falling back across the Adda after Bonaparte marched round its flank. Its rearguard under Sebottendorf stands on the east bank behind fourteen guns, with the wooden bridge, some two hundred yards long, in front of it. The French have been in Lodi since the morning; their guns have been firing along the bridge all afternoon. About six o'clock the carabiniers are to go out of the gate and over it.",
+  "hint": "French: the guns and the advance guard are already in Lodi. Send the carabiniers and grenadiers over the bridge; if the first rush falters, the generals lead the second. Beaumont's horse can look for the ford upstream. Masséna's and Augereau's divisions come up behind. Austrians: hold the bridge until night, keep the guns firing down the span, and counter-attack whoever gets across.",
+  "duration": 600,
+  "clock": { "start": "16:30", "hours": 3 },
+  "weather": "clear",
+  "nat": ["fr", "at"],
+  "bot": ["attack", "defend"],
+  "strength": [1, 1],
+  "hold": { "zone": "br", "side": 1, "t": 480 },
+  "cavalryName": ["Beaumont's Cavalry", "Austrian Hussars"],
+  "abilities": [["barrage"], []],
+  "reserves": [{}, {}],
+  "rpStart": [0, 0],
+  "entry": [{ "x": -140, "z": 18 }, { "x": 140, "z": -16 }],
+  "map": {
+    "size": 300,
+    "rough": { "amp": 0.35, "scale": 40, "seed": 5 },
+    "hills": [{ "x": 26, "z": 0, "rx": 28, "rz": 44, "h": 1.1, "p": 2 }],
+    "rivers": [
+      { "pts": [[-6, -170], [-4, -130], [-2, -96]], "width": 17, "ford": 0.4, "bridges": [] },
+      { "pts": [[-2, -96], [0, -40], [0, 0], [2, 40], [6, 100], [14, 170]], "width": 17, "bridges": [[-7.5, 0, 3.2], [-4.5, 0, 3.2], [-1.5, 0, 3.2], [1.5, 0, 3.2], [4.5, 0, 3.2], [7.5, 0, 3.2]] }
+    ],
+    "roads": [
+      { "pts": [[-150, 18], [-110, 14], [-70, 8], [-40, 3], [-18, 0], [0, 0], [24, -2], [70, -8], [120, -14], [150, -18]], "w": 4.5 },
+      { "pts": [[-60, -2], [-60, -60], [-30, -95]], "w": 3 }
+    ],
+    "woods": [{ "x": 72, "z": 42, "r": 9 }, { "x": -92, "z": -42, "r": 10 }],
+    "villages": [{ "name": "Lodi", "x": -26, "z": 0, "r": 16 }, { "name": "Lodi (San Giovanni)", "x": -17, "z": -15, "r": 7 }],
+    "hedges": []
+  },
+  "zones": [
+    { "id": "br", "name": "Bridge of Lodi", "x": 0, "z": 0, "r": 12, "value": 3.5, "owner": 1 },
+    { "id": "tn", "name": "Lodi", "x": -26, "z": 0, "r": 16, "value": 1.5, "owner": 0 },
+    { "id": "gl", "name": "Austrian Gun Line", "x": 15, "z": 0, "r": 14, "value": 2.5, "owner": 1 },
+    { "id": "cr", "name": "Road to Crema", "x": 95, "z": -11, "r": 16, "value": 2, "owner": 1 },
+    { "id": "fd", "name": "Ford Upstream", "x": -3, "z": -110, "r": 14, "value": 0.5 }
+  ],
+  "forces": [
+    [
+      { "type": "commander", "n": 1, "x": -125, "z": 6, "names": ["General Bonaparte"], "nat": "fr" },
+      { "type": "commander", "n": 5, "x": -98, "z": -16, "dz": 8, "names": ["Berthier", "Cervoni", "Dallemagne", "Colonel Lannes", "Colonel Dupas"], "nat": "fr" },
+      { "type": "skirmisher", "n": 1, "x": -90, "z": 0, "names": ["2nd Battalion, Carabiniers"], "men": 400, "maxMen": 400 },
+      { "type": "line", "n": 4, "x": -86, "z": -30, "dz": 20, "names": ["Grenadiers (Lannes), 1st Bn", "Grenadiers (Lannes), 2nd Bn", "Grenadiers (Lannes), 3rd Bn", "Grenadiers (Lannes), 4th Bn"], "men": 520, "maxMen": 520 },
+      { "type": "artillery", "n": 6, "x": -14, "z": -30, "dz": 12, "names": ["French Battery 1", "French Battery 2", "French Battery 3", "French Battery 4", "French Battery 5", "French Battery 6"] }
+    ],
+    [
+      { "type": "commander", "n": 1, "x": 52, "z": 0, "names": ["Sebottendorf"], "nat": "at" },
+      { "type": "artillery", "n": 1, "x": 15, "z": 0, "names": ["Austrian Battery (on the slope)"], "men": 324, "maxMen": 324 },
+      { "type": "artillery", "n": 2, "x": 15, "z": -26, "dz": 52, "names": ["Austrian Battery (north flank)", "Austrian Battery (south flank)"], "men": 216, "maxMen": 216 },
+      { "type": "line", "n": 2, "x": 24, "z": -11, "dz": 22, "names": ["Carlstädter Grenz IR (Bn 1)", "Carlstädter Grenz IR (Bn 2)"], "men": 730, "maxMen": 730 },
+      { "type": "line", "n": 1, "x": 24, "z": -38, "names": ["Nádasdy IR No. 39"], "men": 623, "maxMen": 623 },
+      { "type": "line", "n": 1, "x": 24, "z": 38, "names": ["Warasdiner Grenz IR"], "men": 1262, "maxMen": 1262 },
+      { "type": "line", "n": 3, "x": 46, "z": -24, "dz": 24, "names": ["Terzi IR No. 16 (Bn 1)", "Terzi IR No. 16 (Bn 2)", "Terzi IR No. 16 (Bn 3)"], "men": 404, "maxMen": 404 },
+      { "type": "line", "n": 1, "x": 58, "z": -42, "names": ["Belgiojoso IR No. 44"], "men": 311, "maxMen": 311 },
+      { "type": "line", "n": 1, "x": 58, "z": 42, "names": ["Thurn IR No. 43"], "men": 622, "maxMen": 622 },
+      { "type": "lancer", "n": 1, "x": 66, "z": -14, "names": ["Archduke Joseph Hussars No. 2"], "men": 480, "maxMen": 480 },
+      { "type": "lancer", "n": 1, "x": 66, "z": 14, "names": ["Mészáros Uhlans No. 1"], "men": 286, "maxMen": 286 }
+    ]
+  ],
+  "timeline": [
+    { "t": 2, "type": "note", "msg": "The French advance guard has held Lodi since the morning. The guns have come up and stand along the river bank." },
+    { "t": 100, "type": "reinforce", "side": 0,
+      "units": [{ "type": "lancer", "n": 3, "x": 0, "z": 0, "names": ["Beaumont's Cavalry (1st)", "Beaumont's Cavalry (2nd)", "Ordener's Horse"], "men": 400, "maxMen": 400 }],
+      "entry": { "x": -135, "z": -40 }, "go": { "x": -4, "z": -112 }, "spreadZ": 1.2, "spreadX": 0.2,
+      "msg": "Bonaparte sends Beaumont's cavalry upstream to find a ford." },
+    { "t": 120, "type": "reinforce", "side": 0,
+      "units": [
+        { "type": "commander", "n": 1, "x": 0, "z": 0, "names": ["Masséna"], "nat": "fr" },
+        { "type": "line", "n": 3, "x": 0, "z": 0, "names": ["Masséna's Division, 1st Brigade", "Masséna's Division, 2nd Brigade", "Masséna's Division, 3rd Brigade"] }
+      ],
+      "entry": { "x": -140, "z": 18 }, "go": { "x": -84, "z": 4 }, "spreadX": 0.5, "spreadZ": 1.4,
+      "msg": "Masséna's division comes up through the town behind the advance guard." },
+    { "t": 290, "type": "note", "msg": "About six o'clock. The carabiniers are to go out of the gate and onto the bridge." },
+    { "t": 360, "type": "reinforce", "side": 0,
+      "units": [
+        { "type": "commander", "n": 1, "x": 0, "z": 0, "names": ["Augereau"], "nat": "fr" },
+        { "type": "line", "n": 3, "x": 0, "z": 0, "names": ["Augereau's Division, 1st Brigade", "Augereau's Division, 2nd Brigade", "Augereau's Division, 3rd Brigade"] }
+      ],
+      "entry": { "x": -140, "z": 18 }, "go": { "x": -84, "z": 4 }, "spreadX": 0.5, "spreadZ": 1.4,
+      "msg": "Augereau's division follows Masséna into Lodi." }
+  ]
+}

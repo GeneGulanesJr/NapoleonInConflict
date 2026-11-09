@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- Documentary renderer page, driven frame by frame by scripts/film.ts (window.__doc). Not part of the game build. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Documentary</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: Georgia, 'Times New Roman', serif; color: #f3efe4; }
+    #view { position: fixed; inset: 0; }
+    .card { position: fixed; opacity: 0; pointer-events: none; }
+    .lower { left: 90px; bottom: 110px; max-width: 1100px; font-size: 34px; line-height: 1.25; padding: 16px 26px; background: rgba(10,10,14,.68); border-left: 8px solid #c9a24a; }
+    .tag { left: 90px; bottom: 40px; font-size: 22px; letter-spacing: .04em; opacity: 0; color: #d8d2c0; text-shadow: 0 2px 4px #000; }
+    .title { left: 0; right: 0; top: 36%; text-align: center; font-size: 96px; letter-spacing: .08em; text-shadow: 0 4px 18px #000, 0 0 40px #000; }
+    .title small { display: block; margin-top: 18px; font-size: 40px; letter-spacing: .12em; font-weight: normal; }
+    .quote { left: 160px; right: 160px; bottom: 120px; text-align: center; font-size: 44px; line-height: 1.3; font-style: italic; text-shadow: 0 3px 12px #000, 0 0 30px #000; }
+    .quote small { display: block; margin-top: 16px; font-size: 24px; font-style: normal; letter-spacing: .03em; color: #d8d2c0; }
+    .source { right: 70px; top: 70px; width: 560px; font-size: 28px; line-height: 1.3; padding: 18px 24px; background: rgba(10,10,14,.78); border: 2px solid #c9a24a; }
+    .source b { display: block; margin-bottom: 8px; font-size: 20px; letter-spacing: .12em; color: #c9a24a; }
+    .chapter { left: 90px; top: 60px; font-size: 26px; letter-spacing: .22em; text-transform: uppercase; color: #e6d9b0; text-shadow: 0 2px 6px #000; }
+    #rec { position: fixed; right: 40px; bottom: 34px; font-size: 20px; letter-spacing: .1em; color: #d8d2c0; text-shadow: 0 2px 4px #000; opacity: .85; }
+    #map { position: fixed; inset: 0; display: none; background: #1b2128; } #map svg { width: 100%; height: 100%; }
+    #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+    #end { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; background: #0b0b0e; }
+    #end div { max-width: 1250px; font-size: 38px; line-height: 1.5; } #end small { display: block; margin-top: 28px; font-size: 24px; line-height: 1.5; color: #bdb6a2; }
+  </style>
+</head>
+<body>
+  <div id="view"></div><div id="map"></div><div id="cards"></div><div id="rec">RECONSTRUCTION · positions and movements are illustrative</div><div id="fade"></div><div id="end"><div id="endtext"></div></div>
+  <script type="module" src="/src/doc.ts"></script>
+</body>
+</html>

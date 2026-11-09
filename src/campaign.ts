@@ -11,6 +11,7 @@ import wavre from './data/wavre.json';
 import bridgeJson from './data/bridge.json';
 import retreatJson from './data/retreat.json';
 import laststandJson from './data/laststand.json';
+import lodiJson from './data/lodi.json';
 import { extend, prepare } from './sim/extend.ts';
 import { SIM_VERSION } from './sim/sim.ts';
 import { freshRoster as buildRoster, applyResult as applyBattle, reinforce as buyMen, recruit as buyRegiment, fillCost as menCost, recruitCost as regimentCost, type RosterUnit, type CampaignState } from './sim/roster.ts';
@@ -19,9 +20,9 @@ import { grouchyOrders as orders, grouchyDue as due, fieldRoster as onField } fr
 export const TUNING: any = tuning;
 export const CAMPAIGN: any = camp;
 /** the finished scenarios: `scale` stretches a map once, after any `extends` (see src/sim/extend.ts) */
-export const SCENARIOS: Record<string, any> = Object.fromEntries(Object.entries({ charleroi, quatrebras, ligny, genappe, waterloo, hougoumont, wavre, bridge: extend(genappe, bridgeJson), retreat: extend(quatrebras, retreatJson), laststand: extend(waterloo, laststandJson) }).map(([id, j]) => [id, prepare(j)]));
+export const SCENARIOS: Record<string, any> = Object.fromEntries(Object.entries({ charleroi, quatrebras, ligny, genappe, waterloo, hougoumont, wavre, bridge: extend(genappe, bridgeJson), retreat: extend(quatrebras, retreatJson), laststand: extend(waterloo, laststandJson), lodi: lodiJson }).map(([id, j]) => [id, prepare(j)]));
 /** extra battles that are not part of the campaign: quick battle only */
-export const EXTRA_BATTLES = ['hougoumont', 'wavre', 'bridge', 'retreat', 'laststand'];
+export const EXTRA_BATTLES = ['hougoumont', 'wavre', 'bridge', 'retreat', 'laststand', 'lodi'];
 
 export type { RosterUnit, CampaignState } from './sim/roster.ts';
 const KEY = 'nic-campaign-v2';

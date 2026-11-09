@@ -8,7 +8,7 @@ const raw = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.jso
 const tu = j('tuning'), camp = j('campaign');
 const seed = Number(process.argv[2] ?? 1);
 
-for (const id of [...camp.battles, 'hougoumont', 'wavre', 'bridge', 'retreat', 'laststand']) { // the stand-alone battles (EXTRA_BATTLES in src/campaign.ts) are not in the campaign list
+for (const id of [...camp.battles, 'hougoumont', 'wavre', 'bridge', 'retreat', 'laststand', 'lodi']) { // the stand-alone battles (EXTRA_BATTLES in src/campaign.ts) are not in the campaign list
   const scn = j(id);
   const sim = createSim(scn, tu, { seed });
   const bots = [makeBot(sim, 0), makeBot(sim, 1)];

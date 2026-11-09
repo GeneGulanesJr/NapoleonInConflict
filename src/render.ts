@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { animate } from 'animejs';
-import { heightAt as groundH, lineDist, featureAt, riverAt } from './sim/world.ts';
+import { heightAt as groundH, lineDist, featureAt, riverAt, deepAt } from './sim/world.ts';
 import { posted, foot, hour, distToFoot } from './sim/sim.ts';
 import { pxUrl } from './pixel.ts';
 
@@ -16,8 +16,30 @@ const heightAt = (s: any, x: number, z: number) => groundH(s, x, z) * RELIEF;
 const P = { fr: 0x3f6fdc, gb: 0xd8453a, pr: 0x3b4a85, nl: 0xd8872a, br: 0x2a2a2e, trim: 0xe9e4d6, ink: 0x14110d, skin: 0xd8b090, wood: 0x5a4128, brass: 0xd3a64e, steel: 0xb8bcc4,
   grassA: 0x7f9150, grassB: 0x8a9c58, wheat: 0xc9ab5a, wheatB: 0xb99b4c, ridge: 0x8f9456, lane: 0x8a6d4a, road: 0xb3a07a, woodFloor: 0x405836, denseFloor: 0x324a2b, water: 0x4a6f8f, ford: 0x7099b0, plaster: 0xd6c9a8, tile: 0xa4503a, pine: 0x2f4a2b,
   hedge: 0x3c5a2e, hedgeTop: 0x4a6b36, stone: 0x8d8777, cliff: 0x6b573d, plow: 0x6e5036, smoke: 0xf4f1ea, soil: 0x3a2c1f, horse: 0x6b4a34, pants: 0xe0dbcb };
-const PLUME: Record<string, number> = { fr: 0xd8453a, gb: 0xe9e4d6, pr: 0xe9e4d6, nl: 0xd8872a, br: 0x1b1b1f };
-const NAT: Record<string, number> = { fr: P.fr, gb: P.gb, pr: P.pr, nl: P.nl, br: P.br };
+/** Every army of the era in one table: coat and trouser colour (instance tints), the hat model, and the plume or pompom. An unknown code falls back to a plain shako in grey. */
+type Hat = 'shako' | 'belgic' | 'kiwer' | 'stove' | 'bicorne' | 'raupen' | 'fez';
+const NATIONS: Record<string, { coat: number; pants: number; hat: Hat; plume: number }> = {
+  fr: { coat: P.fr, pants: 0xf6f3ea, hat: 'shako', plume: 0xd8453a },    // France: blue coat, white trousers
+  gb: { coat: P.gb, pants: 0xb9bcc6, hat: 'belgic', plume: 0xe9e4d6 },   // Britain: red coat, grey trousers
+  pr: { coat: P.pr, pants: 0xe9e4d6, hat: 'shako', plume: 0xe9e4d6 },    // Prussia
+  nl: { coat: P.nl, pants: 0xf0ece0, hat: 'belgic', plume: 0xd8872a },   // Netherlands (shown orange so Dutch-Belgians read apart from the French)
+  br: { coat: P.br, pants: 0x3a3a40, hat: 'shako', plume: 0x1b1b1f },    // Brunswick: the Black Brunswickers
+  at: { coat: 0xe6e3d8, pants: 0xe6e3d8, hat: 'stove', plume: 0x1b1b1f }, // Austria: white coat, stovepipe shako
+  ru: { coat: 0x3f7a3f, pants: 0xf0eee4, hat: 'kiwer', plume: 0xe9e4d6 }, // Russia: dark green coat, tall kiwer
+  es: { coat: 0x3a4f9c, pants: 0xf0eee4, hat: 'bicorne', plume: 0xd8453a }, // Spain: blue coat, bicorne
+  pt: { coat: 0x2f4a8c, pants: 0xe9e4d6, hat: 'shako', plume: 0x3a8a3a }, // Portugal
+  se: { coat: 0x2c3f7a, pants: 0xe9e4d6, hat: 'shako', plume: 0xf0c030 }, // Sweden: dark blue, yellow plume
+  dk: { coat: 0x3a4f8a, pants: 0xe9e4d6, hat: 'shako', plume: 0xe9e4d6 }, // Denmark
+  by: { coat: 0x6f9ae0, pants: 0xe9e4d6, hat: 'raupen', plume: 0x1b1b1f }, // Bavaria: light blue coat, caterpillar helmet
+  sx: { coat: 0xe6e3d8, pants: 0xe6e3d8, hat: 'shako', plume: 0x3a8a3a }, // Saxony: white coat
+  wu: { coat: 0x5a86d4, pants: 0xe9e4d6, hat: 'shako', plume: 0x1b1b1f }, // Wurttemberg
+  it: { coat: 0xe6e3d8, pants: 0xe6e3d8, hat: 'shako', plume: 0x3a8a3a }, // Kingdom of Italy: white coat, green plume
+  pl: { coat: 0x2b4a9a, pants: 0xe9e4d6, hat: 'shako', plume: 0xe9e4d6 }, // Duchy of Warsaw
+  hn: { coat: P.gb, pants: 0xb9bcc6, hat: 'belgic', plume: 0xe9e4d6 },    // Hanover and the King's German Legion: dressed as the British
+  tr: { coat: 0x3a5a9a, pants: 0xc23a2e, hat: 'fez', plume: 0xe0c060 },   // Ottoman: blue jacket, red trousers and fez
+};
+const NAT: Record<string, number> = Object.fromEntries(Object.entries(NATIONS).map(([k, v]) => [k, v.coat]));
+const PLUME: Record<string, number> = Object.fromEntries(Object.entries(NATIONS).map(([k, v]) => [k, v.plume]));
 /** [French, Coalition]; setColourBlind swaps it in place, with the CSS --fr/--co (sides) and --mine/--foe (bases, plates) */
 export const SIDE_COLOR = ['#6f9bff', '#ff6a5c'];
 const hexOf = (c: string) => parseInt(c.slice(1), 16);
@@ -76,6 +98,7 @@ function paint(g: THREE.BufferGeometry, hex: number, keep = false) {
   return g;
 }
 const bx = (w: number, h: number, d: number, x: number, y: number, z: number, hex: number) => paint(new THREE.BoxGeometry(w, h, d).translate(x, y, z), hex);
+const pl = (w: number, h: number, x: number, y: number, z: number, hex: number) => paint(new THREE.PlaneGeometry(w, h).translate(x, y, z), hex, true); // a flat quad: 2 triangles for detail that only faces forward (buttons, turnbacks); keep = indexed, or merge() would make the whole figure non-indexed
 const cy = (r0: number, r1: number, h: number, seg: number, x: number, y: number, z: number, hex: number) => paint(new THREE.CylinderGeometry(r0, r1, h, seg).translate(x, y, z), hex);
 const merge = (l: THREE.BufferGeometry[]) => mergeGeometries(l.some(g => !g.index) ? l.map(g => g.index ? g.toNonIndexed() : g) : l)!; // mergeGeometries needs all-or-none indexed
 // turned parts for the tin figures: a tapered rod from a (radius r0) to b (r1), a squashed ball, a dome, an upright cylinder from y0 to y1 (sz flattens it front to back)
@@ -89,7 +112,8 @@ const dome = (r: number, y: number, hex: number, sy = 1) => paint(new THREE.Sphe
 const cyl = (r0: number, r1: number, y0: number, y1: number, hex: number, seg = 8, sz = 1) => paint(new THREE.CylinderGeometry(r1, r0, y1 - y0, seg).scale(1, 1, sz).translate(0, (y0 + y1) / 2, 0), hex, true);
 const mix = (a: number[], b: number[], t: number) => a.map((v, i) => v + (b[i] - v) * t);
 
-export function createView(host: HTMLElement) {
+/** opts.crowd: men shown per sim man for the line and guard when zoomed in (1.4 in the game; the Shorts capture asks for more and the buffers grow with it) */
+export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: number } = {}) {
   // render quality: 0 Guide (strict 480x270 look, fixed zoom stops, 90-degree turns), 1 Fine (360 rows), 2 High (540+ rows), 3 Native (up to 1440 rows)
   const QUALITY = ['Guide: 270 rows, fixed zoom, 90 degree turns', 'Fine: 360 rows', 'High: 540+ rows', 'Native: full resolution up to 1440p'];
   let quality = 2;
@@ -308,7 +332,7 @@ export function createView(host: HTMLElement) {
   const col = new THREE.Color();
 
   function setScenario(s: any, t: any) {
-    clearScene();
+    clearScene(); clearFallen();
     scn = s; tu = t; mapSize = s.map.size; FS = t.figScale ?? 1;
     const segs = Math.min(320, Math.round(mapSize / 1.6)); // ~2 units per cell on the big maps, so roads and fords stay continuous
     const geo = new THREE.PlaneGeometry(mapSize, mapSize, segs, segs);
@@ -483,11 +507,17 @@ export function createView(host: HTMLElement) {
     rod([0.07, 0.62, -0.12], [0.08, 0.38, -0.16], 0.05, 0.04, W, 4), rod([-0.07, 0.62, -0.12], [-0.08, 0.38, -0.16], 0.05, 0.04, W, 4), // coat-tails
     ...belt(1), ...belt(-1), bx(0.07, 0.07, 0.03, 0, 0.92, 0.175, P.brass), // crossbelts and plate
     ball(0.09, 0.23, 1.17, 0, RED, 1.2, 0.55), ball(0.09, -0.23, 1.17, 0, RED, 1.2, 0.55), cyl(0.12, 0.115, 1.16, 1.25, RED), cyl(0.07, 0.07, 1.24, 1.3, DK, 6), // epaulettes, collar, stock
-    ball(0.15, 0, 1.39, 0.015, P.skin, 1, 1.05), ball(0.145, 0, 1.41, -0.03, HAIR),
-    bx(0.04, 0.04, 0.02, 0.055, 1.41, 0.155, DK), bx(0.04, 0.04, 0.02, -0.055, 1.41, 0.155, DK), bx(0.11, 0.03, 0.03, 0, 1.335, 0.15, HAIR), // eyes, moustache
+    ball(0.165, 0, 1.39, 0.015, P.skin, 1, 1.06), ball(0.158, 0, 1.415, -0.035, HAIR), bx(0.035, 0.05, 0.05, 0, 1.375, 0.178, P.skin), // head, hair, nose
+    bx(0.045, 0.04, 0.02, 0.06, 1.41, 0.16, DK), bx(0.045, 0.04, 0.02, -0.06, 1.41, 0.16, DK), bx(0.12, 0.03, 0.03, 0, 1.335, 0.165, HAIR), // eyes, moustache
+    ...[1.08, 0.98, 0.88, 0.78].flatMap((y) => [pl(0.03, 0.03, 0.05, y, 0.192, P.brass), pl(0.03, 0.03, -0.05, y, 0.192, P.brass)]), // coat buttons
+    pl(0.07, 0.26, 0.18, 0.5, 0.135, 0xf3f0e6), pl(0.07, 0.26, -0.18, 0.5, 0.135, 0xf3f0e6), // white turnbacks on the skirts
   ]);
   const packG = atHip([bx(0.34, 0.34, 0.14, 0, 0.98, -0.22, LEATHER), rod([-0.2, 1.21, -0.22], [0.2, 1.21, -0.22], 0.065, 0.065, 0x8a8576), bx(0.24, 0.13, 0.08, 0, 0.66, -0.2, DK)]); // foot only: knapsack, greatcoat roll, cartridge box
-  const legG = (x: number) => merge([rod([x, HIP, 0], [x, 0.3, 0.01], 0.1, 0.082, P.pants), rod([x, 0.32, 0.01], [x, 0.05, 0], 0.084, 0.072, DK), bx(0.11, 0.06, 0.21, x, 0.03, 0.04, DK)]).translate(0, -HIP, 0); // trousers, gaiters, shoe
+  const TROUSER = 0xf6f3ea; // white, not the warm cream that reads as bare legs in sunlight
+  const legG = (x: number) => merge([rod([x, HIP, 0], [x, 0.3, 0.01], 0.1, 0.082, TROUSER), rod([x, 0.32, 0.01], [x, 0.14, 0], 0.082, 0.07, TROUSER), rod([x, 0.17, 0], [x, 0.05, 0], 0.076, 0.07, DK), bx(0.11, 0.06, 0.21, x, 0.03, 0.04, DK)]).translate(0, -HIP, 0); // trousers to the ankle, a short black gaiter, shoe
+  const KNEE = 0.31; // the leg in two so the knee can bend: thigh hangs from the hip, shin from the knee
+  const thighG = (x: number) => merge([rod([x, HIP, 0], [x, 0.3, 0.01], 0.1, 0.082, W)]).translate(0, -HIP, 0); // trousers are white paint: the nation's trouser colour is the instance tint
+  const shinG = (x: number) => merge([ball(0.085, x, KNEE, 0.01, W), rod([x, 0.32, 0.01], [x, 0.14, 0], 0.082, 0.07, W), rod([x, 0.17, 0], [x, 0.05, 0], 0.076, 0.07, DK), bx(0.11, 0.06, 0.21, x, 0.03, 0.04, DK)]).translate(0, -KNEE, 0);
   const arm = (s: number[], e: number[], h: number[]) => [rod(s, e, 0.07, 0.064, W), rod(e, h, 0.064, 0.058, W), rod(mix(e, h, 0.72), h, 0.07, 0.068, RED), ball(0.058, h[0], h[1], h[2], P.skin)];
   const musket = (b: number[], m: number[]) => [rod(b, mix(b, m, 0.32), 0.055, 0.032, P.wood, 5), rod(mix(b, m, 0.3), m, 0.022, 0.022, IRON, 4), rod(m, mix(b, m, 1.28), 0.013, 0.006, P.steel, 4)]; // stock, barrel, bayonet
   // carry: musket upright against the left shoulder (a forest of bayonets above the shakos); aim: levelled from the right shoulder; ride: sabre at the shoulder, reins in the left hand
@@ -499,25 +529,37 @@ export function createView(host: HTMLElement) {
   const lanceG = atSh([rod(mix(HAND, BLADE, -0.95), mix(HAND, BLADE, 2.4), 0.03, 0.024, P.wood, 4), rod(mix(HAND, BLADE, 2.4), mix(HAND, BLADE, 2.62), 0.035, 0.004, P.steel, 4), bx(0.02, 0.18, 0.38, -0.27, 3.0, -0.27, W)]);
   // headgear rides on the body's matrix
   const peak = (r: number, y: number) => paint(new THREE.CylinderGeometry(r, r, 0.02, 8, 1, false, -Math.PI / 2, Math.PI).rotateX(0.25).translate(0, y, 0.02), DK, true);
-  const shakoG = atHip([cyl(0.138, 0.168, 1.47, 1.8, DK), peak(0.17, 1.49), bx(0.1, 0.12, 0.02, 0, 1.62, 0.158, P.brass), rod([0, 1.78, 0.11], [0, 2.07, 0.14], 0.045, 0.022, W, 5)]); // French bell-top + plume
+  const shakoG = atHip([cyl(0.138, 0.168, 1.47, 1.8, 0x2c2e36), peak(0.17, 1.49), bx(0.1, 0.12, 0.02, 0, 1.62, 0.158, P.brass), rod([0, 1.78, 0.11], [0, 2.07, 0.14], 0.045, 0.022, W, 5)]); // French bell-top + plume
   const belgicG = atHip([cyl(0.138, 0.14, 1.47, 1.72, DK), bx(0.3, 0.38, 0.03, 0, 1.74, 0.13, DK), peak(0.17, 1.49), bx(0.11, 0.13, 0.02, 0, 1.62, 0.16, P.brass), rod([0.11, 1.74, 0.14], [0.12, 1.93, 0.15], 0.04, 0.03, W, 5)]); // British false-front shako
-  const bearG = atHip([cyl(0.15, 0.2, 1.46, 1.98, DK, 7), dome(0.2, 1.98, DK, 0.5), bx(0.13, 0.12, 0.02, 0, 1.58, 0.165, P.brass), rod([0.13, 1.62, 0.07], [0.16, 2.06, 0.07], 0.045, 0.03, RED, 5), bx(0.12, 0.12, 0.03, 0, 1.98, -0.19, RED)]);
+  const FUR = 0x3a322b; // bearskin: brown-black fur, not the flat black of the shako (the guard read as dark blobs)
+  const bearG = atHip([cyl(0.15, 0.2, 1.46, 1.98, FUR, 7), dome(0.2, 1.98, FUR, 0.5), rod([-0.14, 1.56, 0.13], [0.14, 1.5, 0.17], 0.016, 0.016, 0xe9e4d6, 3), bx(0.13, 0.12, 0.02, 0, 1.58, 0.165, P.brass), rod([0.13, 1.62, 0.07], [0.16, 2.06, 0.07], 0.045, 0.03, RED, 5), bx(0.12, 0.12, 0.03, 0, 1.98, -0.19, RED)]);
   const cuirG = atHip([cyl(0.182, 0.25, 0.62, SH - 0.02, P.steel, 8, 0.76), dome(0.16, 1.47, P.steel), cyl(0.15, 0.15, 1.44, 1.51, DK), peak(0.16, 1.47), bx(0.05, 0.13, 0.32, 0, 1.66, -0.02, P.brass),
     rod([0, 1.68, -0.15], [0, 1.22, -0.3], 0.045, 0.075, DK, 5), rod([0.03, 1.7, 0.1], [0.05, 1.98, 0.08], 0.035, 0.025, RED, 5)]); // breastplate, helmet, fur turban, crest, horsehair tail, plume
   const capG = atHip([cyl(0.138, 0.12, 1.47, 1.66, DK), paint(new THREE.BoxGeometry(0.3, 0.1, 0.3).rotateY(Math.PI / 4).translate(0, 1.72, 0), RED), peak(0.17, 1.49), bx(0.1, 0.1, 0.02, 0, 1.56, 0.145, P.brass), rod([0.1, 1.76, 0.08], [0.12, 2.0, 0.08], 0.04, 0.025, P.trim, 5)]); // lancer czapka
   const bicG = atHip([cyl(0.152, 0.145, 1.46, 1.6, DK), paint(new THREE.CylinderGeometry(0.33, 0.33, 0.24, 10, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2).scale(1, 0.62, 1).translate(0, 1.5, 0), DK, true), ball(0.045, 0.12, 1.6, 0.13, 0xe9e4d6)]); // bicorne worn en bataille: crown, crescent, cockade
+  // an officer (gold epaulettes, red sash, gold belt) and a drummer (drum on the hip) in each infantry regiment
+  const offG = atHip([ball(0.1, 0.23, 1.18, 0, 0xe8c030, 1.25, 0.6), ball(0.1, -0.23, 1.18, 0, 0xe8c030, 1.25, 0.6), rod([-0.2, 1.12, 0.12], [0.2, 0.58, 0.16], 0.035, 0.035, 0xc23a2e, 4), bx(0.3, 0.05, 0.04, 0, 0.64, 0.18, 0xe8c030)]);
+  const drumG = atHip([paint(new THREE.CylinderGeometry(0.17, 0.17, 0.3, 10).rotateZ(Math.PI / 2).translate(0, 0.62, 0.27), 0xd8c9a0, true), ...[0.16, -0.16].map((x) => paint(new THREE.CylinderGeometry(0.18, 0.18, 0.03, 10).rotateZ(Math.PI / 2).translate(x, 0.62, 0.27), RED, true)), rod([-0.17, 1.15, 0.1], [0, 0.7, 0.2], 0.02, 0.02, P.trim, 3), rod([0.17, 1.15, 0.1], [0, 0.7, 0.2], 0.02, 0.02, P.trim, 3)]);
+  // the other armies' headgear (white paint takes the nation's plume colour)
+  const kiwerG = atHip([cyl(0.145, 0.172, 1.47, 1.92, DK), peak(0.175, 1.49), bx(0.17, 0.2, 0.02, 0, 1.68, 0.172, P.brass), ball(0.05, 0, 1.96, 0, W), rod([0, 1.94, 0], [0, 2.18, 0.02], 0.028, 0.02, W, 5)]); // Russian kiwer: tall, big brass plate, upright plume
+  const stoveG = atHip([cyl(0.158, 0.158, 1.47, 1.86, DK), peak(0.17, 1.49), bx(0.14, 0.17, 0.02, 0, 1.62, 0.16, P.brass), bx(0.32, 0.03, 0.32, 0, 1.87, 0, 0x2a2c33), rod([0.04, 1.86, 0.02], [0.05, 2.06, 0.02], 0.05, 0.03, W, 5)]); // Austrian stovepipe: straight, flat-topped, tufted
+  const raupenG = atHip([dome(0.175, 1.47, DK, 1.05), peak(0.17, 1.49), bx(0.1, 0.1, 0.02, 0, 1.6, 0.17, P.brass), rod([0, 1.66, -0.2], [0, 1.68, 0.15], 0.055, 0.055, W, 5), rod([0, 1.66, -0.2], [0, 1.45, -0.3], 0.04, 0.025, W, 4)]); // Bavarian raupenhelm: leather helmet, caterpillar crest, horsehair tail
+  const fezG = atHip([cyl(0.15, 0.12, 1.45, 1.68, 0xc23a2e), cyl(0.158, 0.158, 1.43, 1.5, 0xf0ece0), rod([0, 1.68, 0], [0.12, 1.52, -0.12], 0.012, 0.02, 0xe0c060, 3)]); // Ottoman fez, turban band, tassel
   const skirG = atHip([ball(0.095, 0.23, 1.175, 0, 0x4a8a3a, 1.2, 0.6), ball(0.095, -0.23, 1.175, 0, 0x4a8a3a, 1.2, 0.6), bx(0.26, 0.035, 0.03, 0, 1.57, 0.165, 0xe8c030)]); // light-company epaulettes and shako cord
   // horse: white parts take a coat per horse (bay, chestnut, black, grey); legs swing in pairs from shoulder and hip
   const HD = 0x2a2a2a;
   const horseG = merge([
     rod([0, 1.04, -0.62], [0, 1.08, 0.56], 0.28, 0.3, W, 8), ball(0.3, 0, 1.06, 0.56, W, 0.95), ball(0.3, 0, 1.1, -0.6, W, 0.95, 1, 1.05), // barrel, chest, rump
-    rod([0, 1.18, 0.62], [0, 1.72, 0.98], 0.2, 0.12, W), rod([0, 1.8, 0.96], [0, 1.5, 1.38], 0.12, 0.075, W), // neck, head
+    rod([0, 1.14, 0.58], [0, 1.52, 0.8], 0.215, 0.17, W, 7), rod([0, 1.5, 0.78], [0, 1.88, 0.97], 0.17, 0.115, W, 7), ball(0.17, 0, 1.4, 0.42, W, 1, 0.8, 1.3), // arched neck in two, withers
+    ball(0.125, 0, 1.84, 1.0, W, 0.9, 1, 1.15), rod([0, 1.82, 1.02], [0, 1.54, 1.4], 0.115, 0.07, W, 6), ball(0.082, 0, 1.51, 1.43, W, 0.95, 0.9, 1.15), ball(0.1, 0.045, 1.72, 1.1, W, 0.8, 1, 1), ball(0.1, -0.045, 1.72, 1.1, W, 0.8, 1, 1), // poll, face, muzzle, cheeks
+    bx(0.025, 0.03, 0.03, 0.04, 1.5, 1.52, HD), bx(0.025, 0.03, 0.03, -0.04, 1.5, 1.52, HD), bx(0.13, 0.025, 0.1, 0, 1.58, 1.34, 0x2a1d16), // nostrils, noseband
+    ball(0.22, 0.2, 1.0, 0.5, W, 0.7, 1.25, 1.2), ball(0.22, -0.2, 1.0, 0.5, W, 0.7, 1.25, 1.2), ball(0.27, 0.2, 1.05, -0.62, W, 0.8, 1.15, 1.1), ball(0.27, -0.2, 1.05, -0.62, W, 0.8, 1.15, 1.1), // shoulder and haunch muscle
     rod([0.06, 1.84, 0.94], [0.08, 1.97, 0.9], 0.035, 0.01, W, 4), rod([-0.06, 1.84, 0.94], [-0.08, 1.97, 0.9], 0.035, 0.01, W, 4), bx(0.03, 0.04, 0.04, 0.085, 1.72, 1.12, HD), bx(0.03, 0.04, 0.04, -0.085, 1.72, 1.12, HD), // ears, eyes
-    rod([0, 1.29, 0.48], [0, 1.83, 0.86], 0.06, 0.05, HD, 4), rod([0, 1.15, -0.86], [0, 0.5, -1.02], 0.08, 0.035, HD, 5), // mane, tail
+    rod([0, 1.3, 0.46], [0, 1.62, 0.7], 0.07, 0.06, HD, 4), rod([0, 1.62, 0.7], [0, 1.95, 0.9], 0.06, 0.05, HD, 4), rod([0, 1.15, -0.86], [0.04, 0.5, -1.08], 0.1, 0.045, HD, 5), rod([0, 1.12, -0.86], [-0.07, 0.62, -1.0], 0.07, 0.035, HD, 5), // mane, tail (two locks)
     bx(0.56, 0.05, 0.86, 0, 1.39, -0.08, 0x7a2a2a), paint(new THREE.BoxGeometry(0.04, 0.34, 0.86).rotateZ(-0.25).translate(0.3, 1.22, -0.08), 0x7a2a2a), paint(new THREE.BoxGeometry(0.04, 0.34, 0.86).rotateZ(0.25).translate(-0.3, 1.22, -0.08), 0x7a2a2a), bx(0.36, 0.08, 0.42, 0, 1.42, 0, LEATHER), rod([-0.22, 1.45, -0.3], [0.22, 1.45, -0.3], 0.065, 0.065, 0x2a3a6a), rod([0, 1.6, 1.22], [0, 1.4, 0.4], 0.012, 0.012, DK, 3), // shabraque, saddle, valise, reins
     rod([0.34, 1.3, 0.05], [0.36, 0.9, 0.08], 0.012, 0.012, DK, 3), rod([-0.34, 1.3, 0.05], [-0.36, 0.9, 0.08], 0.012, 0.012, DK, 3), // stirrup leathers
   ]).translate(0, -HY, 0);
-  const hleg = (x: number, knee: number, r: number, a: number) => merge([rod([x, 0, 0], [x, -0.44, knee], r, 0.06, W, 5), rod([x, -0.44, knee], [x, -0.88, 0], 0.05, 0.045, W, 5), rod([x, -0.88, 0], [x, -0.98, 0.01], 0.06, 0.065, HD, 5)]).rotateX(a);
+  const hleg = (x: number, knee: number, r: number, a: number) => merge([rod([x, 0, 0], [x, -0.44, knee], r * 1.12, 0.06, W, 6), ball(0.065, x, -0.44, knee, W), rod([x, -0.44, knee], [x, -0.86, 0], 0.048, 0.036, W, 5), ball(0.05, x, -0.86, 0.015, W), rod([x, -0.88, 0.01], [x, -0.99, 0.03], 0.045, 0.07, HD, 6)]).rotateX(a); // thigh, knee, slim cannon, fetlock, flared hoof
   const legsFG = merge([hleg(0.16, 0.05, 0.085, 0.2), hleg(-0.16, 0.05, 0.085, -0.2)]), legsHG = merge([hleg(0.16, -0.12, 0.11, 0.2), hleg(-0.16, -0.12, 0.11, -0.2)]);
   // field gun: bronze barrel on an olive Gribeauval carriage, spoked wheels, rammer and shot pile
   const spokes = (sx: number) => [0, 1, 2, 3, 4, 5].map((k) => rod([sx, 0.78, 0], [sx, 0.78 + Math.cos(k * 1.047) * 0.72, Math.sin(k * 1.047) * 0.72], 0.025, 0.025, OLIVE, 3));
@@ -529,18 +571,20 @@ export function createView(host: HTMLElement) {
     ...[[-0.9, 0.11, -0.5], [-0.72, 0.11, -0.3], [-1.08, 0.11, -0.3], [-0.9, 0.11, -0.1], [-0.9, 0.28, -0.3]].map(([x, y, z]) => ball(0.11, x, y, z, DK)),
   ]);
   // enamel paint: the scene's 3 toon steps plus a bright glint where a facet faces the sun (ramp stored /GL, colour scaled back up by GL)
-  const GL = 1.35, figRamp = new THREE.DataTexture(new Uint8Array([0.47, 0.47, 0.47, 0.47, 0.75, 0.75, 1, 1, GL, GL].map((v) => Math.round((v / GL) * 255))), 10, 1, THREE.RedFormat);
+  const GL = 1.35, figRamp = new THREE.DataTexture(new Uint8Array([0.62, 0.62, 0.62, 0.62, 0.84, 0.84, 1, 1, GL, GL].map((v) => Math.round((v / GL) * 255))), 10, 1, THREE.RedFormat);
   figRamp.minFilter = figRamp.magFilter = THREE.NearestFilter; figRamp.needsUpdate = true;
   const fig = (g: THREE.BufferGeometry, n: number, center: [number, number, number] | null, shadow = false) => mkI(g, n, Object.assign(toon({ vertexColors: true, gradientMap: figRamp, color: new THREE.Color(GL, GL, GL) }), { flatShading: true }) /* faceted from indexed parts: ~half the vertices */, center, shadow);
-  const FIG_MAX = 8000, CROWD = 1.4; // figure buffers; CROWD = how many more men than the sim's count the line and guard show when zoomed in (the spacing is already close to a man's width: much past 1.4 they overlap)
-  const body = fig(bodyG, FIG_MAX, [0, 0.35, 0]), legL = fig(legG(0.095), FIG_MAX, [0, -0.3, 0]), legR = fig(legG(-0.095), FIG_MAX, [0, -0.3, 0]);
+  const CROWD = opts.crowd ?? 1.4, GROW = Math.max(1, Math.ceil(CROWD / 1.4)), FIG_MAX = 8000 * GROW; // figure buffers; CROWD = how many more men than the sim's count the line and guard show when zoomed in (the spacing is already close to a man's width: much past 1.4 they overlap)
+  const body = fig(bodyG, FIG_MAX, [0, 0.35, 0]), thL = fig(thighG(0.095), FIG_MAX, null), thR = fig(thighG(-0.095), FIG_MAX, null), shL = fig(shinG(0.095), FIG_MAX, [0, -0.3, 0]), shR = fig(shinG(-0.095), FIG_MAX, [0, -0.3, 0]);
   const armsCarry = fig(armsCarryG, FIG_MAX, [0, -0.2, 0.05]), armsAim = fig(armsAimG, FIG_MAX, [0, -0.05, 0.4]), armsRide = fig(armsRideG, 1600, [0, -0.1, 0.2]);
   const packM = fig(packG, FIG_MAX, [0, 0.35, 0]);
   // one invisible box casts the whole soldier's shadow (cheaper than every part casting); slightly inside the silhouette so it never darkens the figure
   const shadowP = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 1.8, 0.28).translate(0, 0.9 - HIP, 0), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), FIG_MAX);
   shadowP.instanceMatrix = body.instanceMatrix; shadowP.count = 0; shadowP.frustumCulled = false; shadowP.castShadow = true; shadowP.receiveShadow = false; scene.add(shadowP);
   const hat = [0, 1.05, 0] as [number, number, number];
-  const shakoM = fig(shakoG, FIG_MAX, hat), belgM = fig(belgicG, FIG_MAX, hat), bearM = fig(bearG, 3000, hat), cuirM = fig(cuirG, 1500, [0, 0.5, 0]), capM = fig(capG, 1500, hat), bicM = fig(bicG, 200, hat);
+  const shakoM = fig(shakoG, FIG_MAX, hat), belgM = fig(belgicG, FIG_MAX, hat), bearM = fig(bearG, 3000 * GROW, hat), cuirM = fig(cuirG, 1500, [0, 0.5, 0]), capM = fig(capG, 1500, hat), bicM = fig(bicG, 200, hat);
+  const offM = fig(offG, 600, null), drumM = fig(drumG, 600, null);
+  const hats: Record<Hat, THREE.InstancedMesh> = { shako: shakoM, belgic: belgM, kiwer: fig(kiwerG, FIG_MAX, hat), stove: fig(stoveG, FIG_MAX, hat), bicorne: fig(bicG, FIG_MAX, hat), raupen: fig(raupenG, FIG_MAX, hat), fez: fig(fezG, FIG_MAX, hat) }; // by nation (NATIONS)
   const skirM = fig(skirG, 2500, null), lanceM = fig(lanceG, 1500, null);
   // one standard per infantry regiment (pole + finial, waving banner in the nation's colour, gold eagle)
   const flagM = mkI(merge([bx(0.07, 3.6, 0.07, 0, 1.8, 0, P.wood), bx(0.18, 0.2, 0.18, 0, 3.7, 0, P.brass)]), 400, toon({ vertexColors: true }), [0, 1.8, 0], false);
@@ -551,9 +595,39 @@ export function createView(host: HTMLElement) {
   const guns = fig(gunG, 300, [0, 0.8, 0], true);
   // figure rig: rootAt places the feet; joint hangs a child (hip, shoulder, horse legs) off a parent matrix with its own pitch (+ = forward) and roll
   const E = new THREE.Euler(0, 0, 0, 'YXZ'), Q = new THREE.Quaternion(), V = new THREE.Vector3(), SV = new THREE.Vector3();
-  const mRoot = new THREE.Matrix4(), mBody = new THREE.Matrix4(), mHorse = new THREE.Matrix4(), mPart = new THREE.Matrix4();
+  const mRoot = new THREE.Matrix4(), mShin = new THREE.Matrix4(), mBody = new THREE.Matrix4(), mHorse = new THREE.Matrix4(), mPart = new THREE.Matrix4();
   const rootAt = (m: THREE.Matrix4, x: number, y: number, z: number, yaw: number, sc: number) => m.compose(V.set(x, y, z), Q.setFromEuler(E.set(0, yaw, 0)), SV.setScalar(sc));
-  const joint = (out: THREE.Matrix4, parent: THREE.Matrix4, x: number, y: number, z: number, pitch: number, roll = 0) => out.compose(V.set(x, y, z), Q.setFromEuler(E.set(pitch, 0, roll)), SV.setScalar(1)).premultiply(parent);
+  const joint = (out: THREE.Matrix4, parent: THREE.Matrix4, x: number, y: number, z: number, pitch: number, roll = 0, yaw = 0) => out.compose(V.set(x, y, z), Q.setFromEuler(E.set(pitch, yaw, roll)), SV.setScalar(1)).premultiply(parent);
+
+  // the fallen: a man who goes down topples about his hip (ease-out, 0.7 s) and then lies where he fell for the rest of the battle. One instanced mesh from the figure's own parts; a matrix is only written while he falls.
+  const CORP_MAX = 4000 * GROW, corpseM = fig(merge([bodyG, legG(0.095), legG(-0.095), packG, shakoG, armsCarryG.clone().translate(0, SH - HIP, 0)]), CORP_MAX, [0, 0.2, 0]);
+  const HORSE_MAX = 1500 * GROW, horseDeadM = fig(merge([horseG, legsFG.clone().translate(0, 0.98 - HY, 0.55), legsHG.clone().translate(0, 1.0 - HY, -0.55)]), HORSE_MAX, [0, 0.1, 0.2], true); // a horse with its legs set, to lie on its side
+  const falling: { i: number; x: number; y: number; z: number; yaw: number; t0: number; sgn: number; horse?: boolean }[] = [], corpseC = new THREE.Color();
+  let corpseN = 0, horseN = 0;
+  function clearFallen() { corpseN = horseN = 0; falling.length = 0; corpseM.count = horseDeadM.count = 0; }
+  function fell(x: number, z: number, yaw: number, hex: number, h: number, horseHex?: number) {
+    if (horseHex != null) { // a cavalryman down: his horse goes over on its side where it stood and he is thrown clear
+      const j = horseN++ % HORSE_MAX;
+      horseDeadM.count = Math.min(horseN, HORSE_MAX); horseDeadM.setColorAt(j, corpseC.setHex(horseHex)); horseDeadM.instanceColor!.needsUpdate = true;
+      falling.push({ i: j, x, y: heightAt(scn, x, z), z, yaw, t0: clock, sgn: h > 0.5 ? 1 : -1, horse: true });
+      x += (h > 0.5 ? 1 : -1) * 1.6 * FS; // the rider lands beside the horse
+    }
+    const i = corpseN++ % CORP_MAX;
+    corpseM.count = Math.min(corpseN, CORP_MAX); corpseM.setColorAt(i, corpseC.setHex(hex).multiplyScalar(0.8)); corpseM.instanceColor!.needsUpdate = true;
+    const fr = (k: number) => (h * k) % 1 - 0.5; // scatter: they drop where the fire found them, not in the rank's slot
+    x += fr(7.31) * 2.4 * FS; z += fr(11.9) * 2.4 * FS;
+    falling.push({ i, x, y: heightAt(scn, x, z), z, yaw: yaw + fr(13.7) * 1.8, t0: clock, sgn: fr(3.7) > 0 ? 1 : -1 });
+  }
+  function topple() {
+    if (!falling.length) return;
+    for (let k = falling.length - 1; k >= 0; k--) {
+      const c = falling[k], e = Math.min(1, (clock - c.t0) / (c.horse ? 0.9 : 0.7)), f = 1 - (1 - e) ** 2;
+      if (c.horse) { rootAt(mRoot, c.x, c.y, c.z, c.yaw, 1.4 * FS); joint(mBody, mRoot, 0, HY + (0.34 - HY) * f, 0, 0, c.sgn * 1.5 * f); horseDeadM.setMatrixAt(c.i, mBody); }
+      else { rootAt(mRoot, c.x, c.y, c.z, c.yaw, 1.7 * FS); joint(mBody, mRoot, 0, HIP + (0.2 - HIP) * f, 0, c.sgn * 1.5 * f, 0.1 * f * c.sgn); corpseM.setMatrixAt(c.i, mBody); }
+      if (e >= 1) falling.splice(k, 1);
+    }
+    corpseM.instanceMatrix.needsUpdate = horseDeadM.instanceMatrix.needsUpdate = true;
+  }
 
   // 2D pixel effect sprites (rows: powder puff, muzzle flash, shell burst, dust kick), one instanced billboard draw
   const FRAMES = [6, 3, 6, 4];
@@ -609,8 +683,8 @@ export function createView(host: HTMLElement) {
   const spawn = (row: number, x: number, y: number, z: number, life: number, size: number, vx = 0, vy = 0, vz = 0, delay = 0) => { if (fxs.length < FX_MAX - 300) fxs.push({ row, x, y, z, age: -delay, life, size, vx, vy, vz }); }; // delay: starts hidden, so a volley can ripple
 
   // per regiment: smoothed centre and facing, its speed, and per man MS floats: x, z, facing, vx, vz, gait phase
-  const MS = 6;
-  type Vis = { x: number; z: number; f: number; m: Float32Array; form: string; rs: number; n?: number; nd?: number; side: number; kind: number; seenT?: number; th?: number }; // th: the thinning (every th-th man drawn) of the last frame
+  const MS = 7; // per man: x, z, facing, vx, vz, gait phase, kneel (0 standing .. 1 down)
+  type Vis = { x: number; z: number; f: number; m: Float32Array; form: string; rs: number; n?: number; nd?: number; side: number; kind: number; seenT?: number; th?: number; colsN?: number; sqk?: number; nref?: number }; // th: the thinning (every th-th man drawn) of the last frame; colsN, sqk, nref: layout anchors held while men fall
   const GHOST = 30; // fog of war: seconds an enemy's plate lingers where it was last seen
   // crowd: last frame's men (and the houses) in a flat grid, counting-sorted by cell, so each man only looks at his neighbours to shoulder them apart
   const CG = 2.4, CMAX = 14000, cX = new Float32Array(CMAX), cZ = new Float32Array(CMAX), cR = new Float32Array(CMAX), cU = new Int32Array(CMAX), cI = new Int32Array(CMAX), cS = new Int8Array(CMAX), cCell = new Int32Array(CMAX), cOrd = new Int32Array(CMAX);
@@ -659,27 +733,28 @@ export function createView(host: HTMLElement) {
     plates.appendChild(el);
     animate(el, { translateY: [0, -12], opacity: [1, 0], duration: 1100, ease: 'outQuad', onComplete: () => el.remove() });
   }
-  const tmpC = new THREE.Color(), tmpC2 = new THREE.Color(), plumeC = new THREE.Color();
+  const tmpC = new THREE.Color(), tmpC2 = new THREE.Color(), plumeC = new THREE.Color(), pantsC = new THREE.Color();
 
   /** Where man i of n stands, relative to the regiment, before the FS scale. dn = how many times denser than the sim's own count (n / the sim's men): the same frontage and depth, packed tighter. */
-  function slots(u: any, n: number, i: number, out: number[], dn = 1) {
+  /** v.colsN / v.sqk / v.nref are the layout's anchors, held steady while men fall (see the hysteresis where they are set), so a death does not re-deal the whole formation */
+  function slots(u: any, n: number, i: number, out: number[], dn = 1, v: any = {}) {
     const kind = u.type;
     if (u.garrison != null) { out[0] = ((i % 5) - 2) * 1.25; out[1] = -Math.floor(i / 5) * 1.2; return; }
     if (u.routed) { out[0] = (hash(i * 3 + u.id) - 0.5) * 16; out[1] = (hash(i * 7 + u.id) - 0.5) * 10; return; } // broken ranks scatter
     if (kind === 'skirmisher') { out[0] = (hash(i * 3 + u.id) - 0.5) * 16; out[1] = (hash(i * 7 + u.id) - 0.5) * 7; return; }
     if (kind === 'lancer' || kind === 'cuirassier') {
       if (u.form === 'wedge') { const r = Math.floor((Math.sqrt(8 * i + 1) - 1) / 2), c = i - (r * (r + 1)) / 2; out[0] = (c - r / 2) * 2.2; out[1] = r * -2.2; return; } // the wedge: rank r has r + 1 riders, the point in front (mirrors foot())
-      const cols = n > 10 ? Math.ceil(n / 2) : n, r = Math.floor(i / cols), c = i % cols;
+      const cols = v.colsN ?? (n > 10 ? Math.ceil(n / 2) : n), r = Math.floor(i / cols), c = i % cols;
       out[0] = (c - (cols - 1) / 2) * 2.4; out[1] = r * -3; return;
     }
-    if (u.form === 'column') { const r = Math.floor(i / 3), c = i % 3; out[0] = (c - 1) * 1.5; out[1] = (-r * 1.5 + n / 6) / dn; return; }
+    if (u.form === 'column') { const r = Math.floor(i / 3), c = i % 3; out[0] = (c - 1) * 1.5; out[1] = (-r * 1.5 + (v.nref ?? n / dn) / 6) / dn; return; }
     if (u.form === 'square') {
-      const k = Math.max(2, Math.ceil(n / 4) + 1), per = 4 * (k - 1), p = i % per, side = Math.floor(p / (k - 1)), t = (p % (k - 1)) / (k - 1), h = ((k - 1) * 0.8) / dn;
+      const k = v.sqk ? Math.max(2, Math.round((v.sqk - 1) * dn) + 1) : Math.max(2, Math.ceil(n / 4) + 1), per = 4 * (k - 1), p = i % per, side = Math.floor(p / (k - 1)), t = (p % (k - 1)) / (k - 1), h = ((k - 1) * 0.8) / dn;
       const a = -h + 2 * h * t;
       out[0] = side === 0 ? a : side === 1 ? h : side === 2 ? -a : -h;
       out[1] = side === 0 ? h : side === 1 ? -a : side === 2 ? -h : a; return;
     }
-    const ranks = n / dn > 24 ? 3 : 2, cols = Math.ceil(n / ranks), r = Math.floor(i / cols), c = i % cols;
+    const cols = v.colsN ? Math.max(1, Math.round(v.colsN * dn)) : Math.ceil(n / (n / dn > 24 ? 3 : 2)), r = Math.floor(i / cols), c = i % cols;
     out[0] = ((c - (cols - 1) / 2) * 1.3) / dn; out[1] = -r * 1.5;
   }
 
@@ -899,7 +974,8 @@ export function createView(host: HTMLElement) {
     }
 
     // units
-    let nf = 0, nh = 0, ng = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0, nac = 0, naa = 0, nar = 0, nsh = 0, nbg = 0, npk = 0;
+    let nf = 0, nh = 0, ng = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0, nac = 0, naa = 0, nar = 0, npk = 0, noff = 0, ndr = 0;
+    const hc: Record<Hat, number> = { shako: 0, belgic: 0, kiwer: 0, stove: 0, bicorne: 0, raupen: 0, fez: 0 }; // hats drawn this frame, per model
     const live = new Set<number>();
     const seenSet = state.fog ? new Set<number>(state.seen?.[viewer] ?? []) : null; // fog of war: enemies you cannot see are not drawn
     const k = 1 - Math.exp(-10 * dt);
@@ -937,7 +1013,21 @@ export function createView(host: HTMLElement) {
       const nGun = isArt ? Math.max(1, Math.ceil(u.men / 54)) : 0;
       const n = isArt ? nGun * 2 : Math.max(1, Math.min(u.garrison != null ? 10 : 1e9, Math.ceil(u.men / T.perFig))); // a garrison shows a handful of men at the walls
       if (v.n && n < v.n) for (let q = 0; q < Math.min(3, v.n - n); q++) spawn(3, v.x + (Math.random() - 0.5) * 10, heightAt(scn, v.x, v.z) + 0.6, v.z + (Math.random() - 0.5) * 5, 0.5, 2.6); // men falling
+      if (v.n && n < v.n && v.form !== '' && !isArt && cam.dist < 260) { // the men who went down fall where they stood (the rear-most drawn men go first)
+        const a = Math.ceil(n * ((u.type === 'line' || u.type === 'guard') && u.garrison == null && !u.routed ? CROWD : 1)), b = Math.min(v.nd ?? a, a + 40), hx = u.routed ? 0x8d8a82 : NAT[u.nat] ?? 0x888888;
+        const fr = Math.max(1, Math.round((v.colsN ?? 8) * ((v.nd ?? a) / Math.max(1, v.n))));
+        for (let i = a; i < b; i++) { // foot: the men hit are in the front rank, so they fall a pace ahead of the line, not at its rear slots
+          const si = isCav ? i : Math.floor(hash(u.id * 53 + i) * fr), o = si * MS;
+          if (o + 2 < v.m.length && v.m[o] === v.m[o]) fell(v.m[o] + (isCav ? 0 : Math.sin(u.facing) * 1.1 * FS), v.m[o + 1] + (isCav ? 0 : Math.cos(u.facing) * 1.1 * FS), v.m[o + 2], hx, hash(u.id * 31 + i), isCav ? HORSE_COL[Math.floor(hash(u.id * 7 + i) * 4)].getHex() : undefined);
+        }
+      }
       v.n = n; v.side = u.side; v.kind = isArt ? 2 : isCav ? 1 : 0;
+      // men falling must not re-deal the whole formation (every slot depends on the count): keep the file count, the square's side and the column's head where they were while men fall
+      // (the rear rank thins first), and only close up once the unit has thinned a lot; reinforcements widen it at once
+      const idealCols = u.type === 'lancer' || u.type === 'cuirassier' ? (n > 10 ? Math.ceil(n / 2) : n) : Math.ceil(n / (n > 24 ? 3 : 2)), idealK = Math.max(2, Math.ceil(n / 4) + 1);
+      if (!v.colsN || idealCols > v.colsN || idealCols < v.colsN * 0.7) v.colsN = idealCols;
+      if (!v.sqk || idealK > v.sqk || idealK < v.sqk - 2) v.sqk = idealK;
+      if (!v.nref || n > v.nref || n < v.nref * 0.6) v.nref = n;
       const nCap = Math.ceil(n * CROWD);
       if (v.m.length < nCap * MS) { const o = new Float32Array(nCap * MS + 40 * MS).fill(NaN); o.set(v.m); v.m = o; } // NaN = a new man, placed straight on his slot
       // footprint ~25*FS plus 15 for shadows thrown into view and the one-frame-old camera; men snap back to their slots when it returns (form = '')
@@ -947,59 +1037,65 @@ export function createView(host: HTMLElement) {
       tmpC.setHex(u.routed ? 0x8d8a82 : NAT[u.nat] ?? 0x888888);
       if (u.hurt < 0.18 && !u.routed) tmpC.lerp(WHITE, 0.6); // hit flash
       plumeC.setHex(u.type === 'skirmisher' ? 0x4a8a3a : PLUME[u.nat] ?? 0xe9e4d6);
+      pantsC.setHex(u.routed ? 0x8d8a82 : NATIONS[u.nat]?.pants ?? 0xd8d4c8);
       const charging = u.chase != null || u.eng != null, inFight = u.fired < (T.reload || 6) * 1.5;
       const foe = u.eng != null ? byId.get(u.eng) : null, foeA = foe ? Math.atan2(foe.x - v.x, foe.z - v.z) : 0; // melee: the ranks break into a scrum facing the enemy
       // one tin figure, standing at (x, y, z) facing yaw, or sitting in a horse's saddle; mv = this man is on the move, s = his step (sin of his own gait phase)
-      const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number) => {
+      const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number, c = 0, kn = 0, role = 0) => { // role: 1 officer, 2 drummer
         const h1 = hash(u.id * 13 + fi * 7), h2 = hash(u.id * 5 + fi * 3), h3 = hash(u.id * 3 + fi * 11), rider = mount != null, walk = mv && !rider;
         if (mount) mRoot.compose(V.set(0, 1.44 - HY - HIP * 1.1, -0.02), Q.identity(), SV.setScalar(1.1)).premultiply(mount);
-        else { const sc = sc0 * grow * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk && Math.abs(s) > 0.55 ? 0.1 * sc : 0), z, yaw, sc); } // toy hop on each step
+        else { const sc = sc0 * grow * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk ? 0.1 * sc * c * c : 0), z, yaw, sc); } // the body rises as the legs pass under it (a smooth bob, twice a stride) instead of a hop
         const lf = u.fired - h3 * 0.2, kick = lf >= 0 && lf < 0.25 ? 1 - lf / 0.25 : 0; // the volley ripples down the line
         const aim = !rider && !u.routed && u.type !== 'commander' && (charging || inFight && (u.type === 'skirmisher' ? (u.fired + h3 * 5) % 5 < 1.6 : u.fired < 0.8 || u.reload < 0.8));
         const jab = foe ? Math.max(0, Math.sin(clock * 7 + h2 * 6.28)) : 0; // bayonet thrusts and sabre cuts in melee
-        const lean = rider ? 0 : u.routed ? 0.4 : walk ? (charging ? 0.24 : 0.08) : foe ? 0.12 + jab * 0.12 : 0;
-        joint(mBody, mRoot, 0, HIP, 0, lean - kick * 0.12, walk ? s * 0.07 : Math.sin(clock * 0.9 + h1 * 40) * 0.025); // marching sway, or a slow idle shift of weight
+        const flinch = u.hurt < 0.3 && h3 < 0.35 ? (1 - u.hurt / 0.3) * 0.25 : 0; // some of the men hit rock back
+        const lean = (rider ? (charging && mv ? 0.28 : 0.05) : u.routed ? 0.4 : walk ? (charging ? 0.24 : 0.08) : foe ? 0.12 + jab * 0.12 : u.type === 'artillery' && inFight ? 0.12 + Math.sin(clock * 5 + h2 * 6.28) * 0.18 : 0) - flinch; // riders lean into a charge; gun crews work forward and back at the piece
+        const hy = HIP + (0.4 - HIP) * kn; // kneeling: the hip drops to knee height (right knee on the ground, left foot forward)
+        joint(mBody, mRoot, 0, hy, 0, lean + kn * 0.15 - kick * 0.12, walk ? s * 0.07 : Math.sin(clock * 0.9 + h1 * 40) * 0.025, walk ? -s * 0.13 : Math.sin(clock * 0.6 + h1 * 25) * 0.03); // marching sway and shoulders twisting against the hips, or a slow idle shift of weight
         tmpC2.copy(tmpC).multiplyScalar(0.94 + h3 * 0.12); body.setMatrixAt(nf, mBody); body.setColorAt(nf, tmpC2);
         if (!rider && u.type !== 'commander') packM.setMatrixAt(npk++, mBody);
         const stride = walk ? s * (charging || u.routed ? 0.75 : 0.5) : 0;
-        joint(mPart, mRoot, 0, HIP, 0, rider ? -0.6 : stride, rider ? 0.5 : 0); legL.setMatrixAt(nf, mPart);
-        joint(mPart, mRoot, 0, HIP, 0, rider ? -0.6 : -stride, rider ? -0.5 : 0); legR.setMatrixAt(nf++, mPart);
+        const kb = walk ? (charging || u.routed ? 1.2 : 0.8) : 0; // the leg that swings forward folds at the knee (it is the one whose stride is rising: cos of the gait phase)
+        joint(mPart, mRoot, rider ? 0.1 : 0, hy, 0, rider ? -0.6 : stride * (1 - kn) + kn * 1.3, rider ? 0.5 : 0); thL.setMatrixAt(nf, mPart); thL.setColorAt(nf, pantsC); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, c) * (1 - kn) - kn * 1.6); shL.setMatrixAt(nf, mShin); shL.setColorAt(nf, pantsC);
+        joint(mPart, mRoot, rider ? -0.1 : 0, hy, 0, rider ? -0.6 : -stride * (1 - kn) - kn * 0.1, rider ? -0.5 : 0); thR.setMatrixAt(nf, mPart); thR.setColorAt(nf, pantsC); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, -c) * (1 - kn) - kn * 1.5); shR.setMatrixAt(nf, mShin); shR.setColorAt(nf++, pantsC);
         // arms: sabre and reins for riders and generals, musket levelled when firing or charging, else shouldered (swinging on the march, thrown up in a rout)
-        const ride = rider || u.type === 'commander', am = ride ? armsRide : aim ? armsAim : armsCarry, ai = ride ? nar++ : aim ? naa++ : nac++;
+        const ride = rider || u.type === 'commander' || role === 1, am = ride ? armsRide : aim ? armsAim : armsCarry, ai = ride ? nar++ : aim ? naa++ : nac++;
         const ap = ride ? (foe ? 0.4 + Math.sin(clock * 8 + h2 * 6.28) * 0.8 : charging && mv ? (u.type === 'lancer' ? 1.5 : 1.2) + s * 0.08 : 0)
-          : aim ? (charging ? 0.3 + jab * 0.3 : 0) - kick * 0.35 : u.routed ? -0.6 + s * 0.5 : walk ? s * 0.08 : 0;
+          : aim ? (charging ? 0.3 + jab * 0.3 : 0) - kick * 0.35 : u.routed ? -0.6 + s * 0.5 : walk ? s * 0.08 : inFight && !foe && !charging && (u.type === 'line' || u.type === 'guard' || u.type === 'skirmisher') ? -0.25 + Math.sin(clock * 7.5 + h2 * 6.28) * 0.3 : 0; // between volleys the men are loading: the musket comes across and the arms work
         joint(mPart, mBody, 0, SH - HIP, 0, ap); am.setMatrixAt(ai, mPart); am.setColorAt(ai, tmpC2);
         if (u.type === 'lancer') { lanceM.setMatrixAt(nlc, mPart); lanceM.setColorAt(nlc++, tmpC); }
         if (u.type === 'cuirassier') cuirM.setMatrixAt(nc++, mBody);
         else if (u.type === 'guard') bearM.setMatrixAt(nbr++, mBody);
-        else if (u.type === 'commander') bicM.setMatrixAt(ncm++, mBody);
-        else if (u.type === 'lancer' && u.nat === 'pr') capM.setMatrixAt(ncp++, mBody);
-        else if (u.nat === 'gb') { belgM.setMatrixAt(nbg, mBody); belgM.setColorAt(nbg++, plumeC); }
-        else { shakoM.setMatrixAt(nsh, mBody); shakoM.setColorAt(nsh++, plumeC); }
+        else if (u.type === 'commander' || role === 1) bicM.setMatrixAt(ncm++, mBody);
+        else if (u.type === 'lancer') capM.setMatrixAt(ncp++, mBody); // every army's lancers wear the czapka
+        else { const k = NATIONS[u.nat]?.hat ?? 'shako', hatMesh = hats[k]; hatMesh.setMatrixAt(hc[k], mBody); hatMesh.setColorAt(hc[k]++, plumeC); }
         if (u.type === 'skirmisher') skirM.setMatrixAt(nsk++, mBody);
+        if (role === 1) offM.setMatrixAt(noff++, mBody); else if (role === 2) drumM.setMatrixAt(ndr++, mBody);
       };
       const thin = isArt ? 1 : cam.dist > 440 ? 3 : cam.dist > 260 ? 2 : 1, snapAll = v.form === '' || v.th !== thin, top = v.rs * 1.2 + T.speed * 1.1, gait = (u.routed ? 13 : charging ? 11 : 8) / T.speed;
       // zoomed out: every 2nd/3rd man is drawn, bigger, so ranks still read as men (not barcode, not a slab); guns keep their crew
       const grow = thin === 3 ? 1.7 : thin === 2 ? 1.45 : 1 + 0.3 * farT;
       const dense = thin === 1 && (u.type === 'line' || u.type === 'guard') && u.garrison == null && !u.routed, nd = dense ? nCap : n; // zoomed in, the line and guard show CROWD x the men in the same frontage (the sim's footprint still comes from perFig); the rest, and everything zoomed out, keep their count
       v.nd = nd;
+      const kneelOK = (u.type === 'line' || u.type === 'guard') && u.form === 'line' && u.garrison == null && !u.routed && !charging && !foe && inFight;
       for (let i = 0; i < (cull ? 0 : nd); i++) {
         if (thin > 1 && i % thin) continue;
         if (isArt) {
           const g = i >> 1, lx = (g - (nGun - 1) / 2) * 4.2 + (i & 1 ? 1.4 : -1.4), lz = i & 1 ? -2.4 : 0;
           sl[0] = lx; sl[1] = lz;
-        } else slots(u, nd, i, sl, nd / n);
+        } else slots(u, nd, i, sl, nd / n, v);
         const hm = hash(u.id * 17 + i * 29);
         if (u.type === 'skirmisher' && !u.routed) { sl[0] += Math.sin(clock * 0.25 + hm * 30) * 1.2; sl[1] += Math.cos(clock * 0.21 + hm * 17) * 0.8; } // skirmishers drift about their posts
         sl[0] *= FS; sl[1] *= FS; // everything is laid out FS times wider
         let tx = v.x + sl[0] * ct + sl[1] * st, tz = v.z - sl[0] * st + sl[1] * ct, face = tf;
+        if (!isArt) for (let w = 0; w < 6 && deepAt(scn, tx, tz); w++) { tx += (v.x - tx) * 0.3; tz += (v.z - tz) * 0.3; } // no man stands in deep water: a slot that falls over a river is drawn back toward the regiment's centre (on its bank or on the bridge)
         if (foe) { // close up to the contact line (never past it), a little ragged along the front
           const pull = Math.max(0, Math.min(1.6 * FS, Math.hypot(foe.x - u.x, foe.z - u.z) / 2 - 0.8 * FS)), lat = (hm - 0.5) * 1.2 * FS;
           tx += Math.sin(foeA) * pull + Math.cos(foeA) * lat; tz += Math.cos(foeA) * pull - Math.sin(foeA) * lat; face = foeA + (hm - 0.5) * 0.6;
         }
         // each man walks to his slot: his own top speed and reaction, easing in on arrival, so wheels, formation changes and gaps in the ranks play out man by man
-        const m = v.m, o = i * MS;
-        if (snapAll || m[o] !== m[o] || Math.hypot(tx - m[o], tz - m[o + 1]) > 40 * FS) { m[o] = tx; m[o + 1] = tz; m[o + 2] = face; m[o + 3] = m[o + 4] = 0; m[o + 5] = hm * 6.28; }
+        const m = v.m, o = i * MS; let sh = 1; // sh: how big his steps are (a short shuffle takes half-strides)
+        if (snapAll || m[o] !== m[o] || Math.hypot(tx - m[o], tz - m[o + 1]) > 40 * FS) { m[o] = tx; m[o + 1] = tz; m[o + 2] = face; m[o + 3] = m[o + 4] = 0; m[o + 5] = hm * 6.28; m[o + 6] = 0; }
         else {
           const dx = tx - m[o], dz = tz - m[o + 1], d = Math.hypot(dx, dz), want = d > 1e-3 ? Math.min(top * (0.85 + 0.3 * hm), d * 2.5) / d : 0, a = Math.min(1, dt * (2.5 + 3 * hm));
           m[o + 3] += (dx * want - m[o + 3]) * a; m[o + 4] += (dz * want - m[o + 4]) * a;
@@ -1021,7 +1117,8 @@ export function createView(host: HTMLElement) {
           const kq = Math.min(1, dt * 10); m[o] += qx * kq; m[o + 1] += qz * kq;
           if (foe) { const over = (m[o] - (u.x + foe.x) / 2) * Math.sin(foeA) + (m[o + 1] - (u.z + foe.z) / 2) * Math.cos(foeA) + 0.6 * FS; if (over > 0) { m[o] -= Math.sin(foeA) * over; m[o + 1] -= Math.cos(foeA) * over; } } // each side keeps to its own half of the melee
           if (foe && ne < 9 * FS * FS) face = Math.atan2(nex, nez); // pair off with the nearest foe
-          const sp = Math.hypot(m[o + 3], m[o + 4]), head = d > 1.5 * FS && sp > 0.3 ? Math.atan2(m[o + 3], m[o + 4]) : face; // march where he's going; shuffle the last steps facing the front
+          const sp = Math.hypot(m[o + 3], m[o + 4]), head = d > 5 * FS && sp > 0.3 ? Math.atan2(m[o + 3], m[o + 4]) : face; // march where he's going; a short adjustment (closing a gap, dressing the ranks) is a shuffle facing the front
+          sh = d < 5 * FS ? 0.5 : 1;
           let dh = head - m[o + 2]; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); m[o + 2] += Math.max(-6 * dt, Math.min(6 * dt, dh));
           m[o + 5] += dt * gait * Math.max(0.6, Math.min(1.8, sp)); // his own gait phase, faster when he hurries
         }
@@ -1044,7 +1141,13 @@ export function createView(host: HTMLElement) {
             joint(mPart, mHorse, 0, 1.0 - HY, -0.55, gal * Math.sin(hp + 2.2) * 0.55); legsH.setMatrixAt(nh++, mPart);
             addFig(i, 0, 0, 0, 0, 0, mHorse, mv, hs);
           }
-        } else if (nf < FIG_MAX - 10) addFig(i, wx, y, wz, yaw, (dense ? 1.6 : 1.7) * FS, null, mv, s); // a touch smaller when packed tighter
+        } else if (nf < FIG_MAX - 10) {
+          // the front rank of a line in a firefight kneels (each man at his own pace, so the rank settles as a ripple) and rises again when the firing stops or the line moves
+          const fc = Math.max(1, Math.round(v.colsN! * (nd / n))), down = kneelOK && !mv && i < fc ? 1 : 0;
+          const role = (u.type === 'line' || u.type === 'guard') && u.garrison == null && !u.routed && nd > 8 ? (i === 0 ? 1 : i === Math.min(nd - 1, fc + (fc >> 1)) ? 2 : 0) : 0; // the officer leads the front rank, the drummer stands mid-rank behind
+          m[o + 6] += (down - m[o + 6]) * Math.min(1, dt * (4 + 5 * hm));
+          addFig(i, wx, y, wz, yaw, (dense ? 1.6 : 1.7) * FS, null, mv, s * sh, Math.cos(m[o + 5]) * sh, m[o + 6] < 0.02 ? 0 : m[o + 6], role); // a touch smaller
+        }
       }
       v.form = cull ? '' : u.form; v.th = thin; // '' = every man snaps to his slot when the camera comes back in; so does a change of thinning (the men not drawn were not moving)
       if (!cull && (selected.has(u.id) || u.id === hoverId)) baseRing(v.x, v.z, st, ct, foot(u, tu), bTh, sideCol); // the ground it covers, only for the regiment you are looking at
@@ -1083,9 +1186,10 @@ export function createView(host: HTMLElement) {
       const sk = full ? unitStatus(u, state.t, tu).join(' ') : ''; // status icons beside full plates only
       if (sk !== p.sk) { p.st.innerHTML = sk && sk.split(' ').map((k) => `<img src="${pxUrl(k)}">`).join(''); p.sk = sk; }
     }
+    topple();
     horses.count = legsF.count = legsH.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; packM.count = npk;
-    body.count = legL.count = legR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; shakoM.count = nsh; belgM.count = nbg; bearM.count = nbr; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
-    const figs = [body, packM, legL, legR, armsCarry, armsAim, armsRide, shakoM, belgM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, guns];
+    body.count = thL.count = thR.count = shL.count = shR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; bearM.count = nbr; offM.count = noff; drumM.count = ndr; for (const k in hats) hats[k as Hat].count = hc[k as Hat]; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
+    const figs = [body, packM, thL, thR, shL, shR, armsCarry, armsAim, armsRide, ...Object.values(hats), offM, drumM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, guns];
     // upload only the live [0, count) slice; clear first so ranges never pile up across frames (hull twins share these attributes)
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
     for (const m of [...figs, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
@@ -1112,7 +1216,7 @@ export function createView(host: HTMLElement) {
     const place = (row: number, frame: number, x: number, y: number, z: number, size: number) => {
       if (nfx >= FX_MAX) return;
       dummy.position.set(x, y, z); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(1); dummy.updateMatrix();
-      fxMesh.setMatrixAt(nfx, dummy.matrix); fxAttr.setXYZ(nfx++, frame, row, size);
+      fxMesh.setMatrixAt(nfx, dummy.matrix); fxAttr.setXYZ(nfx++, frame, row, size * (opts.smoke ?? 1));
     };
     for (const s of state.smoke) {
       const a = s.age / tu.smoke.life;
@@ -1292,6 +1396,6 @@ export function createView(host: HTMLElement) {
     (reticle.material as THREE.MeshBasicMaterial).color.setHex(color);
   }
 
-  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get quality() { return QUALITY[quality].split(':')[0]; }, get guide() { return guideOn(); }, cycleUi, get uiSize() { return UI[ui]; }, setColourBlind, get colourBlind() { return cb; }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, setGhosts, setHover, setShowAll, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
+  return { dom: canvas, cam, tilt: tl, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get quality() { return QUALITY[quality].split(':')[0]; }, get guide() { return guideOn(); }, cycleUi, get uiSize() { return UI[ui]; }, setColourBlind, get colourBlind() { return cb; }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, setGhosts, setHover, setShowAll, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
 }
 export type View = ReturnType<typeof createView>;

@@ -12,6 +12,8 @@ import { makeBot } from '../src/sim/bot.ts';
 import { heightAt, groundAt, los, deepAt, riverAt } from '../src/sim/world.ts';
 import { route } from '../src/sim/path.ts';
 import { resolve } from '../src/sim/extend.ts';
+import { directed } from '../src/sim/orders.ts';
+import { mapSvg, project, TOWNS, W as MAP_W, H as MAP_H } from '../src/docmap.ts';
 
 // ---------------------------------------------------------------- unit-vs-unit rules
 const raw = (f: string) => JSON.parse(readFileSync(new URL(`../src/data/${f}.json`, import.meta.url), 'utf8')), data = (f: string) => resolve(raw(f), raw);
@@ -1546,4 +1548,33 @@ test('the server drops orders from a client that floods it, and still obeys one 
     assert.equal(a.last.units.find((x: any) => x.id === u.id).stance, 'hold', 'an ordinary order goes through again');
     a.ws.close();
   } finally { server.removeAllListeners('exit'); server.kill(); }
+});
+
+// ---------------------------------------------------------------- scenarios
+test('Lodi (10 May 1796): 24 French and 14 Austrian guns, a narrow bridge over a deep Adda, a ford upstream, and it plays on without bad numbers', () => {
+  const scn = data('lodi'), sim = createSim(scn, data('tuning'), { seed: 1 }), guns = [0, 0];
+  assert.deepEqual(scn.nat, ['fr', 'at']);
+  for (const u of sim.s.units as any[]) if (u.type === 'artillery') guns[u.side] += Math.ceil(u.men / 54);
+  assert.deepEqual(guns, [24, 14], 'Bonaparte sited about 24 guns; Sebottendorf had 14');
+  assert.ok(sim.s.units.some((u: any) => u.side === 1 && /Terzi/.test(u.name)) && sim.s.units.some((u: any) => u.side === 0 && /Lannes/.test(u.name)), 'named regiments of both armies');
+  assert.ok(!sim.s.units.some((u: any) => /Life Guards|Uxbridge|d'Erlon/.test(u.name)), 'nothing from the Waterloo campaign');
+  assert.ok(!deepAt(scn, 0, 0), 'the bridge is dry'); assert.ok(deepAt(scn, 0, 6), 'the Adda is deep a few paces off the bridge (the span is narrow)'); assert.ok(!deepAt(scn, -4, -130), 'the ford upstream is shallow');
+  run(sim, 30);
+  for (const u of sim.s.units) assert.ok(Number.isFinite(u.x + u.z + u.men + u.morale), `${u.name} has finite numbers`);
+});
+
+test('documentary map: every element the film spec reveals exists, only routes are drawn, and every town lands inside the frame', () => {
+  const ids = new Set([...mapSvg().matchAll(/id="([^"]+)"/g)].map((m) => m[1])), spec = raw('lodi-film');
+  for (const c of spec.chapters) for (const r of c.map ?? []) { assert.ok(ids.has(r.id), 'map element ' + r.id + ' exists'); if (r.kind === 'draw') assert.ok(r.id.startsWith('route-'), 'only a route is drawn, everything else fades'); }
+  for (const [id, [lon, lat]] of Object.entries(TOWNS)) { const [x, y] = project(lon, lat); assert.ok(x > 40 && x < MAP_W - 40 && y > 40 && y < MAP_H - 40, id + ' is inside the frame (' + x + ', ' + y + ')'); }
+});
+
+test('the directed Lodi stage: scripted casualties follow the script, and nobody breaks by accident', () => {
+  const sim = createSim(data('lodi'), data('tuning'), { seed: 1 }), go = directed(sim, raw('lodi-orders'), { lock: true });
+  const carab = () => sim.s.units.find((u: any) => /Carabiniers/.test(u.name)), until = (t: number) => { while (sim.s.t < t) { step(sim, 0.05); go(); } };
+  until(289); assert.equal(Math.round(carab().men), 400, 'untouched before the rush');
+  until(306); assert.ok(carab().men < 300 && carab().men >= 250, 'thinned by the script to about 250 (' + carab().men + ')');
+  until(346);
+  assert.ok(!sim.s.units.some((u: any) => u.routed), 'nobody routed: the script decides who breaks');
+  assert.ok(!sim.s.units.some((u: any) => u.side === 1 && /on the slope/.test(u.name) && !u.dead), 'the battery on the slope is taken');
 });

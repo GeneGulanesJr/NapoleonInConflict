@@ -15,10 +15,16 @@ export function setVolume(k: 'mus' | 'sfx', v: number) {
   if (k === 'sfx' && sfx) sfx.gain.value = v;
 }
 
+let off: OfflineAudioContext | null = null, clock = 0; // offline (Shorts capture): scheduling follows `clock`, not the live audio clock
+const now = () => (off ? clock : ctx!.currentTime);
+
 function init() {
   if (ctx) return ctx;
-  try {
-    ctx = new AudioContext();
+  try { ctx = new AudioContext(); build(ctx); } catch { ctx = null; }
+  return ctx;
+}
+function build(ctx: AudioContext) {
+  {
     master = ctx.createGain(); master.gain.value = muted ? 0 : 0.5; master.connect(ctx.destination);
     sfx = ctx.createGain(); sfx.gain.value = vol.sfx; sfx.connect(master);
     mus = ctx.createGain(); mus.gain.value = 0.6 * vol.mus; mus.connect(master);
@@ -30,16 +36,22 @@ function init() {
     for (let c = 0; c < 2; c++) { const ch = imp.getChannelData(c); for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3; }
     const verb = ctx.createConvolver(), wet = ctx.createGain();
     verb.buffer = imp; wet.gain.value = 0.22; sfx.connect(verb); verb.connect(wet); wet.connect(master);
-  } catch { ctx = null; }
-  return ctx;
+  }
 }
+/** Shorts capture: render `secs` of audio into a buffer instead of playing it. Drive it with at(t), playEvents(...) and musicTick() once per video frame, then renderOffline(). */
+export function offline(secs: number, nat = 'fr') {
+  off = new OfflineAudioContext(2, 44100 * secs, 44100); ctx = off as unknown as AudioContext; build(ctx);
+  march = MARCH[nat] ?? MARCH.gb; nextT = 0.1; step = 0; intensity = 0; // 0.1 like the live start: the first snare flam lands before the beat
+}
+export const at = (t: number) => { clock = t; };
+export const renderOffline = () => off!.startRendering();
 /** Call from a user gesture so the browser allows audio. */
 export function unlock() { init()?.resume(); }
 export function toggleMute() { muted = !muted; setPref('nic-mute', muted); if (master) master.gain.value = muted ? 0 : 0.5; return muted; }
 
 function burst(vol: number, dur: number, freq: number, q = 0.7, type: BiquadFilterType = 'lowpass', thump = 0, delay = 0) {
   if (!ctx || !sfx || !noise || muted || vol < 0.01) return;
-  const t = ctx.currentTime + delay, src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+  const t = now() + delay, src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
   src.buffer = noise; src.playbackRate.value = 0.8 + Math.random() * 0.4;
   f.type = type; f.frequency.value = freq; f.Q.value = q;
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
@@ -74,7 +86,7 @@ export function playEvents(events: any[], camX: number, camZ: number) {
 /** Short UI cues: kind = 'capture' | 'arrive' | 'counter' | 'alert' */
 export function cue(kind: string) {
   if (!init() || !ctx || !sfx || muted) return;
-  const t = ctx.currentTime, horn = kind === 'counter'; // counter-attack: a snare roll under two low brass calls rising a fifth
+  const t = now(), horn = kind === 'counter'; // counter-attack: a snare roll under two low brass calls rising a fifth
   const notes = kind === 'capture' ? [392, 523, 659] : kind === 'arrive' ? [330, 392] : horn ? [147, 147, 220] : [220, 196], gap = horn ? 0.32 : 0.12;
   if (horn) for (let i = 0; i < 14; i++) burst(0.12 + i * 0.012, 0.09, 1800, 0.8, 'bandpass', 0, i * 0.055);
   notes.forEach((f, i) => {
@@ -128,7 +140,7 @@ function fife(t: number, semis: number, len: number, v: number) {
 function tick() {
   if (!ctx || !mus) return;
   intensity *= 0.992;
-  while (nextT < ctx.currentTime + 0.25) {
+  while (nextT < now() + 0.25) {
     const i = step % march.bar, n = march.seq[step % march.seq.length];
     const dv = 0.05 + 0.1 * intensity;
     if (SNARE[i]) { if (i % 4 === 0) drum(nextT - 0.025, 'snare', dv * 0.5); drum(nextT, 'snare', dv * (i % 4 === 0 ? 1 : 0.7)); }
@@ -137,6 +149,7 @@ function tick() {
     nextT += S; step++;
   }
 }
+export { tick as musicTick };
 /** Start or stop the march of nation `nat` (scenario nat code). Safe to call before the user has interacted (it simply stays silent until unlock). */
 export function music(on: boolean, nat = 'fr') {
   if (!on) { clearInterval(timer); timer = 0; clip?.pause(); try { speechSynthesis.cancel(); } catch { /* no speech */ } return; }
