@@ -563,7 +563,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   const E = new THREE.Euler(0, 0, 0, 'YXZ'), Q = new THREE.Quaternion(), V = new THREE.Vector3(), SV = new THREE.Vector3();
   const mRoot = new THREE.Matrix4(), mShin = new THREE.Matrix4(), mBody = new THREE.Matrix4(), mHorse = new THREE.Matrix4(), mPart = new THREE.Matrix4();
   const rootAt = (m: THREE.Matrix4, x: number, y: number, z: number, yaw: number, sc: number) => m.compose(V.set(x, y, z), Q.setFromEuler(E.set(0, yaw, 0)), SV.setScalar(sc));
-  const joint = (out: THREE.Matrix4, parent: THREE.Matrix4, x: number, y: number, z: number, pitch: number, roll = 0) => out.compose(V.set(x, y, z), Q.setFromEuler(E.set(pitch, 0, roll)), SV.setScalar(1)).premultiply(parent);
+  const joint = (out: THREE.Matrix4, parent: THREE.Matrix4, x: number, y: number, z: number, pitch: number, roll = 0, yaw = 0) => out.compose(V.set(x, y, z), Q.setFromEuler(E.set(pitch, yaw, roll)), SV.setScalar(1)).premultiply(parent);
 
   // the fallen: a man who goes down topples about his hip (ease-out, 0.7 s) and then lies where he fell for the rest of the battle. One instanced mesh from the figure's own parts; a matrix is only written while he falls.
   const CORP_MAX = 4000 * GROW, corpseM = fig(merge([bodyG, legG(0.095), legG(-0.095), packG, shakoG, armsCarryG.clone().translate(0, SH - HIP, 0)]), CORP_MAX, [0, 0.2, 0]);
@@ -642,8 +642,8 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   const spawn = (row: number, x: number, y: number, z: number, life: number, size: number, vx = 0, vy = 0, vz = 0, delay = 0) => { if (fxs.length < FX_MAX - 300) fxs.push({ row, x, y, z, age: -delay, life, size, vx, vy, vz }); }; // delay: starts hidden, so a volley can ripple
 
   // per regiment: smoothed centre and facing, its speed, and per man MS floats: x, z, facing, vx, vz, gait phase
-  const MS = 6;
-  type Vis = { x: number; z: number; f: number; m: Float32Array; form: string; rs: number; n?: number; nd?: number; side: number; kind: number; seenT?: number; th?: number }; // th: the thinning (every th-th man drawn) of the last frame
+  const MS = 7; // per man: x, z, facing, vx, vz, gait phase, kneel (0 standing .. 1 down)
+  type Vis = { x: number; z: number; f: number; m: Float32Array; form: string; rs: number; n?: number; nd?: number; side: number; kind: number; seenT?: number; th?: number; colsN?: number; sqk?: number; nref?: number }; // th: the thinning (every th-th man drawn) of the last frame; colsN, sqk, nref: layout anchors held while men fall
   const GHOST = 30; // fog of war: seconds an enemy's plate lingers where it was last seen
   // crowd: last frame's men (and the houses) in a flat grid, counting-sorted by cell, so each man only looks at his neighbours to shoulder them apart
   const CG = 2.4, CMAX = 14000, cX = new Float32Array(CMAX), cZ = new Float32Array(CMAX), cR = new Float32Array(CMAX), cU = new Int32Array(CMAX), cI = new Int32Array(CMAX), cS = new Int8Array(CMAX), cCell = new Int32Array(CMAX), cOrd = new Int32Array(CMAX);
@@ -695,24 +695,25 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   const tmpC = new THREE.Color(), tmpC2 = new THREE.Color(), plumeC = new THREE.Color();
 
   /** Where man i of n stands, relative to the regiment, before the FS scale. dn = how many times denser than the sim's own count (n / the sim's men): the same frontage and depth, packed tighter. */
-  function slots(u: any, n: number, i: number, out: number[], dn = 1) {
+  /** v.colsN / v.sqk / v.nref are the layout's anchors, held steady while men fall (see the hysteresis where they are set), so a death does not re-deal the whole formation */
+  function slots(u: any, n: number, i: number, out: number[], dn = 1, v: any = {}) {
     const kind = u.type;
     if (u.garrison != null) { out[0] = ((i % 5) - 2) * 1.25; out[1] = -Math.floor(i / 5) * 1.2; return; }
     if (u.routed) { out[0] = (hash(i * 3 + u.id) - 0.5) * 16; out[1] = (hash(i * 7 + u.id) - 0.5) * 10; return; } // broken ranks scatter
     if (kind === 'skirmisher') { out[0] = (hash(i * 3 + u.id) - 0.5) * 16; out[1] = (hash(i * 7 + u.id) - 0.5) * 7; return; }
     if (kind === 'lancer' || kind === 'cuirassier') {
       if (u.form === 'wedge') { const r = Math.floor((Math.sqrt(8 * i + 1) - 1) / 2), c = i - (r * (r + 1)) / 2; out[0] = (c - r / 2) * 2.2; out[1] = r * -2.2; return; } // the wedge: rank r has r + 1 riders, the point in front (mirrors foot())
-      const cols = n > 10 ? Math.ceil(n / 2) : n, r = Math.floor(i / cols), c = i % cols;
+      const cols = v.colsN ?? (n > 10 ? Math.ceil(n / 2) : n), r = Math.floor(i / cols), c = i % cols;
       out[0] = (c - (cols - 1) / 2) * 2.4; out[1] = r * -3; return;
     }
-    if (u.form === 'column') { const r = Math.floor(i / 3), c = i % 3; out[0] = (c - 1) * 1.5; out[1] = (-r * 1.5 + n / 6) / dn; return; }
+    if (u.form === 'column') { const r = Math.floor(i / 3), c = i % 3; out[0] = (c - 1) * 1.5; out[1] = (-r * 1.5 + (v.nref ?? n / dn) / 6) / dn; return; }
     if (u.form === 'square') {
-      const k = Math.max(2, Math.ceil(n / 4) + 1), per = 4 * (k - 1), p = i % per, side = Math.floor(p / (k - 1)), t = (p % (k - 1)) / (k - 1), h = ((k - 1) * 0.8) / dn;
+      const k = v.sqk ? Math.max(2, Math.round((v.sqk - 1) * dn) + 1) : Math.max(2, Math.ceil(n / 4) + 1), per = 4 * (k - 1), p = i % per, side = Math.floor(p / (k - 1)), t = (p % (k - 1)) / (k - 1), h = ((k - 1) * 0.8) / dn;
       const a = -h + 2 * h * t;
       out[0] = side === 0 ? a : side === 1 ? h : side === 2 ? -a : -h;
       out[1] = side === 0 ? h : side === 1 ? -a : side === 2 ? -h : a; return;
     }
-    const ranks = n / dn > 24 ? 3 : 2, cols = Math.ceil(n / ranks), r = Math.floor(i / cols), c = i % cols;
+    const cols = v.colsN ? Math.max(1, Math.round(v.colsN * dn)) : Math.ceil(n / (n / dn > 24 ? 3 : 2)), r = Math.floor(i / cols), c = i % cols;
     out[0] = ((c - (cols - 1) / 2) * 1.3) / dn; out[1] = -r * 1.5;
   }
 
@@ -975,6 +976,12 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
         for (let i = a; i < b; i++) { const o = i * MS; if (o + 2 < v.m.length && v.m[o] === v.m[o]) fell(v.m[o], v.m[o + 1], v.m[o + 2], hx, hash(u.id * 31 + i)); }
       }
       v.n = n; v.side = u.side; v.kind = isArt ? 2 : isCav ? 1 : 0;
+      // men falling must not re-deal the whole formation (every slot depends on the count): keep the file count, the square's side and the column's head where they were while men fall
+      // (the rear rank thins first), and only close up once the unit has thinned a lot; reinforcements widen it at once
+      const idealCols = u.type === 'lancer' || u.type === 'cuirassier' ? (n > 10 ? Math.ceil(n / 2) : n) : Math.ceil(n / (n > 24 ? 3 : 2)), idealK = Math.max(2, Math.ceil(n / 4) + 1);
+      if (!v.colsN || idealCols > v.colsN || idealCols < v.colsN * 0.7) v.colsN = idealCols;
+      if (!v.sqk || idealK > v.sqk || idealK < v.sqk - 2) v.sqk = idealK;
+      if (!v.nref || n > v.nref || n < v.nref * 0.6) v.nref = n;
       const nCap = Math.ceil(n * CROWD);
       if (v.m.length < nCap * MS) { const o = new Float32Array(nCap * MS + 40 * MS).fill(NaN); o.set(v.m); v.m = o; } // NaN = a new man, placed straight on his slot
       // footprint ~25*FS plus 15 for shadows thrown into view and the one-frame-old camera; men snap back to their slots when it returns (form = '')
@@ -987,21 +994,22 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
       const charging = u.chase != null || u.eng != null, inFight = u.fired < (T.reload || 6) * 1.5;
       const foe = u.eng != null ? byId.get(u.eng) : null, foeA = foe ? Math.atan2(foe.x - v.x, foe.z - v.z) : 0; // melee: the ranks break into a scrum facing the enemy
       // one tin figure, standing at (x, y, z) facing yaw, or sitting in a horse's saddle; mv = this man is on the move, s = his step (sin of his own gait phase)
-      const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number, c = 0) => {
+      const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number, c = 0, kn = 0) => {
         const h1 = hash(u.id * 13 + fi * 7), h2 = hash(u.id * 5 + fi * 3), h3 = hash(u.id * 3 + fi * 11), rider = mount != null, walk = mv && !rider;
         if (mount) mRoot.compose(V.set(0, 1.44 - HY - HIP * 1.1, -0.02), Q.identity(), SV.setScalar(1.1)).premultiply(mount);
-        else { const sc = sc0 * grow * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk && Math.abs(s) > 0.55 ? 0.1 * sc : 0), z, yaw, sc); } // toy hop on each step
+        else { const sc = sc0 * grow * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk ? 0.1 * sc * c * c : 0), z, yaw, sc); } // the body rises as the legs pass under it (a smooth bob, twice a stride) instead of a hop
         const lf = u.fired - h3 * 0.2, kick = lf >= 0 && lf < 0.25 ? 1 - lf / 0.25 : 0; // the volley ripples down the line
         const aim = !rider && !u.routed && u.type !== 'commander' && (charging || inFight && (u.type === 'skirmisher' ? (u.fired + h3 * 5) % 5 < 1.6 : u.fired < 0.8 || u.reload < 0.8));
         const jab = foe ? Math.max(0, Math.sin(clock * 7 + h2 * 6.28)) : 0; // bayonet thrusts and sabre cuts in melee
         const lean = rider ? 0 : u.routed ? 0.4 : walk ? (charging ? 0.24 : 0.08) : foe ? 0.12 + jab * 0.12 : 0;
-        joint(mBody, mRoot, 0, HIP, 0, lean - kick * 0.12, walk ? s * 0.07 : Math.sin(clock * 0.9 + h1 * 40) * 0.025); // marching sway, or a slow idle shift of weight
+        const hy = HIP + (0.4 - HIP) * kn; // kneeling: the hip drops to knee height (right knee on the ground, left foot forward)
+        joint(mBody, mRoot, 0, hy, 0, lean + kn * 0.15 - kick * 0.12, walk ? s * 0.07 : Math.sin(clock * 0.9 + h1 * 40) * 0.025, walk ? -s * 0.13 : Math.sin(clock * 0.6 + h1 * 25) * 0.03); // marching sway and shoulders twisting against the hips, or a slow idle shift of weight
         tmpC2.copy(tmpC).multiplyScalar(0.94 + h3 * 0.12); body.setMatrixAt(nf, mBody); body.setColorAt(nf, tmpC2);
         if (!rider && u.type !== 'commander') packM.setMatrixAt(npk++, mBody);
         const stride = walk ? s * (charging || u.routed ? 0.75 : 0.5) : 0;
         const kb = walk ? (charging || u.routed ? 1.2 : 0.8) : 0; // the leg that swings forward folds at the knee (it is the one whose stride is rising: cos of the gait phase)
-        joint(mPart, mRoot, 0, HIP, 0, rider ? -0.6 : stride, rider ? 0.5 : 0); thL.setMatrixAt(nf, mPart); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, c)); shL.setMatrixAt(nf, mShin);
-        joint(mPart, mRoot, 0, HIP, 0, rider ? -0.6 : -stride, rider ? -0.5 : 0); thR.setMatrixAt(nf, mPart); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, -c)); shR.setMatrixAt(nf++, mShin);
+        joint(mPart, mRoot, 0, hy, 0, rider ? -0.6 : stride * (1 - kn) + kn * 1.3, rider ? 0.5 : 0); thL.setMatrixAt(nf, mPart); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, c) * (1 - kn) - kn * 1.6); shL.setMatrixAt(nf, mShin);
+        joint(mPart, mRoot, 0, hy, 0, rider ? -0.6 : -stride * (1 - kn) - kn * 0.1, rider ? -0.5 : 0); thR.setMatrixAt(nf, mPart); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, -c) * (1 - kn) - kn * 1.5); shR.setMatrixAt(nf++, mShin);
         // arms: sabre and reins for riders and generals, musket levelled when firing or charging, else shouldered (swinging on the march, thrown up in a rout)
         const ride = rider || u.type === 'commander', am = ride ? armsRide : aim ? armsAim : armsCarry, ai = ride ? nar++ : aim ? naa++ : nac++;
         const ap = ride ? (foe ? 0.4 + Math.sin(clock * 8 + h2 * 6.28) * 0.8 : charging && mv ? (u.type === 'lancer' ? 1.5 : 1.2) + s * 0.08 : 0)
@@ -1021,12 +1029,13 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
       const grow = thin === 3 ? 1.7 : thin === 2 ? 1.45 : 1 + 0.3 * farT;
       const dense = thin === 1 && (u.type === 'line' || u.type === 'guard') && u.garrison == null && !u.routed, nd = dense ? nCap : n; // zoomed in, the line and guard show CROWD x the men in the same frontage (the sim's footprint still comes from perFig); the rest, and everything zoomed out, keep their count
       v.nd = nd;
+      const kneelOK = (u.type === 'line' || u.type === 'guard') && u.form === 'line' && u.garrison == null && !u.routed && !charging && !foe && inFight;
       for (let i = 0; i < (cull ? 0 : nd); i++) {
         if (thin > 1 && i % thin) continue;
         if (isArt) {
           const g = i >> 1, lx = (g - (nGun - 1) / 2) * 4.2 + (i & 1 ? 1.4 : -1.4), lz = i & 1 ? -2.4 : 0;
           sl[0] = lx; sl[1] = lz;
-        } else slots(u, nd, i, sl, nd / n);
+        } else slots(u, nd, i, sl, nd / n, v);
         const hm = hash(u.id * 17 + i * 29);
         if (u.type === 'skirmisher' && !u.routed) { sl[0] += Math.sin(clock * 0.25 + hm * 30) * 1.2; sl[1] += Math.cos(clock * 0.21 + hm * 17) * 0.8; } // skirmishers drift about their posts
         sl[0] *= FS; sl[1] *= FS; // everything is laid out FS times wider
@@ -1036,8 +1045,8 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
           tx += Math.sin(foeA) * pull + Math.cos(foeA) * lat; tz += Math.cos(foeA) * pull - Math.sin(foeA) * lat; face = foeA + (hm - 0.5) * 0.6;
         }
         // each man walks to his slot: his own top speed and reaction, easing in on arrival, so wheels, formation changes and gaps in the ranks play out man by man
-        const m = v.m, o = i * MS;
-        if (snapAll || m[o] !== m[o] || Math.hypot(tx - m[o], tz - m[o + 1]) > 40 * FS) { m[o] = tx; m[o + 1] = tz; m[o + 2] = face; m[o + 3] = m[o + 4] = 0; m[o + 5] = hm * 6.28; }
+        const m = v.m, o = i * MS; let sh = 1; // sh: how big his steps are (a short shuffle takes half-strides)
+        if (snapAll || m[o] !== m[o] || Math.hypot(tx - m[o], tz - m[o + 1]) > 40 * FS) { m[o] = tx; m[o + 1] = tz; m[o + 2] = face; m[o + 3] = m[o + 4] = 0; m[o + 5] = hm * 6.28; m[o + 6] = 0; }
         else {
           const dx = tx - m[o], dz = tz - m[o + 1], d = Math.hypot(dx, dz), want = d > 1e-3 ? Math.min(top * (0.85 + 0.3 * hm), d * 2.5) / d : 0, a = Math.min(1, dt * (2.5 + 3 * hm));
           m[o + 3] += (dx * want - m[o + 3]) * a; m[o + 4] += (dz * want - m[o + 4]) * a;
@@ -1059,7 +1068,8 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
           const kq = Math.min(1, dt * 10); m[o] += qx * kq; m[o + 1] += qz * kq;
           if (foe) { const over = (m[o] - (u.x + foe.x) / 2) * Math.sin(foeA) + (m[o + 1] - (u.z + foe.z) / 2) * Math.cos(foeA) + 0.6 * FS; if (over > 0) { m[o] -= Math.sin(foeA) * over; m[o + 1] -= Math.cos(foeA) * over; } } // each side keeps to its own half of the melee
           if (foe && ne < 9 * FS * FS) face = Math.atan2(nex, nez); // pair off with the nearest foe
-          const sp = Math.hypot(m[o + 3], m[o + 4]), head = d > 1.5 * FS && sp > 0.3 ? Math.atan2(m[o + 3], m[o + 4]) : face; // march where he's going; shuffle the last steps facing the front
+          const sp = Math.hypot(m[o + 3], m[o + 4]), head = d > 5 * FS && sp > 0.3 ? Math.atan2(m[o + 3], m[o + 4]) : face; // march where he's going; a short adjustment (closing a gap, dressing the ranks) is a shuffle facing the front
+          sh = d < 5 * FS ? 0.5 : 1;
           let dh = head - m[o + 2]; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); m[o + 2] += Math.max(-6 * dt, Math.min(6 * dt, dh));
           m[o + 5] += dt * gait * Math.max(0.6, Math.min(1.8, sp)); // his own gait phase, faster when he hurries
         }
@@ -1082,7 +1092,12 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
             joint(mPart, mHorse, 0, 1.0 - HY, -0.55, gal * Math.sin(hp + 2.2) * 0.55); legsH.setMatrixAt(nh++, mPart);
             addFig(i, 0, 0, 0, 0, 0, mHorse, mv, hs);
           }
-        } else if (nf < FIG_MAX - 10) addFig(i, wx, y, wz, yaw, (dense ? 1.6 : 1.7) * FS, null, mv, s, Math.cos(m[o + 5])); // a touch smaller when packed tighter
+        } else if (nf < FIG_MAX - 10) {
+          // the front rank of a line in a firefight kneels (each man at his own pace, so the rank settles as a ripple) and rises again when the firing stops or the line moves
+          const down = kneelOK && !mv && i < Math.max(1, Math.round(v.colsN * (nd / n))) ? 1 : 0;
+          m[o + 6] += (down - m[o + 6]) * Math.min(1, dt * (4 + 5 * hm));
+          addFig(i, wx, y, wz, yaw, (dense ? 1.6 : 1.7) * FS, null, mv, s * sh, Math.cos(m[o + 5]) * sh, m[o + 6] < 0.02 ? 0 : m[o + 6]); // a touch smaller
+        }
       }
       v.form = cull ? '' : u.form; v.th = thin; // '' = every man snaps to his slot when the camera comes back in; so does a change of thinning (the men not drawn were not moving)
       if (!cull && (selected.has(u.id) || u.id === hoverId)) baseRing(v.x, v.z, st, ct, foot(u, tu), bTh, sideCol); // the ground it covers, only for the regiment you are looking at

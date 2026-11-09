@@ -83,10 +83,10 @@ function direct(evs: any[], dt: number, p: number) {
     const pool = [...g.s.units] as any[], picked: any[] = [];
     kinds.forEach((k, i) => {
       const [type, nat] = k.split(':'), u = pool.find((q) => q.type === type && (!nat || q.nat === nat) && !picked.includes(q));
-      if (u) { Object.assign(u, { x: i * 80 - (kinds.length - 1) * 40, z: 0, facing: 0, form: 'line', tx: null, tz: null, men: u.maxMen }); picked.push(u); }
+      if (u) { Object.assign(u, { x: i * 80 - (kinds.length - 1) * 40, z: 0, facing: 0, form: 'line', tx: null, tz: null, men: u.maxMen, fired: 0.5 }); picked.push(u); }
     });
     g.s.units = picked; g.s.zones = []; g.s.smoke = []; g.s.fx = [];
-    for (let i = 0; i < 4; i++) { view.sync(g.s, 0.1, 0, []); view.render(); } // men walk to their slots
+    for (let i = 0; i < 16; i++) { view.sync(g.s, 0.1, 0, []); view.render(); } // men walk to their slots and settle into their pose
     return picked.map((u) => ({ id: u.id, x: u.x, z: u.z, type: u.type, nat: u.nat }));
   },
   /** one still: camera at (x, z), distance, yaw, tilt (radians) */
