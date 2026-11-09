@@ -2,7 +2,7 @@
 // Usage: node scripts/capture.ts <scenario> <seed> <from> <to> [out.mp4] [--title "..."] [--sub "..."] [--x N --z N] [--speed 2] [--dist 110] [--fps 30] [--music fr|gb|off] [--narrate 1] [--crowd 2.2] [--max 58] [--w 1080 --h 1920]
 // Take scenario/seed/from/to/x/z straight from scripts/moments.ts output. Needs Chrome or Edge installed (CHROME env var to override).
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'vite';
 import puppeteer from 'puppeteer-core';
 import ffmpeg from 'ffmpeg-static';
@@ -10,8 +10,10 @@ import ffmpeg from 'ffmpeg-static';
 const pos: string[] = [], f: Record<string, string> = {};
 const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) av[i].startsWith('--') ? (f[av[i].slice(2)] = av[++i]) : pos.push(av[i]);
-const [scn, seed, from, to, out = `short-${scn}-${seed}-${from}.mp4`] = pos;
-if (!scn || !to) throw new Error('usage: node scripts/capture.ts <scenario> <seed> <from> <to> [out.mp4] [--title ..] [--sub ..] [--x N --z N] [--speed 2] [--dist 110] [--fps 30]');
+// a saved battle instead of a scenario+seed: node scripts/capture.ts --replay battle.json --from 100 --to 140 [out.mp4]
+const replay = f.replay ? readFileSync(f.replay, 'utf8') : undefined;
+const [scn, seed, from, to, out = `short-${scn}-${seed}-${from}.mp4`] = replay ? ['replay', '0', f.from, f.to, pos[0] ?? `short-replay-${f.from}.mp4`] : pos;
+if (!scn || !to) throw new Error('usage: node scripts/capture.ts <scenario> <seed> <from> <to> [out.mp4] [--title ..] [--sub ..] [--x N --z N] [--speed 2] [--dist 110] [--fps 30]   or   --replay battle.json --from N --to N [out.mp4]');
 const music = f.music ?? 'fr'; // fr | gb | off
 const fps = Number(f.fps ?? 30), W = Number(f.w ?? 1080), H = Number(f.h ?? 1920), speed = Number(f.speed ?? 2);
 const chrome = process.env.CHROME ?? ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(existsSync);
@@ -27,7 +29,7 @@ try {
   await page.goto(`http://localhost:5199/capture.html?crowd=${f.crowd ?? 2.2}`); // crowd: men shown per sim man in the line and guard (the game shows 1.4)
   await page.waitForFunction('window.__cineReady', { timeout: 60000 });
   const x = f.x == null ? 0 : Number(f.x), z = f.z == null ? 0 : Number(f.z);
-  await page.evaluate((o) => (window as any).__cine.init(o), { scn, seed: Number(seed), from: Number(from), to: Number(to), fps, speed, x, z, dist: Number(f.dist ?? 110), title: f.title, sub: f.sub, music, maxSec: Number(f.max ?? 58) });
+  await page.evaluate((o) => (window as any).__cine.init(o), { scn, seed: Number(seed), from: Number(from), to: Number(to), fps, speed, x, z, dist: Number(f.dist ?? 110), title: f.title, sub: f.sub, music, maxSec: Number(f.max ?? 58), replay });
 
   const narrate = f.narrate === 'true' || f.narrate === '1'; // read the story captions aloud (Windows speech synthesis), at their times
   const silent = music === 'off' && !narrate, vid = silent ? out : `${out}.video.mp4`, wav = `${out}.wav`;

@@ -6,14 +6,14 @@ import { createView } from './render.ts';
 import { SCENARIOS, TUNING } from './campaign.ts';
 import { createSim, step } from './sim/sim.ts';
 import { makeBot } from './sim/bot.ts';
-import { DT } from './sim/replay.ts';
+import { DT, runner, parseReplay } from './sim/replay.ts';
 import { offline, at, playEvents, musicTick, renderOffline } from './audio.ts';
 
-type Opts = { scn: string; seed: number; from: number; to: number; fps: number; speed: number; x: number; z: number; dist: number; title?: string; sub?: string; music?: string; maxSec: number };
+type Opts = { scn: string; seed: number; from: number; to: number; fps: number; speed: number; x: number; z: number; dist: number; title?: string; sub?: string; music?: string; maxSec: number; replay?: string };
 
 const q = new URLSearchParams(location.search);
 const view = createView(document.getElementById('view')!, { crowd: Number(q.get('crowd') ?? 2.2), smoke: Number(q.get('smoke') ?? 0.6) });
-let g: ReturnType<typeof createSim>, bots: ((dt: number) => void)[], acc = 0, fi = 0, o: Opts;
+let g: ReturnType<typeof createSim>, bots: ((dt: number) => void)[], adv: () => void, acc = 0, fi = 0, o: Opts;
 
 // ---------------------------------------------------------------- director
 const TILT = (35 * Math.PI) / 180, ISO = Math.PI / 4, PI2 = Math.PI * 2;
@@ -107,9 +107,15 @@ function direct(evs: any[], dt: number, p: number) {
   },
   init(opts: Opts) {
     o = opts;
-    const scn = SCENARIOS[o.scn];
-    g = createSim(scn, TUNING, { seed: o.seed }); bots = [makeBot(g, 0), makeBot(g, 1)];
-    while (g.s.t < o.from && !g.s.over) { step(g, DT); bots[0](DT); bots[1](DT); } // the part before the clip: sim only, no drawing
+    let scn: any;
+    if (o.replay) { // a saved battle (Save replay in the game): its orders play back against the bot, exactly as played
+      const r = parseReplay(o.replay, SCENARIOS), run = runner(TUNING, r, true);
+      scn = r.scn; g = run.sim as any; adv = () => run.tick();
+    } else {
+      scn = SCENARIOS[o.scn]; g = createSim(scn, TUNING, { seed: o.seed }); bots = [makeBot(g, 0), makeBot(g, 1)];
+      adv = () => { step(g, DT); bots[0](DT); bots[1](DT); };
+    }
+    while (g.s.t < o.from && !g.s.over) adv(); // the part before the clip: sim only, no drawing
     g.s.events.length = 0;
     for (const c of g.s.chron as any[]) seen.add(`${c.t}|${c.text}`); // what happened before the clip is not news
     if (o.music !== 'off') offline(o.maxSec + 2, o.music);
@@ -124,7 +130,7 @@ function direct(evs: any[], dt: number, p: number) {
     const dt = 1 / o.fps, p = Math.max(0, Math.min(1, (g.s.t - o.from) / (o.to - o.from)));
     acc += dt * o.speed * slowNow;
     const evs: any[] = [];
-    while (acc >= DT && !g.s.over) { step(g, DT); bots[0](DT); bots[1](DT); acc -= DT; evs.push(...g.s.events.splice(0)); }
+    while (acc >= DT && !g.s.over) { adv(); acc -= DT; evs.push(...g.s.events.splice(0)); }
     direct(evs, dt, p);
     if (o.music !== 'off') { at(fi * dt); playEvents(evs, view.cam.x, view.cam.z); musicTick(); } // sound is scheduled on the video clock
     const vt = fi * dt;
