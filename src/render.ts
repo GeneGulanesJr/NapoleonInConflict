@@ -484,11 +484,17 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
     rod([0.07, 0.62, -0.12], [0.08, 0.38, -0.16], 0.05, 0.04, W, 4), rod([-0.07, 0.62, -0.12], [-0.08, 0.38, -0.16], 0.05, 0.04, W, 4), // coat-tails
     ...belt(1), ...belt(-1), bx(0.07, 0.07, 0.03, 0, 0.92, 0.175, P.brass), // crossbelts and plate
     ball(0.09, 0.23, 1.17, 0, RED, 1.2, 0.55), ball(0.09, -0.23, 1.17, 0, RED, 1.2, 0.55), cyl(0.12, 0.115, 1.16, 1.25, RED), cyl(0.07, 0.07, 1.24, 1.3, DK, 6), // epaulettes, collar, stock
-    ball(0.15, 0, 1.39, 0.015, P.skin, 1, 1.05), ball(0.145, 0, 1.41, -0.03, HAIR),
-    bx(0.04, 0.04, 0.02, 0.055, 1.41, 0.155, DK), bx(0.04, 0.04, 0.02, -0.055, 1.41, 0.155, DK), bx(0.11, 0.03, 0.03, 0, 1.335, 0.15, HAIR), // eyes, moustache
+    ball(0.165, 0, 1.39, 0.015, P.skin, 1, 1.06), ball(0.158, 0, 1.415, -0.035, HAIR), bx(0.035, 0.05, 0.05, 0, 1.375, 0.178, P.skin), // head, hair, nose
+    bx(0.045, 0.04, 0.02, 0.06, 1.41, 0.16, DK), bx(0.045, 0.04, 0.02, -0.06, 1.41, 0.16, DK), bx(0.12, 0.03, 0.03, 0, 1.335, 0.165, HAIR), // eyes, moustache
+    ...[1.08, 0.98, 0.88, 0.78].flatMap((y) => [bx(0.03, 0.03, 0.02, 0.05, y, 0.19, P.brass), bx(0.03, 0.03, 0.02, -0.05, y, 0.19, P.brass)]), // coat buttons
+    bx(0.07, 0.26, 0.03, 0.18, 0.5, 0.115, 0xf3f0e6), bx(0.07, 0.26, 0.03, -0.18, 0.5, 0.115, 0xf3f0e6), // white turnbacks on the skirts
   ]);
   const packG = atHip([bx(0.34, 0.34, 0.14, 0, 0.98, -0.22, LEATHER), rod([-0.2, 1.21, -0.22], [0.2, 1.21, -0.22], 0.065, 0.065, 0x8a8576), bx(0.24, 0.13, 0.08, 0, 0.66, -0.2, DK)]); // foot only: knapsack, greatcoat roll, cartridge box
-  const legG = (x: number) => merge([rod([x, HIP, 0], [x, 0.3, 0.01], 0.1, 0.082, P.pants), rod([x, 0.32, 0.01], [x, 0.05, 0], 0.084, 0.072, DK), bx(0.11, 0.06, 0.21, x, 0.03, 0.04, DK)]).translate(0, -HIP, 0); // trousers, gaiters, shoe
+  const TROUSER = 0xf6f3ea; // white, not the warm cream that reads as bare legs in sunlight
+  const legG = (x: number) => merge([rod([x, HIP, 0], [x, 0.3, 0.01], 0.1, 0.082, TROUSER), rod([x, 0.32, 0.01], [x, 0.14, 0], 0.082, 0.07, TROUSER), rod([x, 0.17, 0], [x, 0.05, 0], 0.076, 0.07, DK), bx(0.11, 0.06, 0.21, x, 0.03, 0.04, DK)]).translate(0, -HIP, 0); // trousers to the ankle, a short black gaiter, shoe
+  const KNEE = 0.31; // the leg in two so the knee can bend: thigh hangs from the hip, shin from the knee
+  const thighG = (x: number) => merge([rod([x, HIP, 0], [x, 0.3, 0.01], 0.1, 0.082, TROUSER)]).translate(0, -HIP, 0);
+  const shinG = (x: number) => merge([ball(0.085, x, KNEE, 0.01, TROUSER), rod([x, 0.32, 0.01], [x, 0.14, 0], 0.082, 0.07, TROUSER), rod([x, 0.17, 0], [x, 0.05, 0], 0.076, 0.07, DK), bx(0.11, 0.06, 0.21, x, 0.03, 0.04, DK)]).translate(0, -KNEE, 0);
   const arm = (s: number[], e: number[], h: number[]) => [rod(s, e, 0.07, 0.064, W), rod(e, h, 0.064, 0.058, W), rod(mix(e, h, 0.72), h, 0.07, 0.068, RED), ball(0.058, h[0], h[1], h[2], P.skin)];
   const musket = (b: number[], m: number[]) => [rod(b, mix(b, m, 0.32), 0.055, 0.032, P.wood, 5), rod(mix(b, m, 0.3), m, 0.022, 0.022, IRON, 4), rod(m, mix(b, m, 1.28), 0.013, 0.006, P.steel, 4)]; // stock, barrel, bayonet
   // carry: musket upright against the left shoulder (a forest of bayonets above the shakos); aim: levelled from the right shoulder; ride: sabre at the shoulder, reins in the left hand
@@ -500,7 +506,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   const lanceG = atSh([rod(mix(HAND, BLADE, -0.95), mix(HAND, BLADE, 2.4), 0.03, 0.024, P.wood, 4), rod(mix(HAND, BLADE, 2.4), mix(HAND, BLADE, 2.62), 0.035, 0.004, P.steel, 4), bx(0.02, 0.18, 0.38, -0.27, 3.0, -0.27, W)]);
   // headgear rides on the body's matrix
   const peak = (r: number, y: number) => paint(new THREE.CylinderGeometry(r, r, 0.02, 8, 1, false, -Math.PI / 2, Math.PI).rotateX(0.25).translate(0, y, 0.02), DK, true);
-  const shakoG = atHip([cyl(0.138, 0.168, 1.47, 1.8, DK), peak(0.17, 1.49), bx(0.1, 0.12, 0.02, 0, 1.62, 0.158, P.brass), rod([0, 1.78, 0.11], [0, 2.07, 0.14], 0.045, 0.022, W, 5)]); // French bell-top + plume
+  const shakoG = atHip([cyl(0.138, 0.168, 1.47, 1.8, 0x2c2e36), peak(0.17, 1.49), bx(0.1, 0.12, 0.02, 0, 1.62, 0.158, P.brass), rod([0, 1.78, 0.11], [0, 2.07, 0.14], 0.045, 0.022, W, 5)]); // French bell-top + plume
   const belgicG = atHip([cyl(0.138, 0.14, 1.47, 1.72, DK), bx(0.3, 0.38, 0.03, 0, 1.74, 0.13, DK), peak(0.17, 1.49), bx(0.11, 0.13, 0.02, 0, 1.62, 0.16, P.brass), rod([0.11, 1.74, 0.14], [0.12, 1.93, 0.15], 0.04, 0.03, W, 5)]); // British false-front shako
   const bearG = atHip([cyl(0.15, 0.2, 1.46, 1.98, DK, 7), dome(0.2, 1.98, DK, 0.5), bx(0.13, 0.12, 0.02, 0, 1.58, 0.165, P.brass), rod([0.13, 1.62, 0.07], [0.16, 2.06, 0.07], 0.045, 0.03, RED, 5), bx(0.12, 0.12, 0.03, 0, 1.98, -0.19, RED)]);
   const cuirG = atHip([cyl(0.182, 0.25, 0.62, SH - 0.02, P.steel, 8, 0.76), dome(0.16, 1.47, P.steel), cyl(0.15, 0.15, 1.44, 1.51, DK), peak(0.16, 1.47), bx(0.05, 0.13, 0.32, 0, 1.66, -0.02, P.brass),
@@ -512,13 +518,16 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   const HD = 0x2a2a2a;
   const horseG = merge([
     rod([0, 1.04, -0.62], [0, 1.08, 0.56], 0.28, 0.3, W, 8), ball(0.3, 0, 1.06, 0.56, W, 0.95), ball(0.3, 0, 1.1, -0.6, W, 0.95, 1, 1.05), // barrel, chest, rump
-    rod([0, 1.18, 0.62], [0, 1.72, 0.98], 0.2, 0.12, W), rod([0, 1.8, 0.96], [0, 1.5, 1.38], 0.12, 0.075, W), // neck, head
+    rod([0, 1.14, 0.58], [0, 1.52, 0.8], 0.215, 0.17, W, 7), rod([0, 1.5, 0.78], [0, 1.88, 0.97], 0.17, 0.115, W, 7), ball(0.17, 0, 1.4, 0.42, W, 1, 0.8, 1.3), // arched neck in two, withers
+    ball(0.125, 0, 1.84, 1.0, W, 0.9, 1, 1.15), rod([0, 1.82, 1.02], [0, 1.54, 1.4], 0.115, 0.07, W, 6), ball(0.082, 0, 1.51, 1.43, W, 0.95, 0.9, 1.15), ball(0.1, 0.045, 1.72, 1.1, W, 0.8, 1, 1), ball(0.1, -0.045, 1.72, 1.1, W, 0.8, 1, 1), // poll, face, muzzle, cheeks
+    bx(0.025, 0.03, 0.03, 0.04, 1.5, 1.52, HD), bx(0.025, 0.03, 0.03, -0.04, 1.5, 1.52, HD), bx(0.13, 0.025, 0.1, 0, 1.58, 1.34, 0x2a1d16), // nostrils, noseband
+    ball(0.22, 0.2, 1.0, 0.5, W, 0.7, 1.25, 1.2), ball(0.22, -0.2, 1.0, 0.5, W, 0.7, 1.25, 1.2), ball(0.27, 0.2, 1.05, -0.62, W, 0.8, 1.15, 1.1), ball(0.27, -0.2, 1.05, -0.62, W, 0.8, 1.15, 1.1), // shoulder and haunch muscle
     rod([0.06, 1.84, 0.94], [0.08, 1.97, 0.9], 0.035, 0.01, W, 4), rod([-0.06, 1.84, 0.94], [-0.08, 1.97, 0.9], 0.035, 0.01, W, 4), bx(0.03, 0.04, 0.04, 0.085, 1.72, 1.12, HD), bx(0.03, 0.04, 0.04, -0.085, 1.72, 1.12, HD), // ears, eyes
-    rod([0, 1.29, 0.48], [0, 1.83, 0.86], 0.06, 0.05, HD, 4), rod([0, 1.15, -0.86], [0, 0.5, -1.02], 0.08, 0.035, HD, 5), // mane, tail
+    rod([0, 1.3, 0.46], [0, 1.62, 0.7], 0.07, 0.06, HD, 4), rod([0, 1.62, 0.7], [0, 1.95, 0.9], 0.06, 0.05, HD, 4), rod([0, 1.15, -0.86], [0.04, 0.5, -1.08], 0.1, 0.045, HD, 5), rod([0, 1.12, -0.86], [-0.07, 0.62, -1.0], 0.07, 0.035, HD, 5), // mane, tail (two locks)
     bx(0.56, 0.05, 0.86, 0, 1.39, -0.08, 0x7a2a2a), paint(new THREE.BoxGeometry(0.04, 0.34, 0.86).rotateZ(-0.25).translate(0.3, 1.22, -0.08), 0x7a2a2a), paint(new THREE.BoxGeometry(0.04, 0.34, 0.86).rotateZ(0.25).translate(-0.3, 1.22, -0.08), 0x7a2a2a), bx(0.36, 0.08, 0.42, 0, 1.42, 0, LEATHER), rod([-0.22, 1.45, -0.3], [0.22, 1.45, -0.3], 0.065, 0.065, 0x2a3a6a), rod([0, 1.6, 1.22], [0, 1.4, 0.4], 0.012, 0.012, DK, 3), // shabraque, saddle, valise, reins
     rod([0.34, 1.3, 0.05], [0.36, 0.9, 0.08], 0.012, 0.012, DK, 3), rod([-0.34, 1.3, 0.05], [-0.36, 0.9, 0.08], 0.012, 0.012, DK, 3), // stirrup leathers
   ]).translate(0, -HY, 0);
-  const hleg = (x: number, knee: number, r: number, a: number) => merge([rod([x, 0, 0], [x, -0.44, knee], r, 0.06, W, 5), rod([x, -0.44, knee], [x, -0.88, 0], 0.05, 0.045, W, 5), rod([x, -0.88, 0], [x, -0.98, 0.01], 0.06, 0.065, HD, 5)]).rotateX(a);
+  const hleg = (x: number, knee: number, r: number, a: number) => merge([rod([x, 0, 0], [x, -0.44, knee], r * 1.12, 0.06, W, 6), ball(0.065, x, -0.44, knee, W), rod([x, -0.44, knee], [x, -0.86, 0], 0.048, 0.036, W, 5), ball(0.05, x, -0.86, 0.015, W), rod([x, -0.88, 0.01], [x, -0.99, 0.03], 0.045, 0.07, HD, 6)]).rotateX(a); // thigh, knee, slim cannon, fetlock, flared hoof
   const legsFG = merge([hleg(0.16, 0.05, 0.085, 0.2), hleg(-0.16, 0.05, 0.085, -0.2)]), legsHG = merge([hleg(0.16, -0.12, 0.11, 0.2), hleg(-0.16, -0.12, 0.11, -0.2)]);
   // field gun: bronze barrel on an olive Gribeauval carriage, spoked wheels, rammer and shot pile
   const spokes = (sx: number) => [0, 1, 2, 3, 4, 5].map((k) => rod([sx, 0.78, 0], [sx, 0.78 + Math.cos(k * 1.047) * 0.72, Math.sin(k * 1.047) * 0.72], 0.025, 0.025, OLIVE, 3));
@@ -530,11 +539,11 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
     ...[[-0.9, 0.11, -0.5], [-0.72, 0.11, -0.3], [-1.08, 0.11, -0.3], [-0.9, 0.11, -0.1], [-0.9, 0.28, -0.3]].map(([x, y, z]) => ball(0.11, x, y, z, DK)),
   ]);
   // enamel paint: the scene's 3 toon steps plus a bright glint where a facet faces the sun (ramp stored /GL, colour scaled back up by GL)
-  const GL = 1.35, figRamp = new THREE.DataTexture(new Uint8Array([0.47, 0.47, 0.47, 0.47, 0.75, 0.75, 1, 1, GL, GL].map((v) => Math.round((v / GL) * 255))), 10, 1, THREE.RedFormat);
+  const GL = 1.35, figRamp = new THREE.DataTexture(new Uint8Array([0.62, 0.62, 0.62, 0.62, 0.84, 0.84, 1, 1, GL, GL].map((v) => Math.round((v / GL) * 255))), 10, 1, THREE.RedFormat);
   figRamp.minFilter = figRamp.magFilter = THREE.NearestFilter; figRamp.needsUpdate = true;
   const fig = (g: THREE.BufferGeometry, n: number, center: [number, number, number] | null, shadow = false) => mkI(g, n, Object.assign(toon({ vertexColors: true, gradientMap: figRamp, color: new THREE.Color(GL, GL, GL) }), { flatShading: true }) /* faceted from indexed parts: ~half the vertices */, center, shadow);
   const CROWD = opts.crowd ?? 1.4, GROW = Math.max(1, Math.ceil(CROWD / 1.4)), FIG_MAX = 8000 * GROW; // figure buffers; CROWD = how many more men than the sim's count the line and guard show when zoomed in (the spacing is already close to a man's width: much past 1.4 they overlap)
-  const body = fig(bodyG, FIG_MAX, [0, 0.35, 0]), legL = fig(legG(0.095), FIG_MAX, [0, -0.3, 0]), legR = fig(legG(-0.095), FIG_MAX, [0, -0.3, 0]);
+  const body = fig(bodyG, FIG_MAX, [0, 0.35, 0]), thL = fig(thighG(0.095), FIG_MAX, [0, -0.3, 0]), thR = fig(thighG(-0.095), FIG_MAX, [0, -0.3, 0]), shL = fig(shinG(0.095), FIG_MAX, [0, -0.3, 0]), shR = fig(shinG(-0.095), FIG_MAX, [0, -0.3, 0]);
   const armsCarry = fig(armsCarryG, FIG_MAX, [0, -0.2, 0.05]), armsAim = fig(armsAimG, FIG_MAX, [0, -0.05, 0.4]), armsRide = fig(armsRideG, 1600, [0, -0.1, 0.2]);
   const packM = fig(packG, FIG_MAX, [0, 0.35, 0]);
   // one invisible box casts the whole soldier's shadow (cheaper than every part casting); slightly inside the silhouette so it never darkens the figure
@@ -552,7 +561,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   const guns = fig(gunG, 300, [0, 0.8, 0], true);
   // figure rig: rootAt places the feet; joint hangs a child (hip, shoulder, horse legs) off a parent matrix with its own pitch (+ = forward) and roll
   const E = new THREE.Euler(0, 0, 0, 'YXZ'), Q = new THREE.Quaternion(), V = new THREE.Vector3(), SV = new THREE.Vector3();
-  const mRoot = new THREE.Matrix4(), mBody = new THREE.Matrix4(), mHorse = new THREE.Matrix4(), mPart = new THREE.Matrix4();
+  const mRoot = new THREE.Matrix4(), mShin = new THREE.Matrix4(), mBody = new THREE.Matrix4(), mHorse = new THREE.Matrix4(), mPart = new THREE.Matrix4();
   const rootAt = (m: THREE.Matrix4, x: number, y: number, z: number, yaw: number, sc: number) => m.compose(V.set(x, y, z), Q.setFromEuler(E.set(0, yaw, 0)), SV.setScalar(sc));
   const joint = (out: THREE.Matrix4, parent: THREE.Matrix4, x: number, y: number, z: number, pitch: number, roll = 0) => out.compose(V.set(x, y, z), Q.setFromEuler(E.set(pitch, 0, roll)), SV.setScalar(1)).premultiply(parent);
 
@@ -978,7 +987,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
       const charging = u.chase != null || u.eng != null, inFight = u.fired < (T.reload || 6) * 1.5;
       const foe = u.eng != null ? byId.get(u.eng) : null, foeA = foe ? Math.atan2(foe.x - v.x, foe.z - v.z) : 0; // melee: the ranks break into a scrum facing the enemy
       // one tin figure, standing at (x, y, z) facing yaw, or sitting in a horse's saddle; mv = this man is on the move, s = his step (sin of his own gait phase)
-      const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number) => {
+      const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number, c = 0) => {
         const h1 = hash(u.id * 13 + fi * 7), h2 = hash(u.id * 5 + fi * 3), h3 = hash(u.id * 3 + fi * 11), rider = mount != null, walk = mv && !rider;
         if (mount) mRoot.compose(V.set(0, 1.44 - HY - HIP * 1.1, -0.02), Q.identity(), SV.setScalar(1.1)).premultiply(mount);
         else { const sc = sc0 * grow * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk && Math.abs(s) > 0.55 ? 0.1 * sc : 0), z, yaw, sc); } // toy hop on each step
@@ -990,8 +999,9 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
         tmpC2.copy(tmpC).multiplyScalar(0.94 + h3 * 0.12); body.setMatrixAt(nf, mBody); body.setColorAt(nf, tmpC2);
         if (!rider && u.type !== 'commander') packM.setMatrixAt(npk++, mBody);
         const stride = walk ? s * (charging || u.routed ? 0.75 : 0.5) : 0;
-        joint(mPart, mRoot, 0, HIP, 0, rider ? -0.6 : stride, rider ? 0.5 : 0); legL.setMatrixAt(nf, mPart);
-        joint(mPart, mRoot, 0, HIP, 0, rider ? -0.6 : -stride, rider ? -0.5 : 0); legR.setMatrixAt(nf++, mPart);
+        const kb = walk ? (charging || u.routed ? 1.2 : 0.8) : 0; // the leg that swings forward folds at the knee (it is the one whose stride is rising: cos of the gait phase)
+        joint(mPart, mRoot, 0, HIP, 0, rider ? -0.6 : stride, rider ? 0.5 : 0); thL.setMatrixAt(nf, mPart); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, c)); shL.setMatrixAt(nf, mShin);
+        joint(mPart, mRoot, 0, HIP, 0, rider ? -0.6 : -stride, rider ? -0.5 : 0); thR.setMatrixAt(nf, mPart); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, -c)); shR.setMatrixAt(nf++, mShin);
         // arms: sabre and reins for riders and generals, musket levelled when firing or charging, else shouldered (swinging on the march, thrown up in a rout)
         const ride = rider || u.type === 'commander', am = ride ? armsRide : aim ? armsAim : armsCarry, ai = ride ? nar++ : aim ? naa++ : nac++;
         const ap = ride ? (foe ? 0.4 + Math.sin(clock * 8 + h2 * 6.28) * 0.8 : charging && mv ? (u.type === 'lancer' ? 1.5 : 1.2) + s * 0.08 : 0)
@@ -1072,7 +1082,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
             joint(mPart, mHorse, 0, 1.0 - HY, -0.55, gal * Math.sin(hp + 2.2) * 0.55); legsH.setMatrixAt(nh++, mPart);
             addFig(i, 0, 0, 0, 0, 0, mHorse, mv, hs);
           }
-        } else if (nf < FIG_MAX - 10) addFig(i, wx, y, wz, yaw, (dense ? 1.6 : 1.7) * FS, null, mv, s); // a touch smaller when packed tighter
+        } else if (nf < FIG_MAX - 10) addFig(i, wx, y, wz, yaw, (dense ? 1.6 : 1.7) * FS, null, mv, s, Math.cos(m[o + 5])); // a touch smaller when packed tighter
       }
       v.form = cull ? '' : u.form; v.th = thin; // '' = every man snaps to his slot when the camera comes back in; so does a change of thinning (the men not drawn were not moving)
       if (!cull && (selected.has(u.id) || u.id === hoverId)) baseRing(v.x, v.z, st, ct, foot(u, tu), bTh, sideCol); // the ground it covers, only for the regiment you are looking at
@@ -1113,8 +1123,8 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
     }
     topple();
     horses.count = legsF.count = legsH.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; packM.count = npk;
-    body.count = legL.count = legR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; shakoM.count = nsh; belgM.count = nbg; bearM.count = nbr; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
-    const figs = [body, packM, legL, legR, armsCarry, armsAim, armsRide, shakoM, belgM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, guns];
+    body.count = thL.count = thR.count = shL.count = shR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; shakoM.count = nsh; belgM.count = nbg; bearM.count = nbr; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
+    const figs = [body, packM, thL, thR, shL, shR, armsCarry, armsAim, armsRide, shakoM, belgM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, guns];
     // upload only the live [0, count) slice; clear first so ranges never pile up across frames (hull twins share these attributes)
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
     for (const m of [...figs, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);

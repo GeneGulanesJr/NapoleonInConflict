@@ -76,6 +76,24 @@ function direct(evs: any[], dt: number, p: number) {
 }
 
 (window as any).__cine = {
+  /** model lab: one regiment of each listed type ('line:fr', 'guard:fr', 'cuirassier:fr', ...) in a row on flat ground, for close-up stills (see scripts/lab.ts) */
+  lab(kinds: string[]) {
+    const scn = { ...SCENARIOS.quatrebras, map: { size: 400 }, clock: null };
+    g = createSim(scn, TUNING, { seed: 1 }); view.setScenario(scn, TUNING);
+    const pool = [...g.s.units] as any[], picked: any[] = [];
+    kinds.forEach((k, i) => {
+      const [type, nat] = k.split(':'), u = pool.find((q) => q.type === type && (!nat || q.nat === nat) && !picked.includes(q));
+      if (u) { Object.assign(u, { x: i * 80 - (kinds.length - 1) * 40, z: 0, facing: 0, form: 'line', tx: null, tz: null, men: u.maxMen }); picked.push(u); }
+    });
+    g.s.units = picked; g.s.zones = []; g.s.smoke = []; g.s.fx = [];
+    for (let i = 0; i < 4; i++) { view.sync(g.s, 0.1, 0, []); view.render(); } // men walk to their slots
+    return picked.map((u) => ({ id: u.id, x: u.x, z: u.z, type: u.type, nat: u.nat }));
+  },
+  /** one still: camera at (x, z), distance, yaw, tilt (radians) */
+  snap(x: number, z: number, dist: number, yaw: number, tilt: number) {
+    Object.assign(view.cam, { x, z, dist, yaw }); view.tilt.v = tilt;
+    for (let i = 0; i < 3; i++) { view.sync(g.s, 0.05, 0, []); view.render(); }
+  },
   init(opts: Opts) {
     o = opts;
     const scn = SCENARIOS[o.scn];
