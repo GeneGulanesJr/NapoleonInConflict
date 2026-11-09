@@ -8,11 +8,13 @@
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
     #view { position: fixed; inset: 0; }
     .cap { position: fixed; left: 0; right: 0; text-align: center; color: #fff; font: 700 64px/1.1 system-ui, sans-serif; text-shadow: 0 4px 0 #000, 0 0 24px #000; padding: 0 48px; pointer-events: none; }
-    #t { top: 150px; } #s { top: 330px; font-size: 40px; font-weight: 500; opacity: .9; }
+    #t { top: 150px; } #s { top: 330px; font-size: 40px; font-weight: 500; }
+    #c { bottom: 300px; font-size: 50px; opacity: 0; } #c b { display: inline-block; padding: 14px 28px; background: rgba(10,10,14,.62); border-left: 10px solid #fff; border-radius: 6px; text-shadow: none; font-weight: 600; }
+    #fx { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
   </style>
 </head>
 <body>
-  <div id="view"></div><div class="cap" id="t"></div><div class="cap" id="s"></div>
+  <div id="view"></div><div class="cap" id="t"></div><div class="cap" id="s"></div><div class="cap" id="c"><b></b></div><div id="fx"></div>
   <script type="module" src="/src/capture.ts"></script>
 </body>
 </html>

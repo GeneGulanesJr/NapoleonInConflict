@@ -20,7 +20,18 @@ const TILT = (35 * Math.PI) / 180, ISO = Math.PI / 4, PI2 = Math.PI * 2;
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 /** a shot: what it frames and how it moves. follow = a unit id the camera tracks; dist/tilt/yaw are targets that eased toward; slow = sim speed factor (1 = normal); prio = what may cut it short */
 type Shot = { kind: string; x: number; z: number; follow: number | null; dist: number; tilt: number; yaw: number; rate: number; slow: number; hold: number; prio: number; t: number; drift: number };
-let shot: Shot, slowNow = 1, yawBase = 0;
+let shot: Shot, slowNow = 1, yawBase = 0, flash = 0;
+// story captions: the battle's own chronicle (turning points), shown one at a time in the lower third
+const $ = (id: string) => document.getElementById(id)!, capB = () => $('c').firstElementChild as HTMLElement;
+const seen = new Set<string>(), queue: { text: string; side: number }[] = [], shown: { t: number; text: string }[] = [];
+let cur: { text: string; t0: number } | null = null;
+const CAP_HOLD = 3.2, SIDE = ['#6f9bff', '#ff6a5c'];
+function captions(t: number) {
+  for (const c of g.s.chron as any[]) { const k = `${c.t}|${c.text}`; if (!seen.has(k)) { seen.add(k); queue.push({ text: c.text, side: c.side }); } }
+  while (queue.length > 2) queue.shift(); // never fall behind the action: keep the latest
+  if ((!cur || t - cur.t0 > CAP_HOLD) && queue.length) { const n = queue.shift()!; cur = { text: n.text, t0: t }; shown.push({ t, text: n.text }); capB().textContent = n.text; capB().style.borderColor = SIDE[n.side] ?? '#fff'; }
+  $('c').style.opacity = cur ? String(Math.max(0, Math.min(1, (t - cur.t0) / 0.25, (cur.t0 + CAP_HOLD - t) / 0.35))) : '0';
+}
 const PRIO: Record<string, number> = { rout: 5, dead: 5, charge: 4, flank: 3, boom: 2, special: 2, shot: 1 };
 
 const unitAt = (x: number, z: number, side?: number) => {
@@ -60,7 +71,7 @@ function direct(evs: any[], dt: number, p: number) {
       let best: any = null;
       for (const e of evs) { const pr = PRIO[e.k] ?? 0; if (pr && (!best || pr > PRIO[best.k]) && (pr >= shot.prio || shot.t >= shot.hold)) best = e; }
       const s = best && shotFor(best);
-      if (s) { const far = Math.hypot(s.x - view.cam.x, s.z - view.cam.z) > 70; shot = s; if (far) { view.cam.x = s.x; view.cam.z = s.z; view.cam.dist = s.dist * 1.15; } } // across the field: a hard cut, not a flight over the middle
+      if (s) { const far = Math.hypot(s.x - view.cam.x, s.z - view.cam.z) > 70; shot = s; if (far) { view.cam.x = s.x; view.cam.z = s.z; view.cam.dist = s.dist * 1.15; flash = 1; } } // across the field: a hard cut, not a flight over the middle
     }
   }
   // move the camera toward the shot
@@ -100,6 +111,7 @@ function direct(evs: any[], dt: number, p: number) {
     g = createSim(scn, TUNING, { seed: o.seed }); bots = [makeBot(g, 0), makeBot(g, 1)];
     while (g.s.t < o.from && !g.s.over) { step(g, DT); bots[0](DT); bots[1](DT); } // the part before the clip: sim only, no drawing
     g.s.events.length = 0;
+    for (const c of g.s.chron as any[]) seen.add(`${c.t}|${c.text}`); // what happened before the clip is not news
     if (o.music !== 'off') offline(o.maxSec + 2, o.music);
     view.setScenario(scn, TUNING);
     yawBase = 0.5; Object.assign(view.cam, { x: o.x, z: o.z, dist: o.dist * 1.9, yaw: yawBase });
@@ -115,11 +127,17 @@ function direct(evs: any[], dt: number, p: number) {
     while (acc >= DT && !g.s.over) { step(g, DT); bots[0](DT); bots[1](DT); acc -= DT; evs.push(...g.s.events.splice(0)); }
     direct(evs, dt, p);
     if (o.music !== 'off') { at(fi * dt); playEvents(evs, view.cam.x, view.cam.z); musicTick(); } // sound is scheduled on the video clock
+    const vt = fi * dt;
+    captions(vt);
+    $('t').style.opacity = $('s').style.opacity = String(Math.max(0, Math.min(1, (2.8 - vt) / 0.6))); // the title is the hook: up for the first seconds, then out of the way
+    $('fx').style.opacity = String(flash * 0.5); flash = Math.max(0, flash - dt * 6); // a short white flash on a hard cut
     fi++;
     view.sync(g.s, dt, 0, evs);
     view.render();
     return g.s.t < o.to && !g.s.over && fi < o.maxSec * o.fps;
   },
+  /** the captions that were shown, with their video times (for narration) */
+  shown: () => shown,
   /** the whole soundtrack as a 16-bit stereo WAV, base64 */
   async audio(): Promise<string> {
     const b = await renderOffline(), n = Math.min(b.length, Math.ceil(fi / o.fps * b.sampleRate)), L = b.getChannelData(0), R = b.getChannelData(1);
