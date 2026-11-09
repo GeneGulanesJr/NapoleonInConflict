@@ -1,0 +1,12 @@
+[
+  { "t": 262, "side": 0, "who": "Carabiniers", "c": "move", "x": -10, "z": 0, "col": true },
+  { "t": 262, "side": 0, "who": "Lannes", "c": "move", "x": -16, "z": 0, "col": true },
+  { "t": 290, "side": 0, "who": "Carabiniers", "c": "move", "x": 0, "z": 0, "run": true, "col": true },
+  { "t": 306, "side": 0, "who": "Carabiniers|Lannes|^Masséna$", "c": "move", "x": 34, "z": 0, "run": true, "col": true },
+  { "t": 318, "side": 0, "who": "Masséna's Division", "c": "move", "x": 34, "z": 0, "col": true },
+  { "t": 372, "side": 0, "who": "Augereau", "c": "move", "x": 34, "z": 0, "col": true },
+  { "t": 382, "side": 1, "who": "Terzi|Carlstädter", "c": "move", "x": 18, "z": 0, "am": true },
+  { "t": 392, "side": 0, "who": "Beaumont|Ordener", "c": "move", "x": 10, "z": -112, "am": true },
+  { "t": 400, "side": 0, "who": "Beaumont|Ordener", "c": "move", "x": 52, "z": -30, "am": true },
+  { "t": 426, "side": 1, "who": ".", "c": "move", "x": 120, "z": -14, "col": true }
+]

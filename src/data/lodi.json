@@ -41,9 +41,9 @@
   ],
   "forces": [
     [
-      { "type": "commander", "n": 1, "x": -44, "z": 6, "names": ["General Bonaparte"], "nat": "fr" },
-      { "type": "skirmisher", "n": 1, "x": -30, "z": 0, "names": ["2nd Battalion, Carabiniers"], "men": 400, "maxMen": 400 },
-      { "type": "line", "n": 4, "x": -22, "z": -30, "dz": 20, "names": ["Grenadiers (Lannes), 1st Bn", "Grenadiers (Lannes), 2nd Bn", "Grenadiers (Lannes), 3rd Bn", "Grenadiers (Lannes), 4th Bn"], "men": 520, "maxMen": 520 },
+      { "type": "commander", "n": 1, "x": -70, "z": 6, "names": ["General Bonaparte"], "nat": "fr" },
+      { "type": "skirmisher", "n": 1, "x": -90, "z": 0, "names": ["2nd Battalion, Carabiniers"], "men": 400, "maxMen": 400 },
+      { "type": "line", "n": 4, "x": -86, "z": -30, "dz": 20, "names": ["Grenadiers (Lannes), 1st Bn", "Grenadiers (Lannes), 2nd Bn", "Grenadiers (Lannes), 3rd Bn", "Grenadiers (Lannes), 4th Bn"], "men": 520, "maxMen": 520 },
       { "type": "artillery", "n": 6, "x": -14, "z": -30, "dz": 12, "names": ["French Battery 1", "French Battery 2", "French Battery 3", "French Battery 4", "French Battery 5", "French Battery 6"] }
     ],
     [
@@ -62,24 +62,24 @@
   ],
   "timeline": [
     { "t": 2, "type": "note", "msg": "The French advance guard has held Lodi since the morning. The guns have come up and stand along the river bank." },
+    { "t": 100, "type": "reinforce", "side": 0,
+      "units": [{ "type": "lancer", "n": 3, "x": 0, "z": 0, "names": ["Beaumont's Cavalry (1st)", "Beaumont's Cavalry (2nd)", "Ordener's Horse"], "men": 400, "maxMen": 400 }],
+      "entry": { "x": -135, "z": -40 }, "go": { "x": -4, "z": -112 }, "spreadZ": 1.2, "spreadX": 0.2,
+      "msg": "Bonaparte sends Beaumont's cavalry upstream to find a ford." },
     { "t": 120, "type": "reinforce", "side": 0,
       "units": [
         { "type": "commander", "n": 1, "x": 0, "z": 0, "names": ["Masséna"], "nat": "fr" },
         { "type": "line", "n": 3, "x": 0, "z": 0, "names": ["Masséna's Division, 1st Brigade", "Masséna's Division, 2nd Brigade", "Masséna's Division, 3rd Brigade"] }
       ],
-      "entry": { "x": -140, "z": 18 }, "go": { "x": -36, "z": 4 }, "spreadX": 0.5, "spreadZ": 1.4,
+      "entry": { "x": -140, "z": 18 }, "go": { "x": -84, "z": 4 }, "spreadX": 0.5, "spreadZ": 1.4,
       "msg": "Masséna's division comes up through the town behind the advance guard." },
-    { "t": 240, "type": "reinforce", "side": 0,
-      "units": [{ "type": "lancer", "n": 3, "x": 0, "z": 0, "names": ["Beaumont's Cavalry (1st)", "Beaumont's Cavalry (2nd)", "Ordener's Horse"], "men": 400, "maxMen": 400 }],
-      "entry": { "x": -135, "z": -40 }, "go": { "x": -4, "z": -112 }, "spreadZ": 1.2, "spreadX": 0.2,
-      "msg": "Bonaparte sends Beaumont's cavalry upstream to find a ford." },
     { "t": 290, "type": "note", "msg": "About six o'clock. The carabiniers are to go out of the gate and onto the bridge." },
     { "t": 360, "type": "reinforce", "side": 0,
       "units": [
         { "type": "commander", "n": 1, "x": 0, "z": 0, "names": ["Augereau"], "nat": "fr" },
         { "type": "line", "n": 3, "x": 0, "z": 0, "names": ["Augereau's Division, 1st Brigade", "Augereau's Division, 2nd Brigade", "Augereau's Division, 3rd Brigade"] }
       ],
-      "entry": { "x": -140, "z": 18 }, "go": { "x": -36, "z": 4 }, "spreadX": 0.5, "spreadZ": 1.4,
+      "entry": { "x": -140, "z": 18 }, "go": { "x": -84, "z": 4 }, "spreadX": 0.5, "spreadZ": 1.4,
       "msg": "Augereau's division follows Masséna into Lodi." }
   ]
 }
