@@ -1,0 +1,39 @@
+{
+  "extends": "bridge",
+  "id": "lodi",
+  "title": "The Bridge of Lodi",
+  "date": "10 May 1796, evening",
+  "blurb": "Bonaparte's first great battle in Italy. The Austrian rearguard has broken the bridge's arches and trained fourteen guns on the far bank. The only way across is the narrow span itself. Bonaparte lays his own guns on the enemy, sends the cavalry round by a ford upstream, and tells the grenadiers to run for it.",
+  "hint": "French: the guns first, then the column over the bridge at the double; the cavalry can find the ford upstream. Austrians: hold the bridge for five minutes and the army gets away. Keep the guns firing down the span.",
+  "strength": [1.05, 1],
+  "weather": "clear",
+  "clock": { "start": "17:00", "hours": 1 },
+  "nat": ["fr", "at"],
+  "cavalryName": ["Beaumont's Horse", "Austrian Uhlans"],
+  "abilities": [["barrage"], ["barrage"]],
+  "reserves": [{ "line": 1 }, { "line": 1 }],
+  "forces": [
+    [
+      { "type": "artillery", "n": 2, "x": 30, "z": 70, "dx": 40, "names": ["Foot Battery Dommartin", "Horse Battery Lannes"] },
+      { "type": "skirmisher", "n": 2, "x": 8, "z": 52, "dx": 30, "names": ["Carabiniers, 2e Légère", "Chasseurs, 27e Ligne"] },
+      { "type": "line", "n": 2, "x": 4, "z": 82, "dx": 36, "names": ["Dallemagne's Grenadiers", "Beaupuy's Brigade"] },
+      { "type": "guard", "n": 1, "x": 22, "z": 110, "names": ["Bonaparte's Escort"] },
+      { "type": "commander", "n": 1, "x": 22, "z": 120, "names": ["General Bonaparte"], "nat": "fr" }
+    ],
+    [
+      { "type": "artillery", "n": 2, "x": -14, "z": -20, "dx": 40, "names": ["Battery Sebottendorf", "Battery Roselmini"] },
+      { "type": "line", "n": 2, "x": -8, "z": -34, "dx": 38, "names": ["Nádasdy Grenzer", "Kolloredo's Battalion"] },
+      { "type": "skirmisher", "n": 1, "x": -6, "z": -6, "dx": 16, "names": ["Croat Skirmishers"] },
+      { "type": "lancer", "n": 1, "x": -50, "z": -48, "names": ["Austrian Uhlans"] },
+      { "type": "commander", "n": 1, "x": -20, "z": -58, "names": ["Sebottendorf"], "nat": "at" }
+    ]
+  ],
+  "timeline": [
+    {
+      "t": 150, "type": "reinforce", "side": 0,
+      "units": [{ "type": "lancer", "n": 1, "x": 0, "z": 0, "names": ["Beaumont's Horse"] }],
+      "entry": { "x": 38, "z": 195 }, "go": { "x": -65, "z": 50 }, "spreadX": 1.6,
+      "msg": "Beaumont's horse have found a ford upstream and are crossing."
+    }
+  ]
+}

@@ -12,7 +12,7 @@ const tu = j('tuning'), camp = j('campaign');
 const [arg = 'all', seedArg = '1', winArg = '25', topArg = '3'] = process.argv.slice(2);
 const seed = Number(seedArg), win = Number(winArg), top = Number(topArg);
 const W: Record<string, number> = { charge: 4, flank: 3, rout: 6, dead: 8, falter: 2, special: 2, shot: 0.05 }; // what makes a good Short
-const ALL = [...camp.battles, 'hougoumont', 'wavre', 'bridge', 'retreat', 'laststand'];
+const ALL = [...camp.battles, 'hougoumont', 'wavre', 'bridge', 'retreat', 'laststand', 'lodi'];
 const REPLAY = arg.endsWith('.json'); // a saved battle (Save replay in the game): scan what was actually played
 const ids = REPLAY ? ['replay'] : arg === 'all' ? ALL : [arg];
 

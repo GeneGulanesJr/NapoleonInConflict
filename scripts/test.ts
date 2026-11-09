@@ -1547,3 +1547,14 @@ test('the server drops orders from a client that floods it, and still obeys one 
     a.ws.close();
   } finally { server.removeAllListeners('exit'); server.kill(); }
 });
+
+// ---------------------------------------------------------------- scenarios
+test('the Lodi scenario resolves through its two-level extends, fields French and Austrian armies, and plays on without bad numbers', () => {
+  const scn = data('lodi'), sim = createSim(scn, data('tuning'), { seed: 1 });
+  assert.deepEqual(scn.nat, ['fr', 'at']);
+  assert.ok(sim.s.units.some((u: any) => u.side === 0 && u.nat === 'fr'), 'French units');
+  assert.ok(sim.s.units.some((u: any) => u.side === 1 && u.nat === 'at'), 'Austrian units');
+  assert.ok(!sim.s.units.some((u: any) => /Life Guards|Uxbridge|d'Erlon/.test(u.name)), 'no Waterloo-campaign units leaked in from the base');
+  run(sim, 30);
+  for (const u of sim.s.units) assert.ok(Number.isFinite(u.x + u.z + u.men + u.morale), `${u.name} has finite numbers`);
+});

@@ -10,6 +10,7 @@ Five linked battles: **Charleroi → Quatre Bras → Ligny → Genappe → Water
 - **Hold the Bridge** (quick battle): a timed objective. The Coalition rearguard wins the moment it still holds Genappe Bridge when five minutes are up; the French win by taking it first. The HUD counts down to the deadline.
 - **Rearguard at Quatre Bras** (quick battle): the Coalition must keep 40% of everything it has fielded fighting when the clock runs out; the French win by grinding it below that. The bot rearguard falls back toward its own edge instead of holding ground.
 - **Last Stand of the Old Guard** (quick battle): endless waves of British and Prussian troops, a little bigger every half minute, march in on three Old Guard battalions and a battery. There is nothing to win by killing: the score is how long the Guard lasts (the result screen shows time held and waves faced), and holding out to the end of the clock is a victory.
+- **The Bridge of Lodi** (quick battle, 10 May 1796): Bonaparte's first battle in Italy. Austrian guns cover a single narrow bridge; the French win by taking it before five minutes are up or lose it. A small battle, and the first with the Austrian army.
 - **Multiplayer** (work in progress, disabled in the menu for now): team vs team on one battlefield; an empty side is played by the bot. The server and the screen are still in the code; to turn it back on, remove `disabled` from the `#mp` button in `src/main.ts`.
 - **Replays**: after a single-player battle, "Watch replay" plays it back from the recorded orders (the sim is deterministic). The replay bar has play/pause, 1-16×, a scrubber you can click or drag to jump, and a marker per turning point. "Save replay" downloads a .json file; Quick Battle → "Watch a replay file…" plays one (only the scenario id or skirmish seed is stored; the scenario is rebuilt from the game's own data, and files are checked before they play).
 - **Deployment**: local battles open paused. Place your regiments inside the blue zone around your starting positions (right-click or drag; they stand there at once, fronting the enemy), then Start battle / Enter.
@@ -38,6 +39,18 @@ Five linked battles: **Charleroi → Quatre Bras → Ligny → Genappe → Water
     npm run sim        # headless bot-vs-bot run over every battle
     npm run build      # type-check + production build
     npm test           # unit rules, bot, campaign roster, pathfinding, deployment, replay determinism, multiplayer server
+
+## Shorts (vertical videos from the engine)
+Needs Chrome or Edge installed; ffmpeg comes with `npm install` (`ffmpeg-static`). The sim is deterministic, so a battle is a recipe (scenario + seed) and every frame is rendered offline, one at a time.
+
+    node scripts/moments.ts bridge 1 40 3        # best 40 s windows of a battle (scenario|all, seed, window, top)
+    node scripts/capture.ts lodi 1 105 145 out/lodi.mp4 --x -14 --z -13 --title "THE BRIDGE OF LODI" --sub "10 May 1796" --narrate 1
+    node scripts/shorts.ts bridge 1 3            # find the top 3 and render them all to out/
+    node scripts/moments.ts battle.json 30 3     # the same on a replay saved from the game ("Save replay")
+    node scripts/capture.ts --replay battle.json --from 100 --to 140 out/mine.mp4
+
+The capture page (`capture.html`, `src/capture.ts`) runs a small director that cuts the story from the battle's own events (wide opening, charges followed from behind, volley push-ins, slow-motion on routs and kills, flank whips, a pull-out), shows turning points from the chronicle as captions, and renders the soundtrack offline from the game's synth. `--narrate 1` reads the captions aloud with Windows speech synthesis. Options: `--crowd` (men per sim man, 2.2), `--music fr|gb|off`, `--speed`, `--max` seconds.
+`node scripts/lab.ts` renders close-up stills of every unit type and nation on flat ground to judge model changes; `node scripts/bench.ts` times the renderer on mid-battle Hougoumont (`--root` compares another checkout).
 
 ## Controls
 Press **?** or **F10** in battle for the full list.
