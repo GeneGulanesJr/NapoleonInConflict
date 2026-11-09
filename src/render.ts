@@ -601,10 +601,17 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
 
   // the fallen: a man who goes down topples about his hip (ease-out, 0.7 s) and then lies where he fell for the rest of the battle. One instanced mesh from the figure's own parts; a matrix is only written while he falls.
   const CORP_MAX = 4000 * GROW, corpseM = fig(merge([bodyG, legG(0.095), legG(-0.095), packG, shakoG, armsCarryG.clone().translate(0, SH - HIP, 0)]), CORP_MAX, [0, 0.2, 0]);
-  const falling: { i: number; x: number; y: number; z: number; yaw: number; t0: number; sgn: number }[] = [], corpseC = new THREE.Color();
-  let corpseN = 0;
-  function clearFallen() { corpseN = 0; falling.length = 0; corpseM.count = 0; }
-  function fell(x: number, z: number, yaw: number, hex: number, h: number) {
+  const HORSE_MAX = 1500 * GROW, horseDeadM = fig(merge([horseG, legsFG.clone().translate(0, 0.98 - HY, 0.55), legsHG.clone().translate(0, 1.0 - HY, -0.55)]), HORSE_MAX, [0, 0.1, 0.2], true); // a horse with its legs set, to lie on its side
+  const falling: { i: number; x: number; y: number; z: number; yaw: number; t0: number; sgn: number; horse?: boolean }[] = [], corpseC = new THREE.Color();
+  let corpseN = 0, horseN = 0;
+  function clearFallen() { corpseN = horseN = 0; falling.length = 0; corpseM.count = horseDeadM.count = 0; }
+  function fell(x: number, z: number, yaw: number, hex: number, h: number, horseHex?: number) {
+    if (horseHex != null) { // a cavalryman down: his horse goes over on its side where it stood and he is thrown clear
+      const j = horseN++ % HORSE_MAX;
+      horseDeadM.count = Math.min(horseN, HORSE_MAX); horseDeadM.setColorAt(j, corpseC.setHex(horseHex)); horseDeadM.instanceColor!.needsUpdate = true;
+      falling.push({ i: j, x, y: heightAt(scn, x, z), z, yaw, t0: clock, sgn: h > 0.5 ? 1 : -1, horse: true });
+      x += (h > 0.5 ? 1 : -1) * 1.6 * FS; // the rider lands beside the horse
+    }
     const i = corpseN++ % CORP_MAX;
     corpseM.count = Math.min(corpseN, CORP_MAX); corpseM.setColorAt(i, corpseC.setHex(hex).multiplyScalar(0.8)); corpseM.instanceColor!.needsUpdate = true;
     const fr = (k: number) => (h * k) % 1 - 0.5; // scatter: they drop where the fire found them, not in the rank's slot
@@ -614,12 +621,12 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   function topple() {
     if (!falling.length) return;
     for (let k = falling.length - 1; k >= 0; k--) {
-      const c = falling[k], e = Math.min(1, (clock - c.t0) / 0.7), f = 1 - (1 - e) ** 2;
-      rootAt(mRoot, c.x, c.y, c.z, c.yaw, 1.7 * FS);
-      joint(mBody, mRoot, 0, HIP + (0.2 - HIP) * f, 0, c.sgn * 1.5 * f, 0.1 * f * c.sgn); corpseM.setMatrixAt(c.i, mBody);
+      const c = falling[k], e = Math.min(1, (clock - c.t0) / (c.horse ? 0.9 : 0.7)), f = 1 - (1 - e) ** 2;
+      if (c.horse) { rootAt(mRoot, c.x, c.y, c.z, c.yaw, 1.4 * FS); joint(mBody, mRoot, 0, HY + (0.34 - HY) * f, 0, 0, c.sgn * 1.5 * f); horseDeadM.setMatrixAt(c.i, mBody); }
+      else { rootAt(mRoot, c.x, c.y, c.z, c.yaw, 1.7 * FS); joint(mBody, mRoot, 0, HIP + (0.2 - HIP) * f, 0, c.sgn * 1.5 * f, 0.1 * f * c.sgn); corpseM.setMatrixAt(c.i, mBody); }
       if (e >= 1) falling.splice(k, 1);
     }
-    corpseM.instanceMatrix.needsUpdate = true;
+    corpseM.instanceMatrix.needsUpdate = horseDeadM.instanceMatrix.needsUpdate = true;
   }
 
   // 2D pixel effect sprites (rows: powder puff, muzzle flash, shell burst, dust kick), one instanced billboard draw
@@ -1006,9 +1013,9 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
       const nGun = isArt ? Math.max(1, Math.ceil(u.men / 54)) : 0;
       const n = isArt ? nGun * 2 : Math.max(1, Math.min(u.garrison != null ? 10 : 1e9, Math.ceil(u.men / T.perFig))); // a garrison shows a handful of men at the walls
       if (v.n && n < v.n) for (let q = 0; q < Math.min(3, v.n - n); q++) spawn(3, v.x + (Math.random() - 0.5) * 10, heightAt(scn, v.x, v.z) + 0.6, v.z + (Math.random() - 0.5) * 5, 0.5, 2.6); // men falling
-      if (v.n && n < v.n && v.form !== '' && !isArt && !isCav && cam.dist < 260) { // the men who went down fall where they stood (the rear-most drawn men go first)
+      if (v.n && n < v.n && v.form !== '' && !isArt && cam.dist < 260) { // the men who went down fall where they stood (the rear-most drawn men go first)
         const a = Math.ceil(n * ((u.type === 'line' || u.type === 'guard') && u.garrison == null && !u.routed ? CROWD : 1)), b = Math.min(v.nd ?? a, a + 40), hx = u.routed ? 0x8d8a82 : NAT[u.nat] ?? 0x888888;
-        for (let i = a; i < b; i++) { const o = i * MS; if (o + 2 < v.m.length && v.m[o] === v.m[o]) fell(v.m[o], v.m[o + 1], v.m[o + 2], hx, hash(u.id * 31 + i)); }
+        for (let i = a; i < b; i++) { const o = i * MS; if (o + 2 < v.m.length && v.m[o] === v.m[o]) fell(v.m[o], v.m[o + 1], v.m[o + 2], hx, hash(u.id * 31 + i), isCav ? HORSE_COL[Math.floor(hash(u.id * 7 + i) * 4)].getHex() : undefined); }
       }
       v.n = n; v.side = u.side; v.kind = isArt ? 2 : isCav ? 1 : 0;
       // men falling must not re-deal the whole formation (every slot depends on the count): keep the file count, the square's side and the column's head where they were while men fall
