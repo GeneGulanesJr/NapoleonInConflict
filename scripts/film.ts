@@ -26,7 +26,8 @@ function chapterFor(i: number) {
   const keys = c.keys.map((k: any) => ({ ...k, u: when(i, k) })).sort((a: any, b: any) => a.u - b.u);
   const cards = c.cards.map((k: any) => { const u0 = when(i, k); return { u0, u1: u0 + k.dur, kind: k.kind, text: k.text, sub: k.sub }; });
   if (i > 0) cards.push({ u0: 0.5, u1: 5, kind: 'chapter', text: `${ROMAN[i]} · ${c.title}` });
-  return { idx: i, last: i === spec.chapters.length - 1, dur: durs[i], fps, sim: c.sim, keys, cards };
+  const reveals = c.map?.map((r: any) => ({ id: r.id, u0: when(i, r), dur: r.dur ?? 1, kind: r.kind ?? 'fade' }));
+  return { idx: i, last: i === spec.chapters.length - 1, dur: durs[i], fps, sim: c.sim, keys, cards, map: !!c.map, reveals };
 }
 
 const chrome = process.env.CHROME ?? ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(existsSync);

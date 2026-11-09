@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { animate } from 'animejs';
-import { heightAt as groundH, lineDist, featureAt, riverAt } from './sim/world.ts';
+import { heightAt as groundH, lineDist, featureAt, riverAt, deepAt } from './sim/world.ts';
 import { posted, foot, hour, distToFoot } from './sim/sim.ts';
 import { pxUrl } from './pixel.ts';
 
@@ -1015,7 +1015,11 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
       if (v.n && n < v.n) for (let q = 0; q < Math.min(3, v.n - n); q++) spawn(3, v.x + (Math.random() - 0.5) * 10, heightAt(scn, v.x, v.z) + 0.6, v.z + (Math.random() - 0.5) * 5, 0.5, 2.6); // men falling
       if (v.n && n < v.n && v.form !== '' && !isArt && cam.dist < 260) { // the men who went down fall where they stood (the rear-most drawn men go first)
         const a = Math.ceil(n * ((u.type === 'line' || u.type === 'guard') && u.garrison == null && !u.routed ? CROWD : 1)), b = Math.min(v.nd ?? a, a + 40), hx = u.routed ? 0x8d8a82 : NAT[u.nat] ?? 0x888888;
-        for (let i = a; i < b; i++) { const o = i * MS; if (o + 2 < v.m.length && v.m[o] === v.m[o]) fell(v.m[o], v.m[o + 1], v.m[o + 2], hx, hash(u.id * 31 + i), isCav ? HORSE_COL[Math.floor(hash(u.id * 7 + i) * 4)].getHex() : undefined); }
+        const fr = Math.max(1, Math.round((v.colsN ?? 8) * ((v.nd ?? a) / Math.max(1, v.n))));
+        for (let i = a; i < b; i++) { // foot: the men hit are in the front rank, so they fall a pace ahead of the line, not at its rear slots
+          const si = isCav ? i : Math.floor(hash(u.id * 53 + i) * fr), o = si * MS;
+          if (o + 2 < v.m.length && v.m[o] === v.m[o]) fell(v.m[o] + (isCav ? 0 : Math.sin(u.facing) * 1.1 * FS), v.m[o + 1] + (isCav ? 0 : Math.cos(u.facing) * 1.1 * FS), v.m[o + 2], hx, hash(u.id * 31 + i), isCav ? HORSE_COL[Math.floor(hash(u.id * 7 + i) * 4)].getHex() : undefined);
+        }
       }
       v.n = n; v.side = u.side; v.kind = isArt ? 2 : isCav ? 1 : 0;
       // men falling must not re-deal the whole formation (every slot depends on the count): keep the file count, the square's side and the column's head where they were while men fall
@@ -1084,6 +1088,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
         if (u.type === 'skirmisher' && !u.routed) { sl[0] += Math.sin(clock * 0.25 + hm * 30) * 1.2; sl[1] += Math.cos(clock * 0.21 + hm * 17) * 0.8; } // skirmishers drift about their posts
         sl[0] *= FS; sl[1] *= FS; // everything is laid out FS times wider
         let tx = v.x + sl[0] * ct + sl[1] * st, tz = v.z - sl[0] * st + sl[1] * ct, face = tf;
+        if (!isArt) for (let w = 0; w < 6 && deepAt(scn, tx, tz); w++) { tx += (v.x - tx) * 0.3; tz += (v.z - tz) * 0.3; } // no man stands in deep water: a slot that falls over a river is drawn back toward the regiment's centre (on its bank or on the bridge)
         if (foe) { // close up to the contact line (never past it), a little ragged along the front
           const pull = Math.max(0, Math.min(1.6 * FS, Math.hypot(foe.x - u.x, foe.z - u.z) / 2 - 0.8 * FS)), lat = (hm - 0.5) * 1.2 * FS;
           tx += Math.sin(foeA) * pull + Math.cos(foeA) * lat; tz += Math.cos(foeA) * pull - Math.sin(foeA) * lat; face = foeA + (hm - 0.5) * 0.6;

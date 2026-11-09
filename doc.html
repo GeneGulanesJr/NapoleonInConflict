@@ -18,13 +18,14 @@
     .source b { display: block; margin-bottom: 8px; font-size: 20px; letter-spacing: .12em; color: #c9a24a; }
     .chapter { left: 90px; top: 60px; font-size: 26px; letter-spacing: .22em; text-transform: uppercase; color: #e6d9b0; text-shadow: 0 2px 6px #000; }
     #rec { position: fixed; right: 40px; bottom: 34px; font-size: 20px; letter-spacing: .1em; color: #d8d2c0; text-shadow: 0 2px 4px #000; opacity: .85; }
+    #map { position: fixed; inset: 0; display: none; background: #1b2128; } #map svg { width: 100%; height: 100%; }
     #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; }
     #end { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; background: #0b0b0e; }
     #end div { max-width: 1250px; font-size: 38px; line-height: 1.5; } #end small { display: block; margin-top: 28px; font-size: 24px; line-height: 1.5; color: #bdb6a2; }
   </style>
 </head>
 <body>
-  <div id="view"></div><div id="cards"></div><div id="rec">RECONSTRUCTION · positions and movements are illustrative</div><div id="fade"></div><div id="end"><div id="endtext"></div></div>
+  <div id="view"></div><div id="map"></div><div id="cards"></div><div id="rec">RECONSTRUCTION · positions and movements are illustrative</div><div id="fade"></div><div id="end"><div id="endtext"></div></div>
   <script type="module" src="/src/doc.ts"></script>
 </body>
 </html>

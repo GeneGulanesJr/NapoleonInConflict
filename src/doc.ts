@@ -8,15 +8,18 @@ import { DT } from './sim/replay.ts';
 import { directed } from './sim/orders.ts';
 import { offline, at, playEvents, renderOffline } from './audio.ts';
 import ORDERS from './data/lodi-orders.json';
+import { mapSvg } from './docmap.ts';
 
 type Key = { u: number; x: number; z: number; dist: number; yaw: number; tilt: number; cut?: boolean };
 type Card = { u0: number; u1: number; kind: string; text: string; sub?: string };
-type Chapter = { idx: number; last?: boolean; dur: number; fps: number; sim: [number, number]; keys: Key[]; cards: Card[]; end?: string };
+type Reveal = { id: string; u0: number; dur: number; kind: string }; // a map element that fades in (or, for a solid route, is drawn) from u0
+type Chapter = { idx: number; last?: boolean; dur: number; fps: number; sim: [number, number]; keys: Key[]; cards: Card[]; end?: string; map?: boolean; reveals?: Reveal[] };
 
 const q = new URLSearchParams(location.search);
 const view = createView(document.getElementById('view')!, { crowd: Number(q.get('crowd') ?? 2.2), smoke: Number(q.get('smoke') ?? 0.7) });
 const $ = (id: string) => document.getElementById(id)!, clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 let g: any, run: () => void, ch: Chapter, els: HTMLElement[] = [], fi = 0;
+const mapEls = new Map<string, SVGGraphicsElement>(), mapLen = new Map<string, number>();
 
 const html = (c: Card) => c.kind === 'title' ? `${c.text}<small>${c.sub ?? ''}</small>` : c.kind === 'quote' ? `“${c.text}”<small>${c.sub ?? ''}</small>` : c.kind === 'source' ? `<b>${c.sub ?? 'SOURCES DISAGREE'}</b>${c.text}` : c.text;
 
@@ -29,6 +32,11 @@ const html = (c: Card) => c.kind === 'title' ? `${c.text}<small>${c.sub ?? ''}</
     while (g.s.t < c.sim[0] && !g.s.over) { step(g, DT); run(); } // the part before this chapter's footage: sim only
     g.s.events.length = 0;
     $('cards').innerHTML = ''; els = c.cards.map((k) => { const e = document.createElement('div'); e.className = `card ${k.kind}`; e.innerHTML = html(k); $('cards').appendChild(e); return e; });
+    $('map').style.display = c.map ? 'block' : 'none'; mapEls.clear(); mapLen.clear();
+    if (c.map) { // the campaign map: everything starts hidden and is revealed in step with the narration
+      $('map').innerHTML = mapSvg();
+      for (const r of c.reveals ?? []) { const el = document.getElementById(r.id) as unknown as SVGGraphicsElement | null; if (!el) { console.error('map: no element', r.id); continue; } mapEls.set(r.id, el); el.style.opacity = '0'; if (el.dataset?.dash) el.style.strokeDasharray = '14 12'; if (r.kind === 'draw') { const L = (el as unknown as SVGPathElement).getTotalLength(); mapLen.set(r.id, L); el.style.strokeDasharray = String(L); el.style.strokeDashoffset = String(L); } }
+    }
     $('end').style.display = c.end ? 'flex' : 'none'; if (c.end) $('endtext').innerHTML = c.end; $('rec').style.display = c.end ? 'none' : '';
     offline(c.dur + 1, 'fr'); // sound effects only; the music tick is never called
     view.cam.x = c.keys[0].x; view.cam.z = c.keys[0].z; view.cam.dist = c.keys[0].dist; view.cam.yaw = c.keys[0].yaw; view.tilt.v = c.keys[0].tilt;
@@ -36,7 +44,11 @@ const html = (c: Card) => c.kind === 'title' ? `${c.text}<small>${c.sub ?? ''}</
   },
   frame(u: number) {
     const evs: any[] = [];
-    if (!ch.end) {
+    if (ch.map) for (const r of ch.reveals ?? []) { // map chapter: no sim, only the reveals
+      const el = mapEls.get(r.id); if (!el) continue; const p = clamp((u - r.u0) / Math.max(1e-3, r.dur));
+      if (r.kind === 'draw') { el.style.opacity = p > 0 ? '1' : '0'; el.style.strokeDashoffset = String((mapLen.get(r.id) ?? 0) * (1 - p)); } else el.style.opacity = String(p);
+    }
+    if (!ch.end && !ch.map) {
       const target = ch.sim[0] + (ch.sim[1] - ch.sim[0]) * clamp(u / ch.dur);
       while (g.s.t < target && !g.s.over) { step(g, DT); run(); evs.push(...g.s.events.splice(0)); }
       const ks = ch.keys; let i = 0; while (i + 1 < ks.length && ks[i + 1].u <= u) i++;

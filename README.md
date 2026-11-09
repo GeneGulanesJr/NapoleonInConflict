@@ -52,6 +52,18 @@ Needs Chrome or Edge installed; ffmpeg comes with `npm install` (`ffmpeg-static`
 The capture page (`capture.html`, `src/capture.ts`) runs a small director that cuts the story from the battle's own events (wide opening, charges followed from behind, volley push-ins, slow-motion on routs and kills, flank whips, a pull-out), shows turning points from the chronicle as captions, and renders the soundtrack offline from the game's synth. `--narrate 1` reads the captions aloud with Windows speech synthesis. Options: `--crowd` (men per sim man, 2.2), `--music fr|gb|off`, `--speed`, `--max` seconds.
 `node scripts/lab.ts` renders close-up stills of every unit type and nation on flat ground to judge model changes; `node scripts/bench.ts` times the renderer on mid-battle Hougoumont (`--root` compares another checkout).
 
+## Documentary (the Bridge of Lodi)
+A long-form, narrated film made from the engine. The evidence behind it is in `docs/lodi-sources.md` (every claim tagged by how well the sources support it, and where they disagree), the script is `docs/lodi-script.md`, and the scenario notes are `docs/lodi.md`.
+
+    MINIMAX_API_KEY=... node scripts/narrate.ts audition        # three narrator voices on the cold open, to choose one
+    MINIMAX_API_KEY=... node scripts/narrate.ts full English_expressive_narrator   # out/narration/lodi-narration.mp3 + .json (timings)
+    node scripts/film.ts --still 5 40,64                         # check a shot or two (PNG in out/film/)
+    node scripts/film.ts                                         # render every chapter (resumable), then mix the narration in: out/lodi-documentary.mp4
+
+The battle is a **stage**, not a simulation of the outcome: `src/data/lodi-orders.json` moves both armies at the times the sources give and sets casualties on a schedule, with morale and ammunition locked (`src/sim/orders.ts`). The engine supplies the movement, the guns and the falling men; the script supplies who breaks and who dies. `src/data/lodi-film.json` holds the chapters (sim window, camera keyframes, cards), tied to paragraphs of the narration so the footage follows the voice. The campaign chapter is an animated map (`src/docmap.ts`), not footage. A full render takes about an hour on an integrated GPU. Only the narration needs a key (MiniMax); it is read from the environment and never stored.
+
+**Not yet checked by eye:** the map chapter, the prologue, rearguard, morning and aftermath chapters, and the bridge chapter after the last round of fixes (men are now kept out of deep water, and casualties fall in the front rank). Look at `--still` frames before a full render.
+
 ## Controls
 Press **?** or **F10** in battle for the full list.
 
