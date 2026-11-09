@@ -41,7 +41,8 @@
   ],
   "forces": [
     [
-      { "type": "commander", "n": 1, "x": -70, "z": 6, "names": ["General Bonaparte"], "nat": "fr" },
+      { "type": "commander", "n": 1, "x": -125, "z": 6, "names": ["General Bonaparte"], "nat": "fr" },
+      { "type": "commander", "n": 5, "x": -98, "z": -16, "dz": 8, "names": ["Berthier", "Cervoni", "Dallemagne", "Colonel Lannes", "Colonel Dupas"], "nat": "fr" },
       { "type": "skirmisher", "n": 1, "x": -90, "z": 0, "names": ["2nd Battalion, Carabiniers"], "men": 400, "maxMen": 400 },
       { "type": "line", "n": 4, "x": -86, "z": -30, "dz": 20, "names": ["Grenadiers (Lannes), 1st Bn", "Grenadiers (Lannes), 2nd Bn", "Grenadiers (Lannes), 3rd Bn", "Grenadiers (Lannes), 4th Bn"], "men": 520, "maxMen": 520 },
       { "type": "artillery", "n": 6, "x": -14, "z": -30, "dz": 12, "names": ["French Battery 1", "French Battery 2", "French Battery 3", "French Battery 4", "French Battery 5", "French Battery 6"] }

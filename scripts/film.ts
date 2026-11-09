@@ -1,6 +1,6 @@
 // Renders the documentary: 16:9, one chapter at a time (out/film/ch<N>.mp4 + ch<N>.wav, so a run can be resumed), then joins them and mixes the narration over the sound effects.
 // Usage: node scripts/film.ts [--chapters 0,1,5] [--force] [--fps 24] [--w 1920] [--h 1080] [--out out/lodi-documentary.mp4]
-//        node scripts/film.ts --still <chapter> <seconds-into-chapter>     (one PNG in out/film/, to check a shot)
+//        node scripts/film.ts --still <chapter> <seconds[,seconds...]>     (one PNG in out/film/, to check a shot)
 // Needs out/narration/lodi-narration.json and .mp3 (scripts/narrate.ts) and Chrome or Edge. The chapter spec is src/data/lodi-film.json.
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -43,11 +43,9 @@ try {
   const total = spec.chapters.length + 1;
 
   if (f.still != null) { // one shot, to check the camera and the cards
-    const [ci, u] = [Number(av[av.indexOf('--still') + 1]), Number(av[av.indexOf('--still') + 2])];
+    const ci = Number(av[av.indexOf('--still') + 1]), us = String(av[av.indexOf('--still') + 2]).split(',').map(Number); // several moments in one chapter, in increasing order
     await page.evaluate((c) => (window as any).__doc.chapter(c), chapterFor(ci) as any);
-    await page.evaluate((t) => (window as any).__doc.frame(t), u);
-    const file = `${dir}/still-${ci}-${u}.png`; await page.screenshot({ path: file });
-    console.log(file);
+    for (const u of us) { await page.evaluate((t) => (window as any).__doc.frame(t), u); const file = `${dir}/still-${ci}-${u}.png`; await page.screenshot({ path: file }); console.log(file); }
   } else {
     const only = f.chapters ? f.chapters.split(',').map(Number) : null;
     for (let i = 0; i < total; i++) {

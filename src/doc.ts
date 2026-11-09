@@ -25,7 +25,7 @@ const html = (c: Card) => c.kind === 'title' ? `${c.text}<small>${c.sub ?? ''}</
     ch = c; fi = 0;
     const scn = SCENARIOS.lodi;
     view.setScenario(scn, TUNING); // fresh men and ground each chapter, so nothing slides in from the last one
-    g = createSim(scn, TUNING, { seed: 1 }); run = directed(g, ORDERS as any);
+    g = createSim(scn, TUNING, { seed: 1 }); run = directed(g, ORDERS as any, { lock: true }); // the sim is the stage: movement, firing and falling men are its own, the outcome is the script's
     while (g.s.t < c.sim[0] && !g.s.over) { step(g, DT); run(); } // the part before this chapter's footage: sim only
     g.s.events.length = 0;
     $('cards').innerHTML = ''; els = c.cards.map((k) => { const e = document.createElement('div'); e.className = `card ${k.kind}`; e.innerHTML = html(k); $('cards').appendChild(e); return e; });
