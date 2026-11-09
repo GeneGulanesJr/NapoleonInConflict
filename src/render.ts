@@ -531,11 +531,15 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   const peak = (r: number, y: number) => paint(new THREE.CylinderGeometry(r, r, 0.02, 8, 1, false, -Math.PI / 2, Math.PI).rotateX(0.25).translate(0, y, 0.02), DK, true);
   const shakoG = atHip([cyl(0.138, 0.168, 1.47, 1.8, 0x2c2e36), peak(0.17, 1.49), bx(0.1, 0.12, 0.02, 0, 1.62, 0.158, P.brass), rod([0, 1.78, 0.11], [0, 2.07, 0.14], 0.045, 0.022, W, 5)]); // French bell-top + plume
   const belgicG = atHip([cyl(0.138, 0.14, 1.47, 1.72, DK), bx(0.3, 0.38, 0.03, 0, 1.74, 0.13, DK), peak(0.17, 1.49), bx(0.11, 0.13, 0.02, 0, 1.62, 0.16, P.brass), rod([0.11, 1.74, 0.14], [0.12, 1.93, 0.15], 0.04, 0.03, W, 5)]); // British false-front shako
-  const bearG = atHip([cyl(0.15, 0.2, 1.46, 1.98, DK, 7), dome(0.2, 1.98, DK, 0.5), bx(0.13, 0.12, 0.02, 0, 1.58, 0.165, P.brass), rod([0.13, 1.62, 0.07], [0.16, 2.06, 0.07], 0.045, 0.03, RED, 5), bx(0.12, 0.12, 0.03, 0, 1.98, -0.19, RED)]);
+  const FUR = 0x3a322b; // bearskin: brown-black fur, not the flat black of the shako (the guard read as dark blobs)
+  const bearG = atHip([cyl(0.15, 0.2, 1.46, 1.98, FUR, 7), dome(0.2, 1.98, FUR, 0.5), rod([-0.14, 1.56, 0.13], [0.14, 1.5, 0.17], 0.016, 0.016, 0xe9e4d6, 3), bx(0.13, 0.12, 0.02, 0, 1.58, 0.165, P.brass), rod([0.13, 1.62, 0.07], [0.16, 2.06, 0.07], 0.045, 0.03, RED, 5), bx(0.12, 0.12, 0.03, 0, 1.98, -0.19, RED)]);
   const cuirG = atHip([cyl(0.182, 0.25, 0.62, SH - 0.02, P.steel, 8, 0.76), dome(0.16, 1.47, P.steel), cyl(0.15, 0.15, 1.44, 1.51, DK), peak(0.16, 1.47), bx(0.05, 0.13, 0.32, 0, 1.66, -0.02, P.brass),
     rod([0, 1.68, -0.15], [0, 1.22, -0.3], 0.045, 0.075, DK, 5), rod([0.03, 1.7, 0.1], [0.05, 1.98, 0.08], 0.035, 0.025, RED, 5)]); // breastplate, helmet, fur turban, crest, horsehair tail, plume
   const capG = atHip([cyl(0.138, 0.12, 1.47, 1.66, DK), paint(new THREE.BoxGeometry(0.3, 0.1, 0.3).rotateY(Math.PI / 4).translate(0, 1.72, 0), RED), peak(0.17, 1.49), bx(0.1, 0.1, 0.02, 0, 1.56, 0.145, P.brass), rod([0.1, 1.76, 0.08], [0.12, 2.0, 0.08], 0.04, 0.025, P.trim, 5)]); // lancer czapka
   const bicG = atHip([cyl(0.152, 0.145, 1.46, 1.6, DK), paint(new THREE.CylinderGeometry(0.33, 0.33, 0.24, 10, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2).scale(1, 0.62, 1).translate(0, 1.5, 0), DK, true), ball(0.045, 0.12, 1.6, 0.13, 0xe9e4d6)]); // bicorne worn en bataille: crown, crescent, cockade
+  // an officer (gold epaulettes, red sash, gold belt) and a drummer (drum on the hip) in each infantry regiment
+  const offG = atHip([ball(0.1, 0.23, 1.18, 0, 0xe8c030, 1.25, 0.6), ball(0.1, -0.23, 1.18, 0, 0xe8c030, 1.25, 0.6), rod([-0.2, 1.12, 0.12], [0.2, 0.58, 0.16], 0.035, 0.035, 0xc23a2e, 4), bx(0.3, 0.05, 0.04, 0, 0.64, 0.18, 0xe8c030)]);
+  const drumG = atHip([paint(new THREE.CylinderGeometry(0.17, 0.17, 0.3, 10).rotateZ(Math.PI / 2).translate(0, 0.62, 0.27), 0xd8c9a0, true), ...[0.16, -0.16].map((x) => paint(new THREE.CylinderGeometry(0.18, 0.18, 0.03, 10).rotateZ(Math.PI / 2).translate(x, 0.62, 0.27), RED, true)), rod([-0.17, 1.15, 0.1], [0, 0.7, 0.2], 0.02, 0.02, P.trim, 3), rod([0.17, 1.15, 0.1], [0, 0.7, 0.2], 0.02, 0.02, P.trim, 3)]);
   // the other armies' headgear (white paint takes the nation's plume colour)
   const kiwerG = atHip([cyl(0.145, 0.172, 1.47, 1.92, DK), peak(0.175, 1.49), bx(0.17, 0.2, 0.02, 0, 1.68, 0.172, P.brass), ball(0.05, 0, 1.96, 0, W), rod([0, 1.94, 0], [0, 2.18, 0.02], 0.028, 0.02, W, 5)]); // Russian kiwer: tall, big brass plate, upright plume
   const stoveG = atHip([cyl(0.158, 0.158, 1.47, 1.86, DK), peak(0.17, 1.49), bx(0.14, 0.17, 0.02, 0, 1.62, 0.16, P.brass), bx(0.32, 0.03, 0.32, 0, 1.87, 0, 0x2a2c33), rod([0.04, 1.86, 0.02], [0.05, 2.06, 0.02], 0.05, 0.03, W, 5)]); // Austrian stovepipe: straight, flat-topped, tufted
@@ -579,6 +583,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   shadowP.instanceMatrix = body.instanceMatrix; shadowP.count = 0; shadowP.frustumCulled = false; shadowP.castShadow = true; shadowP.receiveShadow = false; scene.add(shadowP);
   const hat = [0, 1.05, 0] as [number, number, number];
   const shakoM = fig(shakoG, FIG_MAX, hat), belgM = fig(belgicG, FIG_MAX, hat), bearM = fig(bearG, 3000 * GROW, hat), cuirM = fig(cuirG, 1500, [0, 0.5, 0]), capM = fig(capG, 1500, hat), bicM = fig(bicG, 200, hat);
+  const offM = fig(offG, 600, null), drumM = fig(drumG, 600, null);
   const hats: Record<Hat, THREE.InstancedMesh> = { shako: shakoM, belgic: belgM, kiwer: fig(kiwerG, FIG_MAX, hat), stove: fig(stoveG, FIG_MAX, hat), bicorne: fig(bicG, FIG_MAX, hat), raupen: fig(raupenG, FIG_MAX, hat), fez: fig(fezG, FIG_MAX, hat) }; // by nation (NATIONS)
   const skirM = fig(skirG, 2500, null), lanceM = fig(lanceG, 1500, null);
   // one standard per infantry regiment (pole + finial, waving banner in the nation's colour, gold eagle)
@@ -962,7 +967,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
     }
 
     // units
-    let nf = 0, nh = 0, ng = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0, nac = 0, naa = 0, nar = 0, npk = 0;
+    let nf = 0, nh = 0, ng = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0, nac = 0, naa = 0, nar = 0, npk = 0, noff = 0, ndr = 0;
     const hc: Record<Hat, number> = { shako: 0, belgic: 0, kiwer: 0, stove: 0, bicorne: 0, raupen: 0, fez: 0 }; // hats drawn this frame, per model
     const live = new Set<number>();
     const seenSet = state.fog ? new Set<number>(state.seen?.[viewer] ?? []) : null; // fog of war: enemies you cannot see are not drawn
@@ -1025,34 +1030,36 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
       const charging = u.chase != null || u.eng != null, inFight = u.fired < (T.reload || 6) * 1.5;
       const foe = u.eng != null ? byId.get(u.eng) : null, foeA = foe ? Math.atan2(foe.x - v.x, foe.z - v.z) : 0; // melee: the ranks break into a scrum facing the enemy
       // one tin figure, standing at (x, y, z) facing yaw, or sitting in a horse's saddle; mv = this man is on the move, s = his step (sin of his own gait phase)
-      const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number, c = 0, kn = 0) => {
+      const addFig = (fi: number, x: number, y: number, z: number, yaw: number, sc0: number, mount: THREE.Matrix4 | null, mv: boolean, s: number, c = 0, kn = 0, role = 0) => { // role: 1 officer, 2 drummer
         const h1 = hash(u.id * 13 + fi * 7), h2 = hash(u.id * 5 + fi * 3), h3 = hash(u.id * 3 + fi * 11), rider = mount != null, walk = mv && !rider;
         if (mount) mRoot.compose(V.set(0, 1.44 - HY - HIP * 1.1, -0.02), Q.identity(), SV.setScalar(1.1)).premultiply(mount);
         else { const sc = sc0 * grow * (0.95 + h1 * 0.1); rootAt(mRoot, x, y + (walk ? 0.1 * sc * c * c : 0), z, yaw, sc); } // the body rises as the legs pass under it (a smooth bob, twice a stride) instead of a hop
         const lf = u.fired - h3 * 0.2, kick = lf >= 0 && lf < 0.25 ? 1 - lf / 0.25 : 0; // the volley ripples down the line
         const aim = !rider && !u.routed && u.type !== 'commander' && (charging || inFight && (u.type === 'skirmisher' ? (u.fired + h3 * 5) % 5 < 1.6 : u.fired < 0.8 || u.reload < 0.8));
         const jab = foe ? Math.max(0, Math.sin(clock * 7 + h2 * 6.28)) : 0; // bayonet thrusts and sabre cuts in melee
-        const lean = rider ? 0 : u.routed ? 0.4 : walk ? (charging ? 0.24 : 0.08) : foe ? 0.12 + jab * 0.12 : 0;
+        const flinch = u.hurt < 0.3 && h3 < 0.35 ? (1 - u.hurt / 0.3) * 0.25 : 0; // some of the men hit rock back
+        const lean = (rider ? (charging && mv ? 0.28 : 0.05) : u.routed ? 0.4 : walk ? (charging ? 0.24 : 0.08) : foe ? 0.12 + jab * 0.12 : u.type === 'artillery' && inFight ? 0.12 + Math.sin(clock * 5 + h2 * 6.28) * 0.18 : 0) - flinch; // riders lean into a charge; gun crews work forward and back at the piece
         const hy = HIP + (0.4 - HIP) * kn; // kneeling: the hip drops to knee height (right knee on the ground, left foot forward)
         joint(mBody, mRoot, 0, hy, 0, lean + kn * 0.15 - kick * 0.12, walk ? s * 0.07 : Math.sin(clock * 0.9 + h1 * 40) * 0.025, walk ? -s * 0.13 : Math.sin(clock * 0.6 + h1 * 25) * 0.03); // marching sway and shoulders twisting against the hips, or a slow idle shift of weight
         tmpC2.copy(tmpC).multiplyScalar(0.94 + h3 * 0.12); body.setMatrixAt(nf, mBody); body.setColorAt(nf, tmpC2);
         if (!rider && u.type !== 'commander') packM.setMatrixAt(npk++, mBody);
         const stride = walk ? s * (charging || u.routed ? 0.75 : 0.5) : 0;
         const kb = walk ? (charging || u.routed ? 1.2 : 0.8) : 0; // the leg that swings forward folds at the knee (it is the one whose stride is rising: cos of the gait phase)
-        joint(mPart, mRoot, 0, hy, 0, rider ? -0.6 : stride * (1 - kn) + kn * 1.3, rider ? 0.5 : 0); thL.setMatrixAt(nf, mPart); thL.setColorAt(nf, pantsC); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, c) * (1 - kn) - kn * 1.6); shL.setMatrixAt(nf, mShin); shL.setColorAt(nf, pantsC);
-        joint(mPart, mRoot, 0, hy, 0, rider ? -0.6 : -stride * (1 - kn) - kn * 0.1, rider ? -0.5 : 0); thR.setMatrixAt(nf, mPart); thR.setColorAt(nf, pantsC); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, -c) * (1 - kn) - kn * 1.5); shR.setMatrixAt(nf, mShin); shR.setColorAt(nf++, pantsC);
+        joint(mPart, mRoot, rider ? 0.1 : 0, hy, 0, rider ? -0.6 : stride * (1 - kn) + kn * 1.3, rider ? 0.5 : 0); thL.setMatrixAt(nf, mPart); thL.setColorAt(nf, pantsC); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, c) * (1 - kn) - kn * 1.6); shL.setMatrixAt(nf, mShin); shL.setColorAt(nf, pantsC);
+        joint(mPart, mRoot, rider ? -0.1 : 0, hy, 0, rider ? -0.6 : -stride * (1 - kn) - kn * 0.1, rider ? -0.5 : 0); thR.setMatrixAt(nf, mPart); thR.setColorAt(nf, pantsC); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, -c) * (1 - kn) - kn * 1.5); shR.setMatrixAt(nf, mShin); shR.setColorAt(nf++, pantsC);
         // arms: sabre and reins for riders and generals, musket levelled when firing or charging, else shouldered (swinging on the march, thrown up in a rout)
-        const ride = rider || u.type === 'commander', am = ride ? armsRide : aim ? armsAim : armsCarry, ai = ride ? nar++ : aim ? naa++ : nac++;
+        const ride = rider || u.type === 'commander' || role === 1, am = ride ? armsRide : aim ? armsAim : armsCarry, ai = ride ? nar++ : aim ? naa++ : nac++;
         const ap = ride ? (foe ? 0.4 + Math.sin(clock * 8 + h2 * 6.28) * 0.8 : charging && mv ? (u.type === 'lancer' ? 1.5 : 1.2) + s * 0.08 : 0)
-          : aim ? (charging ? 0.3 + jab * 0.3 : 0) - kick * 0.35 : u.routed ? -0.6 + s * 0.5 : walk ? s * 0.08 : 0;
+          : aim ? (charging ? 0.3 + jab * 0.3 : 0) - kick * 0.35 : u.routed ? -0.6 + s * 0.5 : walk ? s * 0.08 : inFight && !foe && !charging && (u.type === 'line' || u.type === 'guard' || u.type === 'skirmisher') ? -0.25 + Math.sin(clock * 7.5 + h2 * 6.28) * 0.3 : 0; // between volleys the men are loading: the musket comes across and the arms work
         joint(mPart, mBody, 0, SH - HIP, 0, ap); am.setMatrixAt(ai, mPart); am.setColorAt(ai, tmpC2);
         if (u.type === 'lancer') { lanceM.setMatrixAt(nlc, mPart); lanceM.setColorAt(nlc++, tmpC); }
         if (u.type === 'cuirassier') cuirM.setMatrixAt(nc++, mBody);
         else if (u.type === 'guard') bearM.setMatrixAt(nbr++, mBody);
-        else if (u.type === 'commander') bicM.setMatrixAt(ncm++, mBody);
+        else if (u.type === 'commander' || role === 1) bicM.setMatrixAt(ncm++, mBody);
         else if (u.type === 'lancer') capM.setMatrixAt(ncp++, mBody); // every army's lancers wear the czapka
         else { const k = NATIONS[u.nat]?.hat ?? 'shako', hatMesh = hats[k]; hatMesh.setMatrixAt(hc[k], mBody); hatMesh.setColorAt(hc[k]++, plumeC); }
         if (u.type === 'skirmisher') skirM.setMatrixAt(nsk++, mBody);
+        if (role === 1) offM.setMatrixAt(noff++, mBody); else if (role === 2) drumM.setMatrixAt(ndr++, mBody);
       };
       const thin = isArt ? 1 : cam.dist > 440 ? 3 : cam.dist > 260 ? 2 : 1, snapAll = v.form === '' || v.th !== thin, top = v.rs * 1.2 + T.speed * 1.1, gait = (u.routed ? 13 : charging ? 11 : 8) / T.speed;
       // zoomed out: every 2nd/3rd man is drawn, bigger, so ranks still read as men (not barcode, not a slab); guns keep their crew
@@ -1124,9 +1131,10 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
           }
         } else if (nf < FIG_MAX - 10) {
           // the front rank of a line in a firefight kneels (each man at his own pace, so the rank settles as a ripple) and rises again when the firing stops or the line moves
-          const down = kneelOK && !mv && i < Math.max(1, Math.round(v.colsN * (nd / n))) ? 1 : 0;
+          const fc = Math.max(1, Math.round(v.colsN! * (nd / n))), down = kneelOK && !mv && i < fc ? 1 : 0;
+          const role = (u.type === 'line' || u.type === 'guard') && u.garrison == null && !u.routed && nd > 8 ? (i === 0 ? 1 : i === Math.min(nd - 1, fc + (fc >> 1)) ? 2 : 0) : 0; // the officer leads the front rank, the drummer stands mid-rank behind
           m[o + 6] += (down - m[o + 6]) * Math.min(1, dt * (4 + 5 * hm));
-          addFig(i, wx, y, wz, yaw, (dense ? 1.6 : 1.7) * FS, null, mv, s * sh, Math.cos(m[o + 5]) * sh, m[o + 6] < 0.02 ? 0 : m[o + 6]); // a touch smaller
+          addFig(i, wx, y, wz, yaw, (dense ? 1.6 : 1.7) * FS, null, mv, s * sh, Math.cos(m[o + 5]) * sh, m[o + 6] < 0.02 ? 0 : m[o + 6], role); // a touch smaller
         }
       }
       v.form = cull ? '' : u.form; v.th = thin; // '' = every man snaps to his slot when the camera comes back in; so does a change of thinning (the men not drawn were not moving)
@@ -1168,8 +1176,8 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
     }
     topple();
     horses.count = legsF.count = legsH.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; packM.count = npk;
-    body.count = thL.count = thR.count = shL.count = shR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; bearM.count = nbr; for (const k in hats) hats[k as Hat].count = hc[k as Hat]; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
-    const figs = [body, packM, thL, thR, shL, shR, armsCarry, armsAim, armsRide, ...Object.values(hats), bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, guns];
+    body.count = thL.count = thR.count = shL.count = shR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; bearM.count = nbr; offM.count = noff; drumM.count = ndr; for (const k in hats) hats[k as Hat].count = hc[k as Hat]; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
+    const figs = [body, packM, thL, thR, shL, shR, armsCarry, armsAim, armsRide, ...Object.values(hats), offM, drumM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, guns];
     // upload only the live [0, count) slice; clear first so ranges never pile up across frames (hull twins share these attributes)
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
     for (const m of [...figs, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);
