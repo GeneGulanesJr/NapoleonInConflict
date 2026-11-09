@@ -16,8 +16,30 @@ const heightAt = (s: any, x: number, z: number) => groundH(s, x, z) * RELIEF;
 const P = { fr: 0x3f6fdc, gb: 0xd8453a, pr: 0x3b4a85, nl: 0xd8872a, br: 0x2a2a2e, trim: 0xe9e4d6, ink: 0x14110d, skin: 0xd8b090, wood: 0x5a4128, brass: 0xd3a64e, steel: 0xb8bcc4,
   grassA: 0x7f9150, grassB: 0x8a9c58, wheat: 0xc9ab5a, wheatB: 0xb99b4c, ridge: 0x8f9456, lane: 0x8a6d4a, road: 0xb3a07a, woodFloor: 0x405836, denseFloor: 0x324a2b, water: 0x4a6f8f, ford: 0x7099b0, plaster: 0xd6c9a8, tile: 0xa4503a, pine: 0x2f4a2b,
   hedge: 0x3c5a2e, hedgeTop: 0x4a6b36, stone: 0x8d8777, cliff: 0x6b573d, plow: 0x6e5036, smoke: 0xf4f1ea, soil: 0x3a2c1f, horse: 0x6b4a34, pants: 0xe0dbcb };
-const PLUME: Record<string, number> = { fr: 0xd8453a, gb: 0xe9e4d6, pr: 0xe9e4d6, nl: 0xd8872a, br: 0x1b1b1f };
-const NAT: Record<string, number> = { fr: P.fr, gb: P.gb, pr: P.pr, nl: P.nl, br: P.br };
+/** Every army of the era in one table: coat and trouser colour (instance tints), the hat model, and the plume or pompom. An unknown code falls back to a plain shako in grey. */
+type Hat = 'shako' | 'belgic' | 'kiwer' | 'stove' | 'bicorne' | 'raupen' | 'fez';
+const NATIONS: Record<string, { coat: number; pants: number; hat: Hat; plume: number }> = {
+  fr: { coat: P.fr, pants: 0xf6f3ea, hat: 'shako', plume: 0xd8453a },    // France: blue coat, white trousers
+  gb: { coat: P.gb, pants: 0xb9bcc6, hat: 'belgic', plume: 0xe9e4d6 },   // Britain: red coat, grey trousers
+  pr: { coat: P.pr, pants: 0xe9e4d6, hat: 'shako', plume: 0xe9e4d6 },    // Prussia
+  nl: { coat: P.nl, pants: 0xf0ece0, hat: 'belgic', plume: 0xd8872a },   // Netherlands (shown orange so Dutch-Belgians read apart from the French)
+  br: { coat: P.br, pants: 0x3a3a40, hat: 'shako', plume: 0x1b1b1f },    // Brunswick: the Black Brunswickers
+  at: { coat: 0xe6e3d8, pants: 0xe6e3d8, hat: 'stove', plume: 0x1b1b1f }, // Austria: white coat, stovepipe shako
+  ru: { coat: 0x3f7a3f, pants: 0xf0eee4, hat: 'kiwer', plume: 0xe9e4d6 }, // Russia: dark green coat, tall kiwer
+  es: { coat: 0x3a4f9c, pants: 0xf0eee4, hat: 'bicorne', plume: 0xd8453a }, // Spain: blue coat, bicorne
+  pt: { coat: 0x2f4a8c, pants: 0xe9e4d6, hat: 'shako', plume: 0x3a8a3a }, // Portugal
+  se: { coat: 0x2c3f7a, pants: 0xe9e4d6, hat: 'shako', plume: 0xf0c030 }, // Sweden: dark blue, yellow plume
+  dk: { coat: 0x3a4f8a, pants: 0xe9e4d6, hat: 'shako', plume: 0xe9e4d6 }, // Denmark
+  by: { coat: 0x6f9ae0, pants: 0xe9e4d6, hat: 'raupen', plume: 0x1b1b1f }, // Bavaria: light blue coat, caterpillar helmet
+  sx: { coat: 0xe6e3d8, pants: 0xe6e3d8, hat: 'shako', plume: 0x3a8a3a }, // Saxony: white coat
+  wu: { coat: 0x5a86d4, pants: 0xe9e4d6, hat: 'shako', plume: 0x1b1b1f }, // Wurttemberg
+  it: { coat: 0xe6e3d8, pants: 0xe6e3d8, hat: 'shako', plume: 0x3a8a3a }, // Kingdom of Italy: white coat, green plume
+  pl: { coat: 0x2b4a9a, pants: 0xe9e4d6, hat: 'shako', plume: 0xe9e4d6 }, // Duchy of Warsaw
+  hn: { coat: P.gb, pants: 0xb9bcc6, hat: 'belgic', plume: 0xe9e4d6 },    // Hanover and the King's German Legion: dressed as the British
+  tr: { coat: 0x3a5a9a, pants: 0xc23a2e, hat: 'fez', plume: 0xe0c060 },   // Ottoman: blue jacket, red trousers and fez
+};
+const NAT: Record<string, number> = Object.fromEntries(Object.entries(NATIONS).map(([k, v]) => [k, v.coat]));
+const PLUME: Record<string, number> = Object.fromEntries(Object.entries(NATIONS).map(([k, v]) => [k, v.plume]));
 /** [French, Coalition]; setColourBlind swaps it in place, with the CSS --fr/--co (sides) and --mine/--foe (bases, plates) */
 export const SIDE_COLOR = ['#6f9bff', '#ff6a5c'];
 const hexOf = (c: string) => parseInt(c.slice(1), 16);
@@ -494,8 +516,8 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   const TROUSER = 0xf6f3ea; // white, not the warm cream that reads as bare legs in sunlight
   const legG = (x: number) => merge([rod([x, HIP, 0], [x, 0.3, 0.01], 0.1, 0.082, TROUSER), rod([x, 0.32, 0.01], [x, 0.14, 0], 0.082, 0.07, TROUSER), rod([x, 0.17, 0], [x, 0.05, 0], 0.076, 0.07, DK), bx(0.11, 0.06, 0.21, x, 0.03, 0.04, DK)]).translate(0, -HIP, 0); // trousers to the ankle, a short black gaiter, shoe
   const KNEE = 0.31; // the leg in two so the knee can bend: thigh hangs from the hip, shin from the knee
-  const thighG = (x: number) => merge([rod([x, HIP, 0], [x, 0.3, 0.01], 0.1, 0.082, TROUSER)]).translate(0, -HIP, 0);
-  const shinG = (x: number) => merge([ball(0.085, x, KNEE, 0.01, TROUSER), rod([x, 0.32, 0.01], [x, 0.14, 0], 0.082, 0.07, TROUSER), rod([x, 0.17, 0], [x, 0.05, 0], 0.076, 0.07, DK), bx(0.11, 0.06, 0.21, x, 0.03, 0.04, DK)]).translate(0, -KNEE, 0);
+  const thighG = (x: number) => merge([rod([x, HIP, 0], [x, 0.3, 0.01], 0.1, 0.082, W)]).translate(0, -HIP, 0); // trousers are white paint: the nation's trouser colour is the instance tint
+  const shinG = (x: number) => merge([ball(0.085, x, KNEE, 0.01, W), rod([x, 0.32, 0.01], [x, 0.14, 0], 0.082, 0.07, W), rod([x, 0.17, 0], [x, 0.05, 0], 0.076, 0.07, DK), bx(0.11, 0.06, 0.21, x, 0.03, 0.04, DK)]).translate(0, -KNEE, 0);
   const arm = (s: number[], e: number[], h: number[]) => [rod(s, e, 0.07, 0.064, W), rod(e, h, 0.064, 0.058, W), rod(mix(e, h, 0.72), h, 0.07, 0.068, RED), ball(0.058, h[0], h[1], h[2], P.skin)];
   const musket = (b: number[], m: number[]) => [rod(b, mix(b, m, 0.32), 0.055, 0.032, P.wood, 5), rod(mix(b, m, 0.3), m, 0.022, 0.022, IRON, 4), rod(m, mix(b, m, 1.28), 0.013, 0.006, P.steel, 4)]; // stock, barrel, bayonet
   // carry: musket upright against the left shoulder (a forest of bayonets above the shakos); aim: levelled from the right shoulder; ride: sabre at the shoulder, reins in the left hand
@@ -514,6 +536,11 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
     rod([0, 1.68, -0.15], [0, 1.22, -0.3], 0.045, 0.075, DK, 5), rod([0.03, 1.7, 0.1], [0.05, 1.98, 0.08], 0.035, 0.025, RED, 5)]); // breastplate, helmet, fur turban, crest, horsehair tail, plume
   const capG = atHip([cyl(0.138, 0.12, 1.47, 1.66, DK), paint(new THREE.BoxGeometry(0.3, 0.1, 0.3).rotateY(Math.PI / 4).translate(0, 1.72, 0), RED), peak(0.17, 1.49), bx(0.1, 0.1, 0.02, 0, 1.56, 0.145, P.brass), rod([0.1, 1.76, 0.08], [0.12, 2.0, 0.08], 0.04, 0.025, P.trim, 5)]); // lancer czapka
   const bicG = atHip([cyl(0.152, 0.145, 1.46, 1.6, DK), paint(new THREE.CylinderGeometry(0.33, 0.33, 0.24, 10, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2).scale(1, 0.62, 1).translate(0, 1.5, 0), DK, true), ball(0.045, 0.12, 1.6, 0.13, 0xe9e4d6)]); // bicorne worn en bataille: crown, crescent, cockade
+  // the other armies' headgear (white paint takes the nation's plume colour)
+  const kiwerG = atHip([cyl(0.145, 0.172, 1.47, 1.92, DK), peak(0.175, 1.49), bx(0.17, 0.2, 0.02, 0, 1.68, 0.172, P.brass), ball(0.05, 0, 1.96, 0, W), rod([0, 1.94, 0], [0, 2.18, 0.02], 0.028, 0.02, W, 5)]); // Russian kiwer: tall, big brass plate, upright plume
+  const stoveG = atHip([cyl(0.158, 0.158, 1.47, 1.86, DK), peak(0.17, 1.49), bx(0.14, 0.17, 0.02, 0, 1.62, 0.16, P.brass), bx(0.32, 0.03, 0.32, 0, 1.87, 0, 0x2a2c33), rod([0.04, 1.86, 0.02], [0.05, 2.06, 0.02], 0.05, 0.03, W, 5)]); // Austrian stovepipe: straight, flat-topped, tufted
+  const raupenG = atHip([dome(0.175, 1.47, DK, 1.05), peak(0.17, 1.49), bx(0.1, 0.1, 0.02, 0, 1.6, 0.17, P.brass), rod([0, 1.66, -0.2], [0, 1.68, 0.15], 0.055, 0.055, W, 5), rod([0, 1.66, -0.2], [0, 1.45, -0.3], 0.04, 0.025, W, 4)]); // Bavarian raupenhelm: leather helmet, caterpillar crest, horsehair tail
+  const fezG = atHip([cyl(0.15, 0.12, 1.45, 1.68, 0xc23a2e), cyl(0.158, 0.158, 1.43, 1.5, 0xf0ece0), rod([0, 1.68, 0], [0.12, 1.52, -0.12], 0.012, 0.02, 0xe0c060, 3)]); // Ottoman fez, turban band, tassel
   const skirG = atHip([ball(0.095, 0.23, 1.175, 0, 0x4a8a3a, 1.2, 0.6), ball(0.095, -0.23, 1.175, 0, 0x4a8a3a, 1.2, 0.6), bx(0.26, 0.035, 0.03, 0, 1.57, 0.165, 0xe8c030)]); // light-company epaulettes and shako cord
   // horse: white parts take a coat per horse (bay, chestnut, black, grey); legs swing in pairs from shoulder and hip
   const HD = 0x2a2a2a;
@@ -552,6 +579,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   shadowP.instanceMatrix = body.instanceMatrix; shadowP.count = 0; shadowP.frustumCulled = false; shadowP.castShadow = true; shadowP.receiveShadow = false; scene.add(shadowP);
   const hat = [0, 1.05, 0] as [number, number, number];
   const shakoM = fig(shakoG, FIG_MAX, hat), belgM = fig(belgicG, FIG_MAX, hat), bearM = fig(bearG, 3000 * GROW, hat), cuirM = fig(cuirG, 1500, [0, 0.5, 0]), capM = fig(capG, 1500, hat), bicM = fig(bicG, 200, hat);
+  const hats: Record<Hat, THREE.InstancedMesh> = { shako: shakoM, belgic: belgM, kiwer: fig(kiwerG, FIG_MAX, hat), stove: fig(stoveG, FIG_MAX, hat), bicorne: fig(bicG, FIG_MAX, hat), raupen: fig(raupenG, FIG_MAX, hat), fez: fig(fezG, FIG_MAX, hat) }; // by nation (NATIONS)
   const skirM = fig(skirG, 2500, null), lanceM = fig(lanceG, 1500, null);
   // one standard per infantry regiment (pole + finial, waving banner in the nation's colour, gold eagle)
   const flagM = mkI(merge([bx(0.07, 3.6, 0.07, 0, 1.8, 0, P.wood), bx(0.18, 0.2, 0.18, 0, 3.7, 0, P.brass)]), 400, toon({ vertexColors: true }), [0, 1.8, 0], false);
@@ -693,7 +721,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
     plates.appendChild(el);
     animate(el, { translateY: [0, -12], opacity: [1, 0], duration: 1100, ease: 'outQuad', onComplete: () => el.remove() });
   }
-  const tmpC = new THREE.Color(), tmpC2 = new THREE.Color(), plumeC = new THREE.Color();
+  const tmpC = new THREE.Color(), tmpC2 = new THREE.Color(), plumeC = new THREE.Color(), pantsC = new THREE.Color();
 
   /** Where man i of n stands, relative to the regiment, before the FS scale. dn = how many times denser than the sim's own count (n / the sim's men): the same frontage and depth, packed tighter. */
   /** v.colsN / v.sqk / v.nref are the layout's anchors, held steady while men fall (see the hysteresis where they are set), so a death does not re-deal the whole formation */
@@ -934,7 +962,8 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
     }
 
     // units
-    let nf = 0, nh = 0, ng = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0, nac = 0, naa = 0, nar = 0, nsh = 0, nbg = 0, npk = 0;
+    let nf = 0, nh = 0, ng = 0, nc = 0, nlc = 0, ncp = 0, nsk = 0, nbr = 0, nfl = 0, ncm = 0, nac = 0, naa = 0, nar = 0, npk = 0;
+    const hc: Record<Hat, number> = { shako: 0, belgic: 0, kiwer: 0, stove: 0, bicorne: 0, raupen: 0, fez: 0 }; // hats drawn this frame, per model
     const live = new Set<number>();
     const seenSet = state.fog ? new Set<number>(state.seen?.[viewer] ?? []) : null; // fog of war: enemies you cannot see are not drawn
     const k = 1 - Math.exp(-10 * dt);
@@ -992,6 +1021,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
       tmpC.setHex(u.routed ? 0x8d8a82 : NAT[u.nat] ?? 0x888888);
       if (u.hurt < 0.18 && !u.routed) tmpC.lerp(WHITE, 0.6); // hit flash
       plumeC.setHex(u.type === 'skirmisher' ? 0x4a8a3a : PLUME[u.nat] ?? 0xe9e4d6);
+      pantsC.setHex(u.routed ? 0x8d8a82 : NATIONS[u.nat]?.pants ?? 0xd8d4c8);
       const charging = u.chase != null || u.eng != null, inFight = u.fired < (T.reload || 6) * 1.5;
       const foe = u.eng != null ? byId.get(u.eng) : null, foeA = foe ? Math.atan2(foe.x - v.x, foe.z - v.z) : 0; // melee: the ranks break into a scrum facing the enemy
       // one tin figure, standing at (x, y, z) facing yaw, or sitting in a horse's saddle; mv = this man is on the move, s = his step (sin of his own gait phase)
@@ -1009,8 +1039,8 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
         if (!rider && u.type !== 'commander') packM.setMatrixAt(npk++, mBody);
         const stride = walk ? s * (charging || u.routed ? 0.75 : 0.5) : 0;
         const kb = walk ? (charging || u.routed ? 1.2 : 0.8) : 0; // the leg that swings forward folds at the knee (it is the one whose stride is rising: cos of the gait phase)
-        joint(mPart, mRoot, 0, hy, 0, rider ? -0.6 : stride * (1 - kn) + kn * 1.3, rider ? 0.5 : 0); thL.setMatrixAt(nf, mPart); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, c) * (1 - kn) - kn * 1.6); shL.setMatrixAt(nf, mShin);
-        joint(mPart, mRoot, 0, hy, 0, rider ? -0.6 : -stride * (1 - kn) - kn * 0.1, rider ? -0.5 : 0); thR.setMatrixAt(nf, mPart); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, -c) * (1 - kn) - kn * 1.5); shR.setMatrixAt(nf++, mShin);
+        joint(mPart, mRoot, 0, hy, 0, rider ? -0.6 : stride * (1 - kn) + kn * 1.3, rider ? 0.5 : 0); thL.setMatrixAt(nf, mPart); thL.setColorAt(nf, pantsC); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, c) * (1 - kn) - kn * 1.6); shL.setMatrixAt(nf, mShin); shL.setColorAt(nf, pantsC);
+        joint(mPart, mRoot, 0, hy, 0, rider ? -0.6 : -stride * (1 - kn) - kn * 0.1, rider ? -0.5 : 0); thR.setMatrixAt(nf, mPart); thR.setColorAt(nf, pantsC); joint(mShin, mPart, 0, KNEE - HIP, 0, rider ? -1.1 : -kb * Math.max(0, -c) * (1 - kn) - kn * 1.5); shR.setMatrixAt(nf, mShin); shR.setColorAt(nf++, pantsC);
         // arms: sabre and reins for riders and generals, musket levelled when firing or charging, else shouldered (swinging on the march, thrown up in a rout)
         const ride = rider || u.type === 'commander', am = ride ? armsRide : aim ? armsAim : armsCarry, ai = ride ? nar++ : aim ? naa++ : nac++;
         const ap = ride ? (foe ? 0.4 + Math.sin(clock * 8 + h2 * 6.28) * 0.8 : charging && mv ? (u.type === 'lancer' ? 1.5 : 1.2) + s * 0.08 : 0)
@@ -1020,9 +1050,8 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
         if (u.type === 'cuirassier') cuirM.setMatrixAt(nc++, mBody);
         else if (u.type === 'guard') bearM.setMatrixAt(nbr++, mBody);
         else if (u.type === 'commander') bicM.setMatrixAt(ncm++, mBody);
-        else if (u.type === 'lancer' && u.nat === 'pr') capM.setMatrixAt(ncp++, mBody);
-        else if (u.nat === 'gb') { belgM.setMatrixAt(nbg, mBody); belgM.setColorAt(nbg++, plumeC); }
-        else { shakoM.setMatrixAt(nsh, mBody); shakoM.setColorAt(nsh++, plumeC); }
+        else if (u.type === 'lancer') capM.setMatrixAt(ncp++, mBody); // every army's lancers wear the czapka
+        else { const k = NATIONS[u.nat]?.hat ?? 'shako', hatMesh = hats[k]; hatMesh.setMatrixAt(hc[k], mBody); hatMesh.setColorAt(hc[k]++, plumeC); }
         if (u.type === 'skirmisher') skirM.setMatrixAt(nsk++, mBody);
       };
       const thin = isArt ? 1 : cam.dist > 440 ? 3 : cam.dist > 260 ? 2 : 1, snapAll = v.form === '' || v.th !== thin, top = v.rs * 1.2 + T.speed * 1.1, gait = (u.routed ? 13 : charging ? 11 : 8) / T.speed;
@@ -1139,8 +1168,8 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
     }
     topple();
     horses.count = legsF.count = legsH.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; packM.count = npk;
-    body.count = thL.count = thR.count = shL.count = shR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; shakoM.count = nsh; belgM.count = nbg; bearM.count = nbr; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
-    const figs = [body, packM, thL, thR, shL, shR, armsCarry, armsAim, armsRide, shakoM, belgM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, guns];
+    body.count = thL.count = thR.count = shL.count = shR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; bearM.count = nbr; for (const k in hats) hats[k as Hat].count = hc[k as Hat]; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
+    const figs = [body, packM, thL, thR, shL, shR, armsCarry, armsAim, armsRide, ...Object.values(hats), bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, guns];
     // upload only the live [0, count) slice; clear first so ranges never pile up across frames (hull twins share these attributes)
     const upl = (a: THREE.BufferAttribute, n: number, sz: number) => { a.clearUpdateRanges(); if (n > 0) { a.addUpdateRange(0, n * sz); a.needsUpdate = true; } };
     for (const m of [...figs, flagM, bannerM, eagleM]) upl(m.instanceMatrix, m.count, 16);

@@ -19,8 +19,11 @@ try {
   await page.goto('http://localhost:5199/capture.html?crowd=1.4&smoke=0.6');
   await page.waitForFunction('window.__cineReady', { timeout: 60000 });
   const T = (35 * Math.PI) / 180;
-  const sets: [string, string[]][] = [['inf', ['line:fr', 'line:gb', 'guard:fr']], ['cav', ['cuirassier:fr', 'lancer:fr', 'commander:fr']], ['art', ['artillery:fr', 'skirmisher:fr']]];
+  const sets: [string, string[]][] = [['inf', ['line:fr', 'line:gb', 'guard:fr']], ['cav', ['cuirassier:fr', 'lancer:fr', 'commander:fr']], ['art', ['artillery:fr', 'skirmisher:fr']],
+    ['nat1', ['line:fr', 'line:gb', 'line:pr']], ['nat2', ['line:at', 'line:ru', 'line:es']], ['nat3', ['line:by', 'line:tr', 'line:se']], ['nat4', ['line:sx', 'line:pl', 'line:pt']]]; // nat*: the armies side by side
+  const only = process.argv[3]; // optional: render just this set (e.g. nat2)
   for (const [name, kinds] of sets) {
+    if (only && name !== only) continue;
     const us: any[] = await page.evaluate((k) => (window as any).__cine.lab(k), kinds);
     for (const [i, u] of us.entries()) {
       for (const [view, dist, yaw, tilt] of [['front', 24, -Math.PI / 4, T * 0.7], ['three-quarter', 24, 0, T * 0.9], ['side', 24, Math.PI / 4, T * 0.6], ['back', 24, (3 * Math.PI) / 4, T * 0.8]] as const) {
