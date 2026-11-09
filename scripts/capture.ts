@@ -1,5 +1,5 @@
 // Renders a Short: opens capture.html in headless Chrome, steps the battle one video frame at a time, pipes screenshots into ffmpeg.
-// Usage: node scripts/capture.ts <scenario> <seed> <from> <to> [out.mp4] [--title "..."] [--sub "..."] [--x N --z N] [--speed 2] [--dist 110] [--fps 30] [--music fr|gb|off] [--w 1080 --h 1920]
+// Usage: node scripts/capture.ts <scenario> <seed> <from> <to> [out.mp4] [--title "..."] [--sub "..."] [--x N --z N] [--speed 2] [--dist 110] [--fps 30] [--music fr|gb|off] [--crowd 2.2] [--max 58] [--w 1080 --h 1920]
 // Take scenario/seed/from/to/x/z straight from scripts/moments.ts output. Needs Chrome or Edge installed (CHROME env var to override).
 import { spawn } from 'node:child_process';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
@@ -24,10 +24,10 @@ try {
   const page = await browser.newPage();
   page.on('pageerror', (e) => console.error('page:', e));
   await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
-  await page.goto('http://localhost:5199/capture.html');
+  await page.goto(`http://localhost:5199/capture.html?crowd=${f.crowd ?? 2.2}`); // crowd: men shown per sim man in the line and guard (the game shows 1.4)
   await page.waitForFunction('window.__cineReady', { timeout: 60000 });
   const x = f.x == null ? 0 : Number(f.x), z = f.z == null ? 0 : Number(f.z);
-  await page.evaluate((o) => (window as any).__cine.init(o), { scn, seed: Number(seed), from: Number(from), to: Number(to), fps, speed, x, z, dist: Number(f.dist ?? 110), title: f.title, sub: f.sub, music });
+  await page.evaluate((o) => (window as any).__cine.init(o), { scn, seed: Number(seed), from: Number(from), to: Number(to), fps, speed, x, z, dist: Number(f.dist ?? 110), title: f.title, sub: f.sub, music, maxSec: Number(f.max ?? 58) });
 
   const silent = music === 'off', vid = silent ? out : `${out}.video.mp4`, wav = `${out}.wav`;
   const run = (args: string[], stdio: any = 'inherit') => spawn(ffmpeg as unknown as string, ['-y', '-loglevel', 'error', ...args], { stdio });

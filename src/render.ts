@@ -89,7 +89,8 @@ const dome = (r: number, y: number, hex: number, sy = 1) => paint(new THREE.Sphe
 const cyl = (r0: number, r1: number, y0: number, y1: number, hex: number, seg = 8, sz = 1) => paint(new THREE.CylinderGeometry(r1, r0, y1 - y0, seg).scale(1, 1, sz).translate(0, (y0 + y1) / 2, 0), hex, true);
 const mix = (a: number[], b: number[], t: number) => a.map((v, i) => v + (b[i] - v) * t);
 
-export function createView(host: HTMLElement) {
+/** opts.crowd: men shown per sim man for the line and guard when zoomed in (1.4 in the game; the Shorts capture asks for more and the buffers grow with it) */
+export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: number } = {}) {
   // render quality: 0 Guide (strict 480x270 look, fixed zoom stops, 90-degree turns), 1 Fine (360 rows), 2 High (540+ rows), 3 Native (up to 1440 rows)
   const QUALITY = ['Guide: 270 rows, fixed zoom, 90 degree turns', 'Fine: 360 rows', 'High: 540+ rows', 'Native: full resolution up to 1440p'];
   let quality = 2;
@@ -308,7 +309,7 @@ export function createView(host: HTMLElement) {
   const col = new THREE.Color();
 
   function setScenario(s: any, t: any) {
-    clearScene();
+    clearScene(); clearFallen();
     scn = s; tu = t; mapSize = s.map.size; FS = t.figScale ?? 1;
     const segs = Math.min(320, Math.round(mapSize / 1.6)); // ~2 units per cell on the big maps, so roads and fords stay continuous
     const geo = new THREE.PlaneGeometry(mapSize, mapSize, segs, segs);
@@ -532,7 +533,7 @@ export function createView(host: HTMLElement) {
   const GL = 1.35, figRamp = new THREE.DataTexture(new Uint8Array([0.47, 0.47, 0.47, 0.47, 0.75, 0.75, 1, 1, GL, GL].map((v) => Math.round((v / GL) * 255))), 10, 1, THREE.RedFormat);
   figRamp.minFilter = figRamp.magFilter = THREE.NearestFilter; figRamp.needsUpdate = true;
   const fig = (g: THREE.BufferGeometry, n: number, center: [number, number, number] | null, shadow = false) => mkI(g, n, Object.assign(toon({ vertexColors: true, gradientMap: figRamp, color: new THREE.Color(GL, GL, GL) }), { flatShading: true }) /* faceted from indexed parts: ~half the vertices */, center, shadow);
-  const FIG_MAX = 8000, CROWD = 1.4; // figure buffers; CROWD = how many more men than the sim's count the line and guard show when zoomed in (the spacing is already close to a man's width: much past 1.4 they overlap)
+  const CROWD = opts.crowd ?? 1.4, GROW = Math.max(1, Math.ceil(CROWD / 1.4)), FIG_MAX = 8000 * GROW; // figure buffers; CROWD = how many more men than the sim's count the line and guard show when zoomed in (the spacing is already close to a man's width: much past 1.4 they overlap)
   const body = fig(bodyG, FIG_MAX, [0, 0.35, 0]), legL = fig(legG(0.095), FIG_MAX, [0, -0.3, 0]), legR = fig(legG(-0.095), FIG_MAX, [0, -0.3, 0]);
   const armsCarry = fig(armsCarryG, FIG_MAX, [0, -0.2, 0.05]), armsAim = fig(armsAimG, FIG_MAX, [0, -0.05, 0.4]), armsRide = fig(armsRideG, 1600, [0, -0.1, 0.2]);
   const packM = fig(packG, FIG_MAX, [0, 0.35, 0]);
@@ -540,7 +541,7 @@ export function createView(host: HTMLElement) {
   const shadowP = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 1.8, 0.28).translate(0, 0.9 - HIP, 0), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), FIG_MAX);
   shadowP.instanceMatrix = body.instanceMatrix; shadowP.count = 0; shadowP.frustumCulled = false; shadowP.castShadow = true; shadowP.receiveShadow = false; scene.add(shadowP);
   const hat = [0, 1.05, 0] as [number, number, number];
-  const shakoM = fig(shakoG, FIG_MAX, hat), belgM = fig(belgicG, FIG_MAX, hat), bearM = fig(bearG, 3000, hat), cuirM = fig(cuirG, 1500, [0, 0.5, 0]), capM = fig(capG, 1500, hat), bicM = fig(bicG, 200, hat);
+  const shakoM = fig(shakoG, FIG_MAX, hat), belgM = fig(belgicG, FIG_MAX, hat), bearM = fig(bearG, 3000 * GROW, hat), cuirM = fig(cuirG, 1500, [0, 0.5, 0]), capM = fig(capG, 1500, hat), bicM = fig(bicG, 200, hat);
   const skirM = fig(skirG, 2500, null), lanceM = fig(lanceG, 1500, null);
   // one standard per infantry regiment (pole + finial, waving banner in the nation's colour, gold eagle)
   const flagM = mkI(merge([bx(0.07, 3.6, 0.07, 0, 1.8, 0, P.wood), bx(0.18, 0.2, 0.18, 0, 3.7, 0, P.brass)]), 400, toon({ vertexColors: true }), [0, 1.8, 0], false);
@@ -554,6 +555,29 @@ export function createView(host: HTMLElement) {
   const mRoot = new THREE.Matrix4(), mBody = new THREE.Matrix4(), mHorse = new THREE.Matrix4(), mPart = new THREE.Matrix4();
   const rootAt = (m: THREE.Matrix4, x: number, y: number, z: number, yaw: number, sc: number) => m.compose(V.set(x, y, z), Q.setFromEuler(E.set(0, yaw, 0)), SV.setScalar(sc));
   const joint = (out: THREE.Matrix4, parent: THREE.Matrix4, x: number, y: number, z: number, pitch: number, roll = 0) => out.compose(V.set(x, y, z), Q.setFromEuler(E.set(pitch, 0, roll)), SV.setScalar(1)).premultiply(parent);
+
+  // the fallen: a man who goes down topples about his hip (ease-out, 0.7 s) and then lies where he fell for the rest of the battle. One instanced mesh from the figure's own parts; a matrix is only written while he falls.
+  const CORP_MAX = 4000 * GROW, corpseM = fig(merge([bodyG, legG(0.095), legG(-0.095), packG, shakoG, armsCarryG.clone().translate(0, SH - HIP, 0)]), CORP_MAX, [0, 0.2, 0]);
+  const falling: { i: number; x: number; y: number; z: number; yaw: number; t0: number; sgn: number }[] = [], corpseC = new THREE.Color();
+  let corpseN = 0;
+  function clearFallen() { corpseN = 0; falling.length = 0; corpseM.count = 0; }
+  function fell(x: number, z: number, yaw: number, hex: number, h: number) {
+    const i = corpseN++ % CORP_MAX;
+    corpseM.count = Math.min(corpseN, CORP_MAX); corpseM.setColorAt(i, corpseC.setHex(hex).multiplyScalar(0.8)); corpseM.instanceColor!.needsUpdate = true;
+    const fr = (k: number) => (h * k) % 1 - 0.5; // scatter: they drop where the fire found them, not in the rank's slot
+    x += fr(7.31) * 2.4 * FS; z += fr(11.9) * 2.4 * FS;
+    falling.push({ i, x, y: heightAt(scn, x, z), z, yaw: yaw + fr(13.7) * 1.8, t0: clock, sgn: fr(3.7) > 0 ? 1 : -1 });
+  }
+  function topple() {
+    if (!falling.length) return;
+    for (let k = falling.length - 1; k >= 0; k--) {
+      const c = falling[k], e = Math.min(1, (clock - c.t0) / 0.7), f = 1 - (1 - e) ** 2;
+      rootAt(mRoot, c.x, c.y, c.z, c.yaw, 1.7 * FS);
+      joint(mBody, mRoot, 0, HIP + (0.2 - HIP) * f, 0, c.sgn * 1.5 * f, 0.1 * f * c.sgn); corpseM.setMatrixAt(c.i, mBody);
+      if (e >= 1) falling.splice(k, 1);
+    }
+    corpseM.instanceMatrix.needsUpdate = true;
+  }
 
   // 2D pixel effect sprites (rows: powder puff, muzzle flash, shell burst, dust kick), one instanced billboard draw
   const FRAMES = [6, 3, 6, 4];
@@ -937,6 +961,10 @@ export function createView(host: HTMLElement) {
       const nGun = isArt ? Math.max(1, Math.ceil(u.men / 54)) : 0;
       const n = isArt ? nGun * 2 : Math.max(1, Math.min(u.garrison != null ? 10 : 1e9, Math.ceil(u.men / T.perFig))); // a garrison shows a handful of men at the walls
       if (v.n && n < v.n) for (let q = 0; q < Math.min(3, v.n - n); q++) spawn(3, v.x + (Math.random() - 0.5) * 10, heightAt(scn, v.x, v.z) + 0.6, v.z + (Math.random() - 0.5) * 5, 0.5, 2.6); // men falling
+      if (v.n && n < v.n && v.form !== '' && !isArt && !isCav && cam.dist < 260) { // the men who went down fall where they stood (the rear-most drawn men go first)
+        const a = Math.ceil(n * ((u.type === 'line' || u.type === 'guard') && u.garrison == null && !u.routed ? CROWD : 1)), b = Math.min(v.nd ?? a, a + 40), hx = u.routed ? 0x8d8a82 : NAT[u.nat] ?? 0x888888;
+        for (let i = a; i < b; i++) { const o = i * MS; if (o + 2 < v.m.length && v.m[o] === v.m[o]) fell(v.m[o], v.m[o + 1], v.m[o + 2], hx, hash(u.id * 31 + i)); }
+      }
       v.n = n; v.side = u.side; v.kind = isArt ? 2 : isCav ? 1 : 0;
       const nCap = Math.ceil(n * CROWD);
       if (v.m.length < nCap * MS) { const o = new Float32Array(nCap * MS + 40 * MS).fill(NaN); o.set(v.m); v.m = o; } // NaN = a new man, placed straight on his slot
@@ -1083,6 +1111,7 @@ export function createView(host: HTMLElement) {
       const sk = full ? unitStatus(u, state.t, tu).join(' ') : ''; // status icons beside full plates only
       if (sk !== p.sk) { p.st.innerHTML = sk && sk.split(' ').map((k) => `<img src="${pxUrl(k)}">`).join(''); p.sk = sk; }
     }
+    topple();
     horses.count = legsF.count = legsH.count = nh; guns.count = ng; cuirM.count = nc; lanceM.count = nlc; capM.count = ncp; skirM.count = nsk; packM.count = npk;
     body.count = legL.count = legR.count = shadowP.count = nf; armsCarry.count = nac; armsAim.count = naa; armsRide.count = nar; shakoM.count = nsh; belgM.count = nbg; bearM.count = nbr; bicM.count = ncm; flagM.count = bannerM.count = eagleM.count = nfl;
     const figs = [body, packM, legL, legR, armsCarry, armsAim, armsRide, shakoM, belgM, bearM, cuirM, capM, bicM, skirM, lanceM, horses, legsF, legsH, guns];
@@ -1112,7 +1141,7 @@ export function createView(host: HTMLElement) {
     const place = (row: number, frame: number, x: number, y: number, z: number, size: number) => {
       if (nfx >= FX_MAX) return;
       dummy.position.set(x, y, z); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(1); dummy.updateMatrix();
-      fxMesh.setMatrixAt(nfx, dummy.matrix); fxAttr.setXYZ(nfx++, frame, row, size);
+      fxMesh.setMatrixAt(nfx, dummy.matrix); fxAttr.setXYZ(nfx++, frame, row, size * (opts.smoke ?? 1));
     };
     for (const s of state.smoke) {
       const a = s.age / tu.smoke.life;
@@ -1292,6 +1321,6 @@ export function createView(host: HTMLElement) {
     (reticle.material as THREE.MeshBasicMaterial).color.setHex(color);
   }
 
-  return { dom: canvas, cam, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get quality() { return QUALITY[quality].split(':')[0]; }, get guide() { return guideOn(); }, cycleUi, get uiSize() { return UI[ui]; }, setColourBlind, get colourBlind() { return cb; }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, setGhosts, setHover, setShowAll, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
+  return { dom: canvas, cam, tilt: tl, shake, setDusk, setSilhouette, setTopDown, rotate90, cycleQuality, get quality() { return QUALITY[quality].split(':')[0]; }, get guide() { return guideOn(); }, cycleUi, get uiSize() { return UI[ui]; }, setColourBlind, get colourBlind() { return cb; }, setScenario, sync, render, resize, flyTo, zoomBy, kick, pan, setWeather, ground, toScreen, pickUnit, unitsIn, setSelection, setReticle, setRefillHint, setDragLine, setGhosts, setHover, setShowAll, selected, get mapSize() { return mapSize; }, stopCam: () => camAnim?.pause() };
 }
 export type View = ReturnType<typeof createView>;
