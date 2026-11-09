@@ -20,7 +20,7 @@ import { grouchyOrders as orders, grouchyDue as due, fieldRoster as onField } fr
 export const TUNING: any = tuning;
 export const CAMPAIGN: any = camp;
 /** the finished scenarios: `scale` stretches a map once, after any `extends` (see src/sim/extend.ts) */
-export const SCENARIOS: Record<string, any> = Object.fromEntries(Object.entries({ charleroi, quatrebras, ligny, genappe, waterloo, hougoumont, wavre, bridge: extend(genappe, bridgeJson), retreat: extend(quatrebras, retreatJson), laststand: extend(waterloo, laststandJson), lodi: extend(extend(genappe, bridgeJson), lodiJson) }).map(([id, j]) => [id, prepare(j)]));
+export const SCENARIOS: Record<string, any> = Object.fromEntries(Object.entries({ charleroi, quatrebras, ligny, genappe, waterloo, hougoumont, wavre, bridge: extend(genappe, bridgeJson), retreat: extend(quatrebras, retreatJson), laststand: extend(waterloo, laststandJson), lodi: lodiJson }).map(([id, j]) => [id, prepare(j)]));
 /** extra battles that are not part of the campaign: quick battle only */
 export const EXTRA_BATTLES = ['hougoumont', 'wavre', 'bridge', 'retreat', 'laststand', 'lodi'];
 

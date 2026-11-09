@@ -1549,12 +1549,14 @@ test('the server drops orders from a client that floods it, and still obeys one 
 });
 
 // ---------------------------------------------------------------- scenarios
-test('the Lodi scenario resolves through its two-level extends, fields French and Austrian armies, and plays on without bad numbers', () => {
-  const scn = data('lodi'), sim = createSim(scn, data('tuning'), { seed: 1 });
+test('Lodi (10 May 1796): 24 French and 14 Austrian guns, a narrow bridge over a deep Adda, a ford upstream, and it plays on without bad numbers', () => {
+  const scn = data('lodi'), sim = createSim(scn, data('tuning'), { seed: 1 }), guns = [0, 0];
   assert.deepEqual(scn.nat, ['fr', 'at']);
-  assert.ok(sim.s.units.some((u: any) => u.side === 0 && u.nat === 'fr'), 'French units');
-  assert.ok(sim.s.units.some((u: any) => u.side === 1 && u.nat === 'at'), 'Austrian units');
-  assert.ok(!sim.s.units.some((u: any) => /Life Guards|Uxbridge|d'Erlon/.test(u.name)), 'no Waterloo-campaign units leaked in from the base');
+  for (const u of sim.s.units as any[]) if (u.type === 'artillery') guns[u.side] += Math.ceil(u.men / 54);
+  assert.deepEqual(guns, [24, 14], 'Bonaparte sited about 24 guns; Sebottendorf had 14');
+  assert.ok(sim.s.units.some((u: any) => u.side === 1 && /Terzi/.test(u.name)) && sim.s.units.some((u: any) => u.side === 0 && /Lannes/.test(u.name)), 'named regiments of both armies');
+  assert.ok(!sim.s.units.some((u: any) => /Life Guards|Uxbridge|d'Erlon/.test(u.name)), 'nothing from the Waterloo campaign');
+  assert.ok(!deepAt(scn, 0, 0), 'the bridge is dry'); assert.ok(deepAt(scn, 0, 6), 'the Adda is deep a few paces off the bridge (the span is narrow)'); assert.ok(!deepAt(scn, -4, -130), 'the ford upstream is shallow');
   run(sim, 30);
   for (const u of sim.s.units) assert.ok(Number.isFinite(u.x + u.z + u.men + u.morale), `${u.name} has finite numbers`);
 });
