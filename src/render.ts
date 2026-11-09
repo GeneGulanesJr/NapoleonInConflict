@@ -76,6 +76,7 @@ function paint(g: THREE.BufferGeometry, hex: number, keep = false) {
   return g;
 }
 const bx = (w: number, h: number, d: number, x: number, y: number, z: number, hex: number) => paint(new THREE.BoxGeometry(w, h, d).translate(x, y, z), hex);
+const pl = (w: number, h: number, x: number, y: number, z: number, hex: number) => paint(new THREE.PlaneGeometry(w, h).translate(x, y, z), hex, true); // a flat quad: 2 triangles for detail that only faces forward (buttons, turnbacks); keep = indexed, or merge() would make the whole figure non-indexed
 const cy = (r0: number, r1: number, h: number, seg: number, x: number, y: number, z: number, hex: number) => paint(new THREE.CylinderGeometry(r0, r1, h, seg).translate(x, y, z), hex);
 const merge = (l: THREE.BufferGeometry[]) => mergeGeometries(l.some(g => !g.index) ? l.map(g => g.index ? g.toNonIndexed() : g) : l)!; // mergeGeometries needs all-or-none indexed
 // turned parts for the tin figures: a tapered rod from a (radius r0) to b (r1), a squashed ball, a dome, an upright cylinder from y0 to y1 (sz flattens it front to back)
@@ -486,8 +487,8 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
     ball(0.09, 0.23, 1.17, 0, RED, 1.2, 0.55), ball(0.09, -0.23, 1.17, 0, RED, 1.2, 0.55), cyl(0.12, 0.115, 1.16, 1.25, RED), cyl(0.07, 0.07, 1.24, 1.3, DK, 6), // epaulettes, collar, stock
     ball(0.165, 0, 1.39, 0.015, P.skin, 1, 1.06), ball(0.158, 0, 1.415, -0.035, HAIR), bx(0.035, 0.05, 0.05, 0, 1.375, 0.178, P.skin), // head, hair, nose
     bx(0.045, 0.04, 0.02, 0.06, 1.41, 0.16, DK), bx(0.045, 0.04, 0.02, -0.06, 1.41, 0.16, DK), bx(0.12, 0.03, 0.03, 0, 1.335, 0.165, HAIR), // eyes, moustache
-    ...[1.08, 0.98, 0.88, 0.78].flatMap((y) => [bx(0.03, 0.03, 0.02, 0.05, y, 0.19, P.brass), bx(0.03, 0.03, 0.02, -0.05, y, 0.19, P.brass)]), // coat buttons
-    bx(0.07, 0.26, 0.03, 0.18, 0.5, 0.115, 0xf3f0e6), bx(0.07, 0.26, 0.03, -0.18, 0.5, 0.115, 0xf3f0e6), // white turnbacks on the skirts
+    ...[1.08, 0.98, 0.88, 0.78].flatMap((y) => [pl(0.03, 0.03, 0.05, y, 0.192, P.brass), pl(0.03, 0.03, -0.05, y, 0.192, P.brass)]), // coat buttons
+    pl(0.07, 0.26, 0.18, 0.5, 0.135, 0xf3f0e6), pl(0.07, 0.26, -0.18, 0.5, 0.135, 0xf3f0e6), // white turnbacks on the skirts
   ]);
   const packG = atHip([bx(0.34, 0.34, 0.14, 0, 0.98, -0.22, LEATHER), rod([-0.2, 1.21, -0.22], [0.2, 1.21, -0.22], 0.065, 0.065, 0x8a8576), bx(0.24, 0.13, 0.08, 0, 0.66, -0.2, DK)]); // foot only: knapsack, greatcoat roll, cartridge box
   const TROUSER = 0xf6f3ea; // white, not the warm cream that reads as bare legs in sunlight
@@ -543,7 +544,7 @@ export function createView(host: HTMLElement, opts: { crowd?: number; smoke?: nu
   figRamp.minFilter = figRamp.magFilter = THREE.NearestFilter; figRamp.needsUpdate = true;
   const fig = (g: THREE.BufferGeometry, n: number, center: [number, number, number] | null, shadow = false) => mkI(g, n, Object.assign(toon({ vertexColors: true, gradientMap: figRamp, color: new THREE.Color(GL, GL, GL) }), { flatShading: true }) /* faceted from indexed parts: ~half the vertices */, center, shadow);
   const CROWD = opts.crowd ?? 1.4, GROW = Math.max(1, Math.ceil(CROWD / 1.4)), FIG_MAX = 8000 * GROW; // figure buffers; CROWD = how many more men than the sim's count the line and guard show when zoomed in (the spacing is already close to a man's width: much past 1.4 they overlap)
-  const body = fig(bodyG, FIG_MAX, [0, 0.35, 0]), thL = fig(thighG(0.095), FIG_MAX, [0, -0.3, 0]), thR = fig(thighG(-0.095), FIG_MAX, [0, -0.3, 0]), shL = fig(shinG(0.095), FIG_MAX, [0, -0.3, 0]), shR = fig(shinG(-0.095), FIG_MAX, [0, -0.3, 0]);
+  const body = fig(bodyG, FIG_MAX, [0, 0.35, 0]), thL = fig(thighG(0.095), FIG_MAX, null), thR = fig(thighG(-0.095), FIG_MAX, null), shL = fig(shinG(0.095), FIG_MAX, [0, -0.3, 0]), shR = fig(shinG(-0.095), FIG_MAX, [0, -0.3, 0]);
   const armsCarry = fig(armsCarryG, FIG_MAX, [0, -0.2, 0.05]), armsAim = fig(armsAimG, FIG_MAX, [0, -0.05, 0.4]), armsRide = fig(armsRideG, 1600, [0, -0.1, 0.2]);
   const packM = fig(packG, FIG_MAX, [0, 0.35, 0]);
   // one invisible box casts the whole soldier's shadow (cheaper than every part casting); slightly inside the silhouette so it never darkens the figure
